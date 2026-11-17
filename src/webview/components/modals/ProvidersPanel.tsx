@@ -159,7 +159,7 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
             setForm({ ...EMPTY });
             setStatus(null);
           }}
-          className="flex h-8 items-center gap-1.5 rounded-full bg-[var(--accent-ink)] px-3 text-[12px] font-medium text-[var(--accent-ink-fg)]"
+          className="flex h-8 items-center gap-1.5 rounded-full bg-[var(--accent-action)] px-3 text-[12px] font-medium text-[var(--accent-action-fg)]"
         >
           <Plus size={13} strokeWidth={1.5} />
           Add provider
@@ -292,7 +292,7 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
             <button
               onClick={() => void save()}
               disabled={busy === "save"}
-              className="h-8 rounded-full bg-[var(--accent-ink)] px-3.5 text-[12px] font-medium text-[var(--accent-ink-fg)]"
+              className="h-8 rounded-full bg-[var(--accent-action)] px-3.5 text-[12px] font-medium text-[var(--accent-action-fg)]"
             >
               {busy === "save" ? "Saving..." : "Save provider"}
             </button>

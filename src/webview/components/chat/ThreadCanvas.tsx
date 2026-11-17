@@ -29,6 +29,8 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
   const [showJump, setShowJump] = useState(false);
+  const approvalCount = view?.approvals.length ?? 0;
+  const previousApprovals = useRef(0);
 
   useEffect(() => {
     if (!threadId) return;
@@ -47,7 +49,15 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
     if (pinned && view?.loaded) {
       requestAnimationFrame(() => scrollToBottom());
     }
-  }, [view?.turns, view?.loaded, pinned, scrollToBottom]);
+  }, [view?.turns, view?.running, view?.loaded, pinned, scrollToBottom]);
+
+  useLayoutEffect(() => {
+    if (approvalCount > previousApprovals.current) {
+      setPinned(true);
+      requestAnimationFrame(() => scrollToBottom());
+    }
+    previousApprovals.current = approvalCount;
+  }, [approvalCount, scrollToBottom]);
 
   useEffect(() => {
     if (threadId) setPinned(true);
@@ -98,7 +108,7 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className="thin-scroll h-full overflow-y-auto px-7 pt-[64px] pb-[190px]"
+        className="thin-scroll h-full overflow-y-auto px-7 pt-[64px] pb-[220px]"
       >
         <div className="mx-auto w-full max-w-[740px]">
           {isEmpty ? (
@@ -113,7 +123,7 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
                   </p>
                   <button
                     onClick={() => openSettings("providers")}
-                    className="mt-6 inline-flex h-9 items-center gap-2 rounded-full bg-[var(--accent-ink)] px-4 text-[13px] font-medium text-[var(--accent-ink-fg)] transition-opacity hover:opacity-90"
+                    className="mt-6 inline-flex h-9 items-center gap-2 rounded-full bg-[var(--accent-action)] px-4 text-[13px] font-medium text-[var(--accent-action-fg)] transition-opacity hover:opacity-90"
                   >
                     <Plus size={14} strokeWidth={1.5} />
                     Add a model provider
@@ -164,12 +174,15 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
                   onRetry={threadId ? retry : undefined}
                 />
               ))}
-              {view?.running && (
-                <div className="mt-3 flex items-center gap-2 text-[11.5px] text-[var(--text-muted)]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-secondary)] pulse-dot" />
-                  <span>Kip is working</span>
-                </div>
-              )}
+              {view?.running &&
+                !view.turns[view.turns.length - 1]?.blocks.some(
+                  (block) => block.type !== "text",
+                ) && (
+                  <div className="mt-3 flex items-center gap-2 text-[11.5px] text-[var(--text-muted)]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-secondary)] pulse-dot" />
+                    <span>Kip is thinking</span>
+                  </div>
+                )}
             </>
           )}
         </div>

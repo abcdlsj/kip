@@ -1,10 +1,23 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { AlertCircle, FileText, RotateCcw } from "lucide-react";
-import type { ChatTurn, ToolApprovalPayload } from "../../../shared/types";
+import type {
+  ChatTurn,
+  TextBlock,
+  ThinkingBlock,
+  ToolApprovalPayload,
+  ToolCallBlock,
+} from "../../../shared/types";
 import { ApprovalBanner } from "./ApprovalBanner";
 import { Markdown } from "./Markdown";
 import { ThinkingTrace } from "./ThinkingTrace";
 import { ToolStepPill } from "./ToolStepPill";
+import { TurnActions } from "./TurnActions";
+import { WorkLog } from "./WorkLog";
+
+type WorkBlock = ThinkingBlock | ToolCallBlock;
+type Segment =
+  | { kind: "text"; block: TextBlock }
+  | { kind: "work"; key: string; blocks: WorkBlock[] };
 
 interface MessageTurnProps {
   turn: ChatTurn;
@@ -15,6 +28,27 @@ interface MessageTurnProps {
   onRetry?: (turnId: string) => void;
 }
 
+function groupBlocks(turn: ChatTurn): Segment[] {
+  const segments: Segment[] = [];
+  let work: WorkBlock[] = [];
+  const flush = () => {
+    if (work.length === 0) return;
+    const first = work[0];
+    if (first) segments.push({ kind: "work", key: `work_${first.id}`, blocks: work });
+    work = [];
+  };
+  for (const block of turn.blocks) {
+    if (block.type === "text") {
+      flush();
+      segments.push({ kind: "text", block });
+    } else {
+      work.push(block);
+    }
+  }
+  flush();
+  return segments;
+}
+
 function MessageTurnInner({
   turn,
   threadId,
@@ -23,6 +57,8 @@ function MessageTurnInner({
   isLast,
   onRetry,
 }: MessageTurnProps) {
+  const segments = useMemo(() => groupBlocks(turn), [turn]);
+
   if (turn.role === "user") {
     const text = turn.blocks
       .filter((block) => block.type === "text")
@@ -30,7 +66,7 @@ function MessageTurnInner({
       .join("\n");
     return (
       <div className="my-5 flex justify-start">
-        <div className="max-w-[82%] rounded-[16px] bg-[var(--bg-subtle)] px-4 py-2.5">
+        <div className="max-w-[82%] rounded-[16px] bg-[var(--bg-user)] px-4 py-3">
           {turn.attachments?.length ? (
             <div className="mb-1.5 flex flex-wrap gap-1.5">
               {turn.attachments.map((attachment) => (
@@ -44,7 +80,7 @@ function MessageTurnInner({
               ))}
             </div>
           ) : null}
-          <p className="selectable whitespace-pre-wrap text-[15px] leading-[1.6]">{text}</p>
+          <p className="selectable whitespace-pre-wrap text-[16px] leading-[1.65]">{text}</p>
         </div>
       </div>
     );
@@ -52,28 +88,62 @@ function MessageTurnInner({
 
   const streaming = running && isLast;
   const lastTextBlock = [...turn.blocks].reverse().find((block) => block.type === "text");
+  const textBlocks = turn.blocks.filter((block): block is TextBlock => block.type === "text");
 
   return (
-    <div className="my-4">
-      {turn.blocks.map((block) => {
-        if (block.type === "thinking") {
+    <div className="group/turn my-4">
+      {segments.map((segment) => {
+        if (segment.kind === "text") {
+          const isStreamingBlock = streaming && segment.block.id === lastTextBlock?.id;
           return (
-            <ThinkingTrace key={block.id} block={block} streaming={streaming && !block.isComplete} />
-          );
-        }
-        if (block.type === "text") {
-          const isStreamingBlock = streaming && block.id === lastTextBlock?.id;
-          return (
-            <div key={block.id} className={isStreamingBlock ? "caret" : ""}>
-              <Markdown streaming={isStreamingBlock}>{block.text}</Markdown>
+            <div key={segment.block.id} className={isStreamingBlock ? "caret" : ""}>
+              <Markdown streaming={isStreamingBlock}>{segment.block.text}</Markdown>
             </div>
           );
         }
-        const pending = approvals.find((item) => item.toolCallId === block.id);
+
+        const pending = approvals.filter((approval) =>
+          segment.blocks.some(
+            (block) => block.type === "tool_call" && block.id === approval.toolCallId,
+          ),
+        );
+
+        if (segment.blocks.length === 1) {
+          const only = segment.blocks[0];
+          if (!only) return null;
+          if (only.type === "thinking") {
+            return (
+              <ThinkingTrace
+                key={segment.key}
+                block={only}
+                streaming={streaming && !only.isComplete}
+              />
+            );
+          }
+          return (
+            <div key={segment.key}>
+              <ToolStepPill block={only} />
+              {pending.map((approval) => (
+                <ApprovalBanner
+                  key={approval.toolCallId}
+                  approval={approval}
+                  threadId={threadId}
+                />
+              ))}
+            </div>
+          );
+        }
+
         return (
-          <div key={block.id}>
-            <ToolStepPill block={block} />
-            {pending && <ApprovalBanner approval={pending} threadId={threadId} />}
+          <div key={segment.key}>
+            <WorkLog blocks={segment.blocks} running={streaming} approvals={pending} />
+            {pending.map((approval) => (
+              <ApprovalBanner
+                key={approval.toolCallId}
+                approval={approval}
+                threadId={threadId}
+              />
+            ))}
           </div>
         );
       })}
@@ -83,7 +153,7 @@ function MessageTurnInner({
           <span className="selectable">{turn.error}</span>
           {onRetry && (
             <button
-              onClick={() => onRetry?.(turn.id)}
+              onClick={() => onRetry(turn.id)}
               className="ml-1 inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--status-err)_30%,transparent)] px-2 py-0.5 text-[11px] transition-colors hover:bg-[color-mix(in_srgb,var(--status-err)_8%,transparent)]"
             >
               <RotateCcw size={10} strokeWidth={1.5} />
@@ -92,6 +162,7 @@ function MessageTurnInner({
           )}
         </div>
       )}
+      {!streaming && <TurnActions blocks={textBlocks} />}
     </div>
   );
 }

@@ -215,7 +215,7 @@ export function Composer() {
                         return current.filter((_, itemIndex) => itemIndex !== index);
                       })
                     }
-                    className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-ink)] text-[var(--accent-ink-fg)]"
+                    className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-action)] text-[var(--accent-action-fg)]"
                     aria-label="Remove image"
                   >
                     <X size={9} strokeWidth={2} />
@@ -248,7 +248,7 @@ export function Composer() {
                 : "Add a workspace to begin"
             }
             disabled={!activeWorkspaceId}
-            className="selectable thin-scroll w-full resize-none bg-transparent text-[15px] leading-[1.55] placeholder:text-[var(--text-muted)] disabled:opacity-60"
+            className="selectable thin-scroll w-full resize-none bg-transparent text-[16px] leading-[1.55] placeholder:text-[var(--text-muted)] disabled:opacity-60"
             style={{ maxHeight: 220 }}
           />
           <div className="mt-1 flex h-8 items-center gap-1">
@@ -287,7 +287,7 @@ export function Composer() {
                 <button
                   onClick={() => void send()}
                   disabled={!activeWorkspaceId || (!draft.trim() && images.length === 0)}
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-ink)] text-[var(--accent-ink-fg)] transition-opacity disabled:opacity-30"
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-action)] text-[var(--accent-action-fg)] transition-opacity disabled:opacity-30"
                   aria-label="Send"
                 >
                   <ArrowUp size={15} strokeWidth={1.8} />

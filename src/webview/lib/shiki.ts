@@ -30,8 +30,8 @@ export function getHighlighter(): Promise<Highlighter> {
   return highlighterPromise;
 }
 
-export function currentShikiTheme(): "vitesse-light" | "vitesse-dark" {
-  return document.documentElement.dataset.theme === "dark" ? "vitesse-dark" : "vitesse-light";
+export function currentShikiTheme(): "vitesse-dark" {
+  return "vitesse-dark";
 }
 
 export function normalizeLanguage(language: string | undefined): string {

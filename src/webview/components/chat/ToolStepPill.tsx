@@ -17,6 +17,7 @@ import { DiffView } from "./DiffView";
 
 interface ToolStepPillProps {
   block: ToolCallBlock;
+  compact?: boolean;
 }
 
 function iconFor(toolName: string, highRisk: boolean) {
@@ -54,9 +55,11 @@ function stripAnsi(value: string): string {
   return value.replace(/\u001b\[[0-9;]*m/g, "");
 }
 
-export function ToolStepPill({ block }: ToolStepPillProps) {
+export function ToolStepPill({ block, compact = false }: ToolStepPillProps) {
   const [open, setOpen] = useState(false);
   const hasDetail = Boolean(block.output || block.diff);
+  const label =
+    block.status === "denied" ? `Denied · ${block.summaryLabel}` : block.summaryLabel;
   const seconds =
     block.durationMs === undefined
       ? null
@@ -68,10 +71,14 @@ export function ToolStepPill({ block }: ToolStepPillProps) {
     <div className="my-2">
       <button
         onClick={() => hasDetail && setOpen((value) => !value)}
-        className="flex h-7 max-w-full items-center gap-2 rounded-full border hairline px-2.5 text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)]"
+        className={
+          compact
+            ? "flex h-7 w-full items-center gap-2 rounded-[6px] px-1 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)]"
+            : "flex h-7 max-w-full items-center gap-2 rounded-full border hairline px-2.5 text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)]"
+        }
       >
         <span className="flex items-center">{iconFor(block.toolName, block.risk === "high-risk")}</span>
-        <span className="truncate font-[var(--font-mono)] text-[11.5px]">{block.summaryLabel}</span>
+        <span className="truncate font-[var(--font-mono)] text-[11.5px]">{label}</span>
         {block.risk === "high-risk" && (
           <span className="rounded-full bg-[color-mix(in_srgb,var(--status-err)_12%,transparent)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--status-err)]">
             Risky
@@ -84,7 +91,7 @@ export function ToolStepPill({ block }: ToolStepPillProps) {
         )}
         <span className="ml-auto flex items-center gap-1.5 pl-2 text-[var(--text-muted)]">
           {seconds && <span className="text-meta">{seconds}</span>}
-          {statusIcon(block)}
+          {(!compact || block.status !== "completed") && statusIcon(block)}
           {hasDetail && (
             <ChevronDown
               size={12}
@@ -103,7 +110,11 @@ export function ToolStepPill({ block }: ToolStepPillProps) {
             transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}
             className="overflow-hidden"
           >
-            <div className="mt-2 max-h-72 overflow-auto rounded-[10px] border hairline bg-[var(--bg-code)]">
+            <div
+              className={`mt-1.5 max-h-72 overflow-auto rounded-[8px] border hairline bg-[var(--bg-code)] ${
+                compact ? "ml-1" : ""
+              }`}
+            >
               {block.diff ? (
                 <DiffView before={block.diff.before} after={block.diff.after} />
               ) : (

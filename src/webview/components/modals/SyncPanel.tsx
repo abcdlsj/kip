@@ -167,7 +167,7 @@ export function SyncPanel() {
         <button
           onClick={() => void save()}
           disabled={busy === "save"}
-          className="h-8 rounded-full bg-[var(--accent-ink)] px-3.5 text-[12px] font-medium text-[var(--accent-ink-fg)]"
+          className="h-8 rounded-full bg-[var(--accent-action)] px-3.5 text-[12px] font-medium text-[var(--accent-action-fg)]"
         >
           {busy === "save" ? "Saving..." : "Save & test"}
         </button>

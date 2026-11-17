@@ -26,10 +26,19 @@ export async function submitPrompt(options: SubmitPromptOptions): Promise<void> 
   useChatStore
     .getState()
     .appendUserTurn(options.threadId, options.text, attachments.length ? attachments : undefined);
-  await request("sendPrompt", {
-    threadId: options.threadId,
-    text: options.text,
-    referencedFiles: options.referencedFiles,
-    images: options.images?.map(({ mimeType, base64Data }) => ({ mimeType, base64Data })),
-  });
+  try {
+    await request("sendPrompt", {
+      threadId: options.threadId,
+      text: options.text,
+      referencedFiles: options.referencedFiles,
+      images: options.images?.map(({ mimeType, base64Data }) => ({ mimeType, base64Data })),
+    });
+  } catch (error) {
+    useChatStore
+      .getState()
+      .setError(
+        options.threadId,
+        error instanceof Error ? error.message : "Could not start the run",
+      );
+  }
 }

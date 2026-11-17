@@ -66,14 +66,14 @@ export function CodeBlock({ code, language, streaming = false }: CodeBlockProps)
   };
 
   return (
-    <div className="my-4 overflow-hidden rounded-[10px] border hairline bg-[var(--bg-code)]">
-      <div className="flex h-8 items-center justify-between border-b hairline px-3">
-        <span className="text-meta uppercase tracking-[0.06em] text-[var(--text-muted)]">
+    <div className="my-4 overflow-hidden rounded-[10px] border border-[var(--code-border)] bg-[var(--bg-code-block)]">
+      <div className="flex h-8 items-center justify-between border-b border-[var(--code-border)] px-3">
+        <span className="text-meta uppercase tracking-[0.06em] text-[var(--code-muted)]">
           {lang === "text" ? "code" : lang}
         </span>
         <button
           onClick={copy}
-          className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
+          className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--code-muted)] transition-colors hover:bg-white/10 hover:text-[var(--code-text)]"
           aria-label="Copy code"
         >
           {copied ? <Check size={13} strokeWidth={1.5} /> : <Copy size={13} strokeWidth={1.5} />}
@@ -81,11 +81,11 @@ export function CodeBlock({ code, language, streaming = false }: CodeBlockProps)
       </div>
       {html ? (
         <div
-          className="selectable overflow-x-auto p-4 text-[12.5px] leading-relaxed [&_pre]:!bg-transparent [&_code]:font-[var(--font-mono)]"
+          className="selectable overflow-x-auto p-4 text-[13px] leading-relaxed text-[var(--code-text)] [&_pre]:!bg-transparent [&_code]:font-[var(--font-mono)]"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
-        <pre className="selectable overflow-x-auto p-4 font-[var(--font-mono)] text-[12.5px] leading-relaxed">
+        <pre className="selectable overflow-x-auto p-4 font-[var(--font-mono)] text-[13px] leading-relaxed text-[var(--code-text)]">
           <code>{code}</code>
         </pre>
       )}

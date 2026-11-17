@@ -34,6 +34,7 @@ interface ChatState {
   applyEvent: (threadId: string, event: AgentStreamEvent) => void;
   removeApproval: (threadId: string, toolCallId: string) => void;
   abort: (threadId: string) => Promise<void>;
+  setError: (threadId: string, message: string) => void;
   resolveApproval: (
     threadId: string,
     toolCallId: string,
@@ -177,15 +178,49 @@ export const useChatStore = create<ChatState>()(
             }
             return;
           }
-          case "turn_error":
+          case "turn_error": {
             view.running = false;
             view.error = event.message;
+            const last = view.turns[view.turns.length - 1];
+            if (last?.role === "assistant") {
+              last.error = event.message;
+            } else {
+              view.turns.push({
+                id: `err_${crypto.randomUUID()}`,
+                role: "assistant",
+                blocks: [],
+                createdAt: Date.now(),
+                error: event.message,
+              });
+            }
             return;
+          }
           case "thread_title_updated":
             return;
           default:
             return;
         }
+      });
+    },
+
+    setError: (threadId, message) => {
+      set((state) => {
+        const view = state.threads[threadId] ?? emptyView();
+        view.running = false;
+        view.error = message;
+        const last = view.turns[view.turns.length - 1];
+        if (last?.role === "assistant") {
+          last.error = message;
+        } else {
+          view.turns.push({
+            id: `err_${crypto.randomUUID()}`,
+            role: "assistant",
+            blocks: [],
+            createdAt: Date.now(),
+            error: message,
+          });
+        }
+        state.threads[threadId] = view;
       });
     },
 
