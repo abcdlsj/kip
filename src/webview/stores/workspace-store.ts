@@ -1,0 +1,145 @@
+/** Workspace and thread navigation state. */
+import { create } from "zustand";
+import type { ThinkingLevel, ThreadSummary, Workspace } from "../../shared/types";
+import { request } from "../rpc-client";
+
+interface WorkspaceState {
+  workspaces: Workspace[];
+  activeWorkspaceId: string | null;
+  threads: ThreadSummary[];
+  activeThreadId: string | null;
+  loading: boolean;
+  initialize: () => Promise<void>;
+  selectWorkspace: (workspaceId: string) => Promise<void>;
+  pickWorkspace: () => Promise<void>;
+  refreshWorkspaces: () => Promise<void>;
+  refreshThreads: () => Promise<void>;
+  newThread: () => Promise<ThreadSummary | null>;
+  selectThread: (threadId: string | null) => void;
+  deleteThread: (threadId: string) => Promise<void>;
+  renameThread: (threadId: string, title: string) => Promise<void>;
+  applyStreamMeta: (event: {
+    kind: string;
+    title?: string;
+  }) => void;
+  setThreadRunning: (threadId: string, running: boolean) => void;
+  updateThreadModel: (threadId: string, provider: string, modelId: string) => Promise<void>;
+  setThreadThinking: (threadId: string, level: ThinkingLevel) => Promise<void>;
+}
+
+export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
+  workspaces: [],
+  activeWorkspaceId: null,
+  threads: [],
+  activeThreadId: null,
+  loading: true,
+
+  initialize: async () => {
+    const workspaces = await request("listWorkspaces", undefined);
+    const first = workspaces[0] ?? null;
+    set({ workspaces, activeWorkspaceId: first?.id ?? null, loading: false });
+    if (first) {
+      const threads = await request("listThreads", { workspaceId: first.id });
+      set({
+        threads,
+        activeThreadId: threads[0]?.id ?? null,
+      });
+    }
+  },
+
+  refreshWorkspaces: async () => {
+    const workspaces = await request("listWorkspaces", undefined);
+    set({ workspaces });
+  },
+
+  selectWorkspace: async (workspaceId) => {
+    set({ activeWorkspaceId: workspaceId, threads: [], activeThreadId: null });
+    const threads = await request("listThreads", { workspaceId });
+    set({ threads, activeThreadId: threads[0]?.id ?? null });
+  },
+
+  pickWorkspace: async () => {
+    const workspace = await request("pickAndCreateWorkspace", undefined);
+    if (!workspace) return;
+    await get().refreshWorkspaces();
+    await get().selectWorkspace(workspace.id);
+  },
+
+  refreshThreads: async () => {
+    const workspaceId = get().activeWorkspaceId;
+    if (!workspaceId) return;
+    const threads = await request("listThreads", { workspaceId });
+    set({ threads });
+  },
+
+  newThread: async () => {
+    const workspaceId = get().activeWorkspaceId;
+    if (!workspaceId) return null;
+    const thread = await request("createThread", { workspaceId });
+    set((state) => ({
+      threads: [thread, ...state.threads],
+      activeThreadId: thread.id,
+    }));
+    return thread;
+  },
+
+  selectThread: (threadId) => set({ activeThreadId: threadId }),
+
+  deleteThread: async (threadId) => {
+    await request("deleteThread", { threadId });
+    set((state) => {
+      const threads = state.threads.filter((thread) => thread.id !== threadId);
+      return {
+        threads,
+        activeThreadId:
+          state.activeThreadId === threadId ? (threads[0]?.id ?? null) : state.activeThreadId,
+      };
+    });
+  },
+
+  renameThread: async (threadId, title) => {
+    await request("renameThread", { threadId, title });
+    set((state) => ({
+      threads: state.threads.map((thread) =>
+        thread.id === threadId ? { ...thread, title } : thread,
+      ),
+    }));
+  },
+
+  applyStreamMeta: (event) => {
+    const activeId = get().activeThreadId;
+    if (event.kind === "thread_title_updated" && event.title && activeId) {
+      set((state) => ({
+        threads: state.threads.map((thread) =>
+          thread.id === activeId ? { ...thread, title: event.title ?? thread.title } : thread,
+        ),
+      }));
+    }
+  },
+
+  setThreadRunning: (threadId, running) => {
+    set((state) => ({
+      threads: state.threads.map((thread) =>
+        thread.id === threadId ? { ...thread, isRunning: running } : thread,
+      ),
+    }));
+  },
+
+  updateThreadModel: async (threadId, provider, modelId) => {
+    await request("setThreadModel", { threadId, provider, modelId });
+    set((state) => ({
+      threads: state.threads.map((thread) =>
+        thread.id === threadId ? { ...thread, modelProvider: provider, modelId } : thread,
+      ),
+    }));
+  },
+
+  setThreadThinking: async (threadId, level) => {
+    await request("setThinkingLevel", { threadId, level });
+    set((state) => ({
+      threads: state.threads.map((thread) =>
+        thread.id === threadId ? { ...thread, thinkingLevel: level } : thread,
+      ),
+    }));
+  },
+}));
