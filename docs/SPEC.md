@@ -1,3 +1,16 @@
+> **Implementation notes (read with the contract):**
+>
+> * The maintained Pi distribution used here is `@earendil-works/pi-coding-agent`
+>   and `@earendil-works/pi-ai` (1.5.x); the API contracts are the same family
+>   referenced in this document.
+> * Electrobun is pinned to 1.18.1. Stable Electrobun packages record a macOS 14
+>   deployment target, so the `postWrap` hook lowers the launcher minimum to 12.0
+>   and macOS 13 uses the bundled CEF renderer.
+> * Code blocks intentionally use a dark surface in both themes for contrast.
+> * The chat surface adds a two-level disclosure (`WorkLog` then tool detail)
+>   following the progressive-disclosure guidance in Anthropic's MCP Apps
+>   design guidelines.
+
 # Kip — Product and Engineering Specification
 
 > Kip is a quiet, cross-platform desktop coding agent. The document below is the
