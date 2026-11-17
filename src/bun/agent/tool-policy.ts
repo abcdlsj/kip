@@ -103,7 +103,10 @@ function classifySegment(raw: string): CommandRisk {
     if (rule.pattern.test(segment)) return "high-risk";
   }
 
-  if (/(^|[^>])>{1,2}(?!&)/.test(segment)) return "standard";
+  const withoutNullRedirects = segment
+    .replace(/(?:\d?>>?|&>)\s*\/dev\/null/g, "")
+    .replace(/\d?>&\d/g, "");
+  if (/(^|[^>])>{1,2}(?!&)/.test(withoutNullRedirects)) return "standard";
 
   const words = segment.match(/[^\s]+/g) ?? [];
   const first = (words[0] ?? "").replace(/^\(/, "");

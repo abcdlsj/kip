@@ -45,6 +45,7 @@ describe("command classifier", () => {
     expect(classifyCommand("bun test").risk).toBe("standard");
     expect(classifyCommand("mkdir build").risk).toBe("standard");
     expect(classifyCommand("echo hi > out.txt").risk).toBe("standard");
+    expect(classifyCommand("ls src 2>/dev/null && echo done").risk).toBe("safe");
     expect(classifyCommand("git commit -m test").risk).toBe("standard");
   });
 

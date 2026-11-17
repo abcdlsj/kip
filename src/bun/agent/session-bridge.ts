@@ -86,7 +86,11 @@ export function projectSessionTurns(
       const meta = toolMeta.get(block.id);
       if (!meta) continue;
       block.output = meta.output;
-      block.status = meta.isError ? "error" : "completed";
+      block.status = meta.isError
+        ? /denied|blocked by Kip/i.test(meta.output ?? "")
+          ? "denied"
+          : "error"
+        : "completed";
     }
   }
   return turns;
@@ -181,7 +185,19 @@ export function titleFromPrompt(text: string): string {
     .replace(/[#*_>`]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  const words = clean.split(" ").slice(0, 7).join(" ");
-  const title = words.length > 42 ? `${words.slice(0, 42).trim()}` : words;
-  return title || "New Thread";
+  const lower = clean.toLowerCase();
+  const thenIndex = lower.indexOf(" then ");
+  const clause = thenIndex >= 0 ? clean.slice(thenIndex + 6) : clean;
+  const source = clause.split(/(?<=[.!?])\s+/)[0] ?? clause;
+  const words = source.split(" ").filter(Boolean);
+  let title = "";
+  for (const word of words.slice(0, 8)) {
+    const next = title ? `${title} ${word}` : word;
+    if (next.length > 48) break;
+    title = next;
+  }
+  if (!title) title = source.slice(0, 48);
+  title = title.replace(/[.,;:!?]+$/g, "").trim();
+  if (!title) return "New Thread";
+  return title.charAt(0).toUpperCase() + title.slice(1);
 }
