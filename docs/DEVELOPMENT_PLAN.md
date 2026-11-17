@@ -86,7 +86,8 @@ This plan is the working checklist for the build. The contract lives in
 | 2026-11-18 | Light/dark themes | Both verified via CDP screenshots |
 | 2026-11-18 | Work log folding | 49-step turn collapses to one line; expands to a timeline |
 | 2026-11-18 | Write denial | Deny path verified; model received the denial and file stayed absent |
-| 2026-11-18 | `bun run build` | Packaging completed |
+| 2026-11-18 | `bun run build` | Packaging completed; stable `.app`, `.dmg`, and `.tar.zst` produced |
+| 2026-11-18 | Packaged app launch | macOS 13 launcher patched via `postWrap`; app launches and renders |
 
 ## Next Ideas
 
