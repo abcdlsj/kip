@@ -43,8 +43,10 @@ This plan is the working checklist for the build. The contract lives in
 - [x] Tokens, typography, light/dark themes, hairlines, motion springs.
 - [x] App shell, frameless title bar, collapsible sidebar, top bar.
 - [x] Editorial thread canvas with scroll anchor and jump-to-latest pill.
-- [x] Markdown + Shiki, thinking trace, tool pills, approval card.
+- [x] Markdown + dark Shiki code blocks, folded work log, nested diffs, approval card.
 - [x] Floating composer with @file search, image paste, model selector.
+- [x] Progressive disclosure: collapsed work log, live action header, staggered reveal.
+- [x] Readability pass: 16px prose, higher-contrast text, dark code surface, clay actions.
 
 ## Phase 5 — Shortcuts, onboarding, polish
 
@@ -76,12 +78,14 @@ This plan is the working checklist for the build. The contract lives in
 | Date | Check | Result |
 | --- | --- | --- |
 | 2026-11-18 | `tsc --noEmit` | 0 errors |
-| 2026-11-18 | `bun test` | 25 passed, 0 failed |
+| 2026-11-18 | `bun test` | 29 passed, 0 failed |
 | 2026-11-18 | App launch on macOS 13.7 / arm64 | CEF window renders, RPC connected |
 | 2026-11-18 | Live agent turn (Command Code / DeepSeek) | Streaming text, thinking, tool calls |
 | 2026-11-18 | Write approval | Diff preview, allow, file written |
 | 2026-11-18 | Abort | Session stopped, composer returned to idle |
 | 2026-11-18 | Light/dark themes | Both verified via CDP screenshots |
+| 2026-11-18 | Work log folding | 49-step turn collapses to one line; expands to a timeline |
+| 2026-11-18 | Write denial | Deny path verified; model received the denial and file stayed absent |
 | 2026-11-18 | `bun run build` | Packaging completed |
 
 ## Next Ideas

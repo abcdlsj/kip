@@ -7,7 +7,7 @@ explicit approval boundary between the model and your files. The interface borro
 from editorial design and Braun-era industrial minimalism: warm paper, obsidian,
 hairlines, and no chat bubbles.
 
-![Kip approval flow in light mode](docs/images/approval-light.png)
+![Kip focus mode in light theme](docs/images/thread-light.png)
 
 ## Why another agent client
 
@@ -22,7 +22,31 @@ hairlines, and no chat bubbles.
 - **Optional cloud backup.** Incremental sync to S3, R2, MinIO, B2, or OSS through
   Bun's native S3 client. Credentials are never uploaded.
 
-![Kip thread in dark mode](docs/images/thread-dark.png)
+## Interaction model
+
+Tool work is the noisy part of a coding agent, so Kip treats it as a **work log**, not a
+transcript. Thinking and tool steps collapse into a single line:
+
+```text
+✦ Worked for 12s · 8 steps                     ⌄
+```
+
+While the agent runs, that line becomes the live action — `Reading src/bun/agent/...`,
+`Running bun test` — with a breathing indicator and elapsed time. Expanding the log reveals
+a quiet timeline of thoughts and steps; each step opens its own diff or terminal output.
+Approvals never hide inside the fold: the pending action and its diff surface inline, and
+the log opens automatically when the agent is waiting on you.
+
+This is progressive disclosure for agent output: one glance when you trust it, full
+evidence when you don't. The interaction principles follow Anthropic's
+[MCP Apps design guidelines](https://claude.com/docs/connectors/building/mcp-apps/design-guidelines):
+reveal complexity progressively, keep controls visible, and inherit the host's visual
+hierarchy. Kip keeps its own type system, palette, and layout.
+
+Motion is restrained: spring height transitions for folds, staggered rows on expand, a
+soft shimmer on the live action, and a caret on streaming text. No bounce, no confetti.
+
+![Kip in dark theme](docs/images/thread-dark.png)
 
 ## Requirements
 
@@ -117,6 +141,8 @@ Pi's manual compaction.
 
 ## Safety model
 
+![Inline approval with a diff preview](docs/images/approval-light.png)
+
 Three approval policies are available in **Settings → Safety**:
 
 - **Read-only auto** (default): safe inspection commands and file reads run automatically.
@@ -177,6 +203,9 @@ that backup on another machine.
   covered by unit tests.
 - The interceptor's suspend/resume behavior is exercised headlessly in
   `tests/tool-interceptor.test.ts`.
+- The chat surface uses a two-level disclosure: `WorkLog` groups thinking and tool steps,
+  `ToolStepPill` reveals the raw diff or command output. Both are local components with no
+  external state library beyond Zustand.
 - UI text is English-only, icons are Lucide at 1.5 px stroke, and no emoji are used.
 - File responsibilities are kept small; orchestration, policy, projection, storage, and
   transport live in separate modules.
