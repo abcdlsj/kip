@@ -1,0 +1,15 @@
+node_modules/
+.hutch/
+build/
+dist/
+artifacts/
+*.tsbuildinfo
+.DS_Store
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.env
+.env.*
+credentials.enc
+.cottontail-tmp/
+*.log
