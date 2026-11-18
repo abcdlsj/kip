@@ -123,9 +123,74 @@ jobs:
           path: artifacts/**
           if-no-files-found: error
 
+  cask:
+    name: homebrew cask
+    needs: [macos]
+    runs-on: instabox-medium
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: kip-macos-*
+          path: dmgs
+          merge-multiple: true
+
+      # The dmg names come from electrobun's <env>-<os>-<arch> prefix; both
+      # architectures must exist or the cask would pin a broken url.
+      - name: Write kip.rb with the dmg checksums
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          arm="dmgs/stable-macos-arm64-Kip.dmg"
+          intel="dmgs/stable-macos-x64-Kip.dmg"
+          for f in "$arm" "$intel"; do
+            [ -f "$f" ] || { echo "::error::missing $f"; ls -R dmgs; exit 1; }
+          done
+          arm_sha=$(shasum -a 256 "$arm" | cut -d' ' -f1)
+          intel_sha=$(shasum -a 256 "$intel" | cut -d' ' -f1)
+          cat > kip.rb <<EOF
+          # typed: strict
+          # frozen_string_literal: true
+
+          cask "kip" do
+            version "$version"
+
+            on_arm do
+              sha256 "$arm_sha"
+
+              url "https://github.com/abcdlsj/kip/releases/download/v#{version}/stable-macos-arm64-Kip.dmg"
+            end
+            on_intel do
+              sha256 "$intel_sha"
+
+              url "https://github.com/abcdlsj/kip/releases/download/v#{version}/stable-macos-x64-Kip.dmg"
+            end
+
+            name "Kip"
+            desc "Quiet, cross-platform desktop coding agent built with Electrobun and Pi"
+            homepage "https://github.com/abcdlsj/kip"
+
+            app "Kip.app"
+
+            zap trash: [
+              "~/Library/Application Support/ai.kip.desktop",
+              "~/Library/Caches/ai.kip.desktop",
+              "~/Library/Preferences/ai.kip.desktop.plist",
+            ]
+          end
+          EOF
+          cat kip.rb
+          command -v ruby >/dev/null && ruby -c kip.rb
+          cat kip.rb
+
+      - name: Attach the cask
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" kip.rb --clobber
+
   publish:
     name: publish
-    needs: [macos, windows]
+    needs: [macos, windows, cask]
     runs-on: instabox-medium
     timeout-minutes: 15
     steps:
