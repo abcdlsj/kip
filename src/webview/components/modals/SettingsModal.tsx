@@ -31,7 +31,7 @@ export function SettingsModal() {
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[580px] w-[720px] max-w-[calc(100vw-48px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[16px] border hairline bg-[var(--bg-elevated)] shadow-[var(--shadow-modal)]">
           <Dialog.Title className="sr-only">Kip settings</Dialog.Title>
           <nav className="flex w-[168px] shrink-0 flex-col border-r hairline bg-[var(--bg-sidebar)] p-2.5">
-            <p className="px-2 pb-3 pt-2 text-[11.5px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            <p className="px-2 pb-3 pt-2 text-[11.5px] font-medium text-[var(--text-muted)]">
               Settings
             </p>
             {TABS.map((item) => {
@@ -119,7 +119,7 @@ export function SettingsModal() {
                 </p>
                 <button
                   onClick={() => void refresh()}
-                  className="mt-4 h-7 rounded-full border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+                  className="mt-4 h-7 rounded-[8px] border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
                 >
                   Reload preferences
                 </button>

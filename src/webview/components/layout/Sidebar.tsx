@@ -8,6 +8,7 @@ import {
   PanelLeftClose,
   Plus,
   Settings,
+  SquarePen,
   Trash2,
 } from "lucide-react";
 import { SIDEBAR_WIDTH } from "../../../shared/constants";
@@ -69,17 +70,29 @@ export function Sidebar() {
       initial={false}
       animate={{ width: collapsed ? 0 : SIDEBAR_WIDTH }}
       transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}
-      className="relative z-20 flex h-full shrink-0 flex-col overflow-hidden border-r hairline bg-[var(--bg-sidebar)]"
+      className="relative z-20 flex h-full shrink-0 flex-col overflow-hidden bg-[var(--bg-sidebar)]"
     >
-      <div className="drag-region h-[44px] shrink-0" />
+      {/* Traffic lights sit on the left of this strip. */}
+      <div className="drag-region flex h-[44px] shrink-0 items-center justify-end px-2.5">
+        {!collapsed && (
+          <button
+            onClick={() => void toggleSidebar()}
+            className="no-drag flex h-7 w-7 items-center justify-center rounded-[7px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar (⌘B)"
+          >
+            <PanelLeftClose size={15} strokeWidth={1.5} />
+          </button>
+        )}
+      </div>
       {!collapsed && (
         <>
-          <div className="px-2.5 pt-1">
+          <div className="space-y-0.5 px-2.5">
             <Popover.Root open={workspaceOpen} onOpenChange={setWorkspaceOpen}>
               <Popover.Trigger asChild>
-                <button className="flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left transition-colors hover:bg-[var(--bg-subtle)]">
-                  <FolderClosed size={14} strokeWidth={1.5} className="text-[var(--text-secondary)]" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+                <button className="flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-left transition-colors hover:bg-[var(--bg-subtle)]">
+                  <FolderClosed size={14} strokeWidth={1.5} className="shrink-0 text-[var(--text-secondary)]" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">
                     {workspace?.name ?? "Workspace"}
                   </span>
                   <ChevronsUpDown size={13} strokeWidth={1.5} className="text-[var(--text-muted)]" />
@@ -121,12 +134,22 @@ export function Sidebar() {
                 </Popover.Content>
               </Popover.Portal>
             </Popover.Root>
+            <button
+              onClick={() => void newThread()}
+              className="group/new flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
+            >
+              <SquarePen size={14} strokeWidth={1.5} className="shrink-0" />
+              <span className="whitespace-nowrap">New thread</span>
+              <span className="kbd ml-auto shrink-0 opacity-0 transition-opacity group-hover/new:opacity-100">
+                ⌘N
+              </span>
+            </button>
           </div>
 
-          <div className="mt-3 flex-1 overflow-y-auto px-2.5 pb-2 scrollbar-none">
+          <div className="mt-4 flex-1 overflow-y-auto px-2.5 pb-2 scrollbar-none">
             {groups.map((group) => (
-              <div key={group.label} className="mb-3">
-                <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-[0.07em] text-[var(--text-muted)]">
+              <div key={group.label} className="mb-4">
+                <p className="px-2 pb-1 text-[11.5px] font-medium text-[var(--text-muted)]">
                   {group.label}
                 </p>
                 {group.items.map((thread) => {
@@ -134,10 +157,16 @@ export function Sidebar() {
                   return (
                     <div
                       key={thread.id}
-                      className={`group flex h-8 items-center rounded-[8px] px-2 transition-colors ${
-                        active ? "bg-[var(--bg-subtle)]" : "hover:bg-[var(--bg-subtle)]"
+                      className={`group flex h-8 items-center gap-2 rounded-[8px] px-2 transition-colors ${
+                        active ? "bg-[var(--bg-active)]" : "hover:bg-[var(--bg-subtle)]"
                       }`}
                     >
+                      {thread.isRunning && (
+                        <span
+                          className="pulse-dot h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent-action)]"
+                          aria-label="Running"
+                        />
+                      )}
                       {editingId === thread.id ? (
                         <input
                           autoFocus
@@ -156,7 +185,7 @@ export function Sidebar() {
                           onDoubleClick={() => beginRename(thread.id, thread.title)}
                           className={`min-w-0 flex-1 truncate text-left text-[13px] ${
                             active
-                              ? "font-medium text-[var(--text-primary)]"
+                              ? "text-[var(--text-primary)]"
                               : "text-[var(--text-secondary)]"
                           }`}
                         >
@@ -198,34 +227,19 @@ export function Sidebar() {
               </div>
             ))}
             {threads.length === 0 && (
-              <p className="px-2 text-[12px] leading-relaxed text-[var(--text-muted)]">
+              <p className="px-2 text-[12.5px] leading-relaxed text-[var(--text-muted)]">
                 No threads yet.
               </p>
             )}
           </div>
 
-          <div className="flex items-center gap-1 border-t hairline px-2.5 py-2">
-            <button
-              onClick={() => void newThread()}
-              className="flex h-8 flex-1 items-center gap-2 rounded-[8px] px-2 text-[12.5px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
-            >
-              <Plus size={14} strokeWidth={1.5} className="shrink-0" />
-              <span className="whitespace-nowrap">New Thread</span>
-              <span className="kbd ml-auto shrink-0">⌘N</span>
-            </button>
+          <div className="px-2.5 pb-2.5 pt-1">
             <button
               onClick={() => openSettings()}
-              className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
-              aria-label="Settings"
+              className="flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
             >
-              <Settings size={14} strokeWidth={1.5} />
-            </button>
-            <button
-              onClick={() => void toggleSidebar()}
-              className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
-              aria-label="Collapse sidebar"
-            >
-              <PanelLeftClose size={14} strokeWidth={1.5} />
+              <Settings size={14} strokeWidth={1.5} className="shrink-0" />
+              Settings
             </button>
           </div>
         </>

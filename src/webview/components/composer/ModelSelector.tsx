@@ -56,7 +56,7 @@ export function ModelSelector() {
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button className="flex h-7 max-w-[240px] items-center gap-1.5 rounded-full border hairline px-2.5 text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)]">
+        <button className="-ml-1 flex h-7 max-w-[260px] items-center gap-1.5 rounded-[8px] px-2 text-[12.5px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] data-[state=open]:bg-[var(--bg-subtle)]">
           <span className="truncate">{active?.displayName ?? "Select model"}</span>
           <span className="text-[var(--text-muted)]">·</span>
           <span className="shrink-0 text-[var(--text-muted)]">{thinkingLabel}</span>
@@ -68,9 +68,9 @@ export function ModelSelector() {
           side="top"
           align="start"
           sideOffset={8}
-          className="z-50 w-[300px] rounded-[12px] border hairline bg-[var(--bg-elevated)] p-1.5 shadow-[var(--shadow-modal)]"
+          className="z-50 w-[300px] rounded-[14px] border hairline bg-[var(--bg-elevated)] p-1.5 shadow-[var(--shadow-modal)]"
         >
-          <p className="px-2 pb-1 pt-1 text-[11px] font-medium uppercase tracking-[0.07em] text-[var(--text-muted)]">
+          <p className="px-2 pb-1 pt-1 text-[11.5px] font-medium text-[var(--text-muted)]">
             Model
           </p>
           <div className="max-h-[220px] overflow-y-auto scrollbar-none">
@@ -98,7 +98,7 @@ export function ModelSelector() {
             )}
           </div>
           <div className="my-1 border-t hairline" />
-          <p className="px-2 pb-1 pt-1 text-[11px] font-medium uppercase tracking-[0.07em] text-[var(--text-muted)]">
+          <p className="px-2 pb-1 pt-1 text-[11.5px] font-medium text-[var(--text-muted)]">
             Reasoning
           </p>
           <div className="flex gap-1 px-1 pb-1">

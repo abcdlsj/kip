@@ -109,9 +109,9 @@ export function WorkLog({ blocks, running, approvals }: WorkLogProps) {
     >
       <button
         onClick={() => setOpen((value) => !value)}
-        className="group flex h-7 max-w-full items-center gap-2 rounded-full px-1 text-[12px] text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+        className="group -ml-1.5 flex h-7 max-w-full items-center gap-1.5 rounded-[8px] px-1.5 text-[12.5px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
       >
-        <span className="flex h-5 w-5 items-center justify-center rounded-full border hairline bg-[var(--bg-canvas)]">
+        <span className="flex h-4 w-4 items-center justify-center">
           {running ? (
             <Loader2 size={11} strokeWidth={1.6} className="animate-spin text-[var(--text-muted)]" />
           ) : hasError ? (
@@ -121,10 +121,10 @@ export function WorkLog({ blocks, running, approvals }: WorkLogProps) {
           ) : waiting ? (
             <ShieldAlert size={11} strokeWidth={1.6} className="text-[var(--status-warn)]" />
           ) : (
-            <Sparkles size={11} strokeWidth={1.5} className="text-[var(--text-muted)]" />
+            <Sparkles size={12} strokeWidth={1.5} />
           )}
         </span>
-        <span className={running ? "thinking-shimmer" : ""}>
+        <span className={`truncate ${running ? "thinking-shimmer" : ""}`}>
           {waiting
             ? "Waiting for approval"
             : running
@@ -134,7 +134,7 @@ export function WorkLog({ blocks, running, approvals }: WorkLogProps) {
                 : `Worked`}
         </span>
         {!running && toolCount > 0 && (
-          <span className="text-[11.5px] text-[var(--text-muted)]">
+          <span className="shrink-0 text-[var(--text-muted)] opacity-80">
             · {toolCount} {toolCount === 1 ? "step" : "steps"}
           </span>
         )}
@@ -160,7 +160,7 @@ export function WorkLog({ blocks, running, approvals }: WorkLogProps) {
             transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}
             className="overflow-hidden"
           >
-            <div className="ml-[9px] border-l-[1.5px] border-[var(--border-hairline)] py-1 pl-3.5">
+            <div className="ml-[1px] border-l border-[var(--border-focus)] py-1 pl-4 [border-left-color:var(--border-hairline)]">
               {blocks.map((block, index) => (
                 <motion.div
                   key={block.id}

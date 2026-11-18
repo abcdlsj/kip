@@ -65,14 +65,14 @@ function MessageTurnInner({
       .map((block) => (block.type === "text" ? block.text : ""))
       .join("\n");
     return (
-      <div className="my-5 flex justify-start">
-        <div className="max-w-[82%] rounded-[16px] bg-[var(--bg-user)] px-4 py-3">
+      <div className="my-6 flex justify-end">
+        <div className="max-w-[78%] rounded-[18px] bg-[var(--bg-user)] px-4 py-2.5">
           {turn.attachments?.length ? (
             <div className="mb-1.5 flex flex-wrap gap-1.5">
               {turn.attachments.map((attachment) => (
                 <span
                   key={attachment.path}
-                  className="inline-flex h-[22px] items-center gap-1 rounded-[6px] border hairline px-1.5 text-[11.5px] text-[var(--text-secondary)]"
+                  className="inline-flex h-[22px] items-center gap-1 rounded-[6px] bg-[var(--bg-elevated)] px-1.5 text-[11.5px] text-[var(--text-secondary)]"
                 >
                   <FileText size={11} strokeWidth={1.5} />
                   {attachment.name}
@@ -91,7 +91,7 @@ function MessageTurnInner({
   const textBlocks = turn.blocks.filter((block): block is TextBlock => block.type === "text");
 
   return (
-    <div className="group/turn my-4">
+    <div className="group/turn my-5">
       {segments.map((segment) => {
         if (segment.kind === "text") {
           const isStreamingBlock = streaming && segment.block.id === lastTextBlock?.id;

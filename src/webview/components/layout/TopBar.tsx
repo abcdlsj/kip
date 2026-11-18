@@ -33,9 +33,9 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
 
   return (
     <header
-      className={`drag-region absolute inset-x-0 top-0 z-10 flex h-11 items-center gap-2 px-4 transition-colors ${
-        scrolled ? "border-b hairline" : ""
-      }`}
+      className={`drag-region absolute inset-x-0 top-0 z-10 flex h-11 items-center gap-2 pr-3 transition-colors ${
+        scrolled ? "border-b hairline" : "border-b border-transparent"
+      } ${collapsed ? "pl-[84px]" : "pl-4"}`}
       style={{
         background: "color-mix(in srgb, var(--bg-canvas) 82%, transparent)",
         backdropFilter: "blur(14px)",
@@ -47,16 +47,17 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
           onClick={() => void toggleSidebar()}
           className="no-drag -ml-1 flex h-7 w-7 items-center justify-center rounded-[7px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
           aria-label="Open sidebar"
+          title="Open sidebar (⌘B)"
         >
-          <PanelLeftOpen size={14} strokeWidth={1.5} />
+          <PanelLeftOpen size={15} strokeWidth={1.5} />
         </button>
       )}
-      <div className="no-drag flex min-w-0 items-center gap-1.5 text-[12px] text-[var(--text-muted)]">
+      <div className="no-drag flex min-w-0 items-center gap-1.5 text-[13px] text-[var(--text-muted)]">
         <span className="max-w-[160px] truncate">{workspace?.name ?? "Kip"}</span>
         {thread && (
           <>
-            <span className="opacity-50">/</span>
-            <span className="max-w-[280px] truncate text-[var(--text-secondary)]">
+            <span className="opacity-40">/</span>
+            <span className="max-w-[320px] truncate font-medium text-[var(--text-primary)]">
               {thread.title}
             </span>
           </>
@@ -64,7 +65,7 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
       </div>
       <div className="no-drag ml-auto flex items-center gap-2.5">
         {workspace?.gitBranch && (
-          <span className="flex h-6 items-center gap-1.5 rounded-full border hairline px-2 text-[11.5px] text-[var(--text-secondary)]">
+          <span className="flex h-6 items-center gap-1.5 rounded-[7px] bg-[var(--bg-subtle)] px-2 text-[11.5px] text-[var(--text-secondary)]">
             <GitBranch size={11} strokeWidth={1.5} />
             <span className="max-w-[140px] truncate font-[var(--font-mono)] text-[11px]">
               {workspace.gitBranch}
@@ -83,7 +84,7 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
                 ? `Context ${formatTokens(usage.usedTokens)} / ${formatTokens(usage.maxTokens)} · Click to compact`
                 : "Compact context"
             }
-            className="group flex h-6 items-center gap-1.5 rounded-full px-1.5 transition-colors hover:bg-[var(--bg-subtle)]"
+            className="group flex h-6 items-center gap-1.5 rounded-[7px] px-1.5 transition-colors hover:bg-[var(--bg-subtle)]"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" className="rotate-[-90deg]">
               <circle

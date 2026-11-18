@@ -21,7 +21,7 @@ export function ApprovalBanner({ approval, threadId }: ApprovalBannerProps) {
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}
-      className="my-2 rounded-[12px] border border-[var(--border-focus)] bg-[var(--bg-elevated)] px-4 py-3.5"
+      className="my-3 rounded-[14px] border hairline bg-[var(--bg-elevated)] px-4 py-3.5 shadow-[var(--shadow-composer)]"
       style={highRisk ? { borderColor: "color-mix(in srgb, var(--status-err) 55%, transparent)" } : undefined}
     >
       <div className="flex items-start gap-2">
@@ -41,7 +41,7 @@ export function ApprovalBanner({ approval, threadId }: ApprovalBannerProps) {
                 ? "Review carefully. This action cannot be remembered for the session."
                 : "Kip pauses before changing files or running commands."}
           </p>
-          <pre className="selectable mt-2 max-h-24 overflow-auto whitespace-pre-wrap rounded-[7px] bg-[var(--bg-code)] px-2.5 py-2 font-[var(--font-mono)] text-[12px] leading-[1.5] text-[var(--text-secondary)]">
+          <pre className="selectable thin-scroll mt-2 max-h-24 overflow-auto whitespace-pre-wrap rounded-[8px] bg-[var(--bg-code)] px-2.5 py-2 font-[var(--font-mono)] text-[12px] leading-[1.5] text-[var(--text-secondary)]">
             {approval.commandOrPath}
           </pre>
           {approval.previewDiff && (
@@ -93,13 +93,13 @@ export function ApprovalBanner({ approval, threadId }: ApprovalBannerProps) {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => void resolveApproval(threadId, approval.toolCallId, false, false)}
-                className="h-7 rounded-full px-3 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)]"
+                className="h-7 rounded-[8px] px-3 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)]"
               >
                 Deny
               </button>
               <button
                 onClick={() => void resolveApproval(threadId, approval.toolCallId, true, remember)}
-                className="h-7 rounded-full bg-[var(--accent-action)] px-3 text-[12px] font-medium text-[var(--accent-action-fg)] transition-opacity hover:opacity-90"
+                className="h-7 rounded-[8px] bg-[var(--accent-ink)] px-3 text-[12px] font-medium text-[var(--accent-ink-fg)] transition-opacity hover:opacity-90"
               >
                 Allow{!highRisk && <span className="ml-1 text-[11.5px] opacity-70">⌘↵</span>}
               </button>

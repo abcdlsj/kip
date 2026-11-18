@@ -167,14 +167,14 @@ export function SyncPanel() {
         <button
           onClick={() => void save()}
           disabled={busy === "save"}
-          className="h-8 rounded-full bg-[var(--accent-action)] px-3.5 text-[12px] font-medium text-[var(--accent-action-fg)]"
+          className="h-8 rounded-[8px] bg-[var(--accent-ink)] px-3.5 text-[12px] font-medium text-[var(--accent-ink-fg)]"
         >
           {busy === "save" ? "Saving..." : "Save & test"}
         </button>
         <button
           onClick={() => void syncNow()}
           disabled={busy === "sync" || syncState === "running"}
-          className="flex h-8 items-center gap-1.5 rounded-full border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+          className="flex h-8 items-center gap-1.5 rounded-[8px] border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
         >
           {busy === "sync" ? (
             <Loader2 size={12} strokeWidth={1.5} className="animate-spin" />
@@ -186,7 +186,7 @@ export function SyncPanel() {
         <button
           onClick={() => void exportBackup()}
           disabled={busy === "export"}
-          className="flex h-8 items-center gap-1.5 rounded-full border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+          className="flex h-8 items-center gap-1.5 rounded-[8px] border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
         >
           <ArrowUpFromLine size={12} strokeWidth={1.5} />
           Export backup
@@ -194,7 +194,7 @@ export function SyncPanel() {
         <button
           onClick={() => void importBackup()}
           disabled={busy === "import"}
-          className="flex h-8 items-center gap-1.5 rounded-full border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+          className="flex h-8 items-center gap-1.5 rounded-[8px] border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
         >
           <ArrowDownToLine size={12} strokeWidth={1.5} />
           Import backup
@@ -202,7 +202,7 @@ export function SyncPanel() {
         <button
           onClick={() => void exportThread()}
           disabled={busy === "markdown" || !activeThreadId}
-          className="flex h-8 items-center gap-1.5 rounded-full border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] disabled:opacity-40"
+          className="flex h-8 items-center gap-1.5 rounded-[8px] border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] disabled:opacity-40"
         >
           <FileDown size={12} strokeWidth={1.5} />
           Export thread
@@ -221,7 +221,7 @@ export function SyncPanel() {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-muted)]">
+      <span className="mb-1 block text-[12px] font-medium text-[var(--text-secondary)]">
         {label}
       </span>
       {children}

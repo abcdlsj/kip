@@ -74,7 +74,7 @@ export function ToolStepPill({ block, compact = false }: ToolStepPillProps) {
         className={
           compact
             ? "flex h-7 w-full items-center gap-2 rounded-[6px] px-1 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)]"
-            : "flex h-7 max-w-full items-center gap-2 rounded-full border hairline px-2.5 text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)]"
+            : "flex h-7 max-w-full items-center gap-2 rounded-[8px] bg-[var(--bg-subtle)] px-2.5 text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-active)]"
         }
       >
         <span className="flex items-center">{iconFor(block.toolName, block.risk === "high-risk")}</span>
@@ -111,7 +111,7 @@ export function ToolStepPill({ block, compact = false }: ToolStepPillProps) {
             className="overflow-hidden"
           >
             <div
-              className={`mt-1.5 max-h-72 overflow-auto rounded-[8px] border hairline bg-[var(--bg-code)] ${
+              className={`thin-scroll mt-1.5 max-h-72 overflow-auto rounded-[10px] border border-[var(--code-border)] bg-[var(--bg-code-block)] ${
                 compact ? "ml-1" : ""
               }`}
             >

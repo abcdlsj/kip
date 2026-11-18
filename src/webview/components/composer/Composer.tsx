@@ -183,8 +183,8 @@ export function Composer() {
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-6 pb-5">
       <div className="pointer-events-auto relative w-[min(740px,100%)]">
         {suggestions.length > 0 && (
-          <div className="absolute bottom-full left-0 mb-2 w-[340px] overflow-hidden rounded-[10px] border hairline bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow-modal)]">
-            <p className="px-2 py-1 text-[11px] font-medium uppercase tracking-[0.07em] text-[var(--text-muted)]">
+          <div className="absolute bottom-full left-0 mb-2 w-[360px] overflow-hidden rounded-[12px] border hairline bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow-modal)]">
+            <p className="px-2 py-1 text-[11.5px] font-medium text-[var(--text-muted)]">
               Files
             </p>
             {suggestions.map((suggestion, index) => (
@@ -207,7 +207,7 @@ export function Composer() {
           </div>
         )}
         <div
-          className="rounded-[16px] border bg-[var(--bg-elevated)] px-3.5 pb-2 pt-2.5 shadow-[var(--shadow-composer)] transition-colors duration-150"
+          className="rounded-[20px] border bg-[var(--bg-elevated)] px-3.5 pb-2 pt-3 shadow-[var(--shadow-composer)] transition-[border-color,box-shadow] duration-150"
           style={{
             borderColor: focused ? "var(--border-focus)" : "var(--border-hairline)",
           }}
@@ -247,7 +247,7 @@ export function Composer() {
                         return current.filter((_, itemIndex) => itemIndex !== index);
                       })
                     }
-                    className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-action)] text-[var(--accent-action-fg)]"
+                    className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-ink)] text-[var(--accent-ink-fg)]"
                     aria-label="Remove image"
                   >
                     <X size={9} strokeWidth={2} />
@@ -298,23 +298,22 @@ export function Composer() {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
+              className="flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
               aria-label="Attach image"
+              title="Attach image"
             >
               <Paperclip size={14} strokeWidth={1.5} />
             </button>
             <div className="ml-auto flex items-center gap-2">
-              <span className="text-meta hidden text-[var(--text-muted)] sm:block">
-                {!running
-                  ? "Enter to send"
-                  : hasContent
-                    ? "Enter to queue · ⌘↵ next step"
-                    : "Esc to stop"}
-              </span>
+              {running && (
+                <span className="text-meta hidden text-[var(--text-muted)] sm:block">
+                  {hasContent ? "Enter to queue · ⌘↵ next step" : "Esc to stop"}
+                </span>
+              )}
               {running && (
                 <button
                   onClick={() => void stop()}
-                  className="flex h-7 w-7 items-center justify-center rounded-[9px] border border-[var(--border-focus)] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)]"
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-active)] text-[var(--text-primary)] transition-colors hover:bg-[var(--border-focus)]"
                   aria-label="Stop"
                   title="Stop (Esc)"
                 >
@@ -325,7 +324,7 @@ export function Composer() {
                 <button
                   onClick={() => void send()}
                   disabled={!activeWorkspaceId || !hasContent}
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-action)] text-[var(--accent-action-fg)] transition-opacity disabled:opacity-30"
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-ink)] text-[var(--accent-ink-fg)] transition-colors disabled:bg-[var(--bg-active)] disabled:text-[var(--text-muted)]"
                   aria-label={running ? "Queue message" : "Send"}
                   title={running ? "Queue after the current work (Enter)" : "Send (Enter)"}
                 >

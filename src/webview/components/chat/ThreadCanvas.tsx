@@ -123,7 +123,7 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
                   </p>
                   <button
                     onClick={() => openSettings("providers")}
-                    className="mt-6 inline-flex h-9 items-center gap-2 rounded-full bg-[var(--accent-action)] px-4 text-[13px] font-medium text-[var(--accent-action-fg)] transition-opacity hover:opacity-90"
+                    className="mt-6 inline-flex h-9 items-center gap-2 rounded-[10px] bg-[var(--accent-ink)] px-4 text-[13px] font-medium text-[var(--accent-ink-fg)] transition-opacity hover:opacity-90"
                   >
                     <Plus size={14} strokeWidth={1.5} />
                     Add a model provider
@@ -132,18 +132,18 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
               ) : (
                 <div>
                   <h1 className="title-large">{greeting()}</h1>
-                  <p className="mt-2 text-[15px] text-[var(--text-secondary)]">
+                  <p className="mt-2 text-[14px] text-[var(--text-muted)]">
                     Ready in{" "}
-                    <span className="font-[var(--font-mono)] text-[13px]">
+                    <span className="font-[var(--font-mono)] text-[12.5px] text-[var(--text-secondary)]">
                       {workspace?.rootPath ?? "~/.kip/scratchpad"}
                     </span>
                   </p>
-                  <div className="mt-8 flex flex-wrap gap-2">
+                  <div className="mt-7 flex flex-wrap gap-2">
                     {SUGGESTIONS.map((suggestion) => (
                       <button
                         key={suggestion}
                         onClick={() => void startSuggestion(suggestion)}
-                        className="h-8 rounded-full border hairline px-3.5 text-[12.5px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
+                        className="h-9 rounded-[10px] border hairline bg-[var(--bg-elevated)] px-3.5 text-[13px] text-[var(--text-secondary)] shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-colors hover:border-[var(--border-focus)] hover:text-[var(--text-primary)]"
                       >
                         {suggestion}
                       </button>
@@ -178,7 +178,7 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
                 !view.turns[view.turns.length - 1]?.blocks.some(
                   (block) => block.type !== "text",
                 ) && (
-                  <div className="mt-3 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
+                  <div className="mt-3 flex items-center gap-2 text-[12.5px] text-[var(--text-muted)]">
                     <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-secondary)] pulse-dot" />
                     <span>Kip is thinking</span>
                   </div>
@@ -198,7 +198,7 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
               setPinned(true);
               scrollToBottom(true);
             }}
-            className="absolute bottom-[168px] left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border hairline bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] px-3 text-[12px] font-medium text-[var(--text-secondary)] shadow-[var(--shadow-composer)] backdrop-blur-md"
+            className="absolute bottom-[140px] left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border hairline bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] px-3 text-[12px] font-medium text-[var(--text-secondary)] shadow-[var(--shadow-composer)] backdrop-blur-md"
           >
             <ArrowDown size={12} strokeWidth={1.5} />
             Jump to latest

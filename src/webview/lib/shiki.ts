@@ -30,12 +30,31 @@ export function getHighlighter(): Promise<Highlighter> {
   return highlighterPromise;
 }
 
-export function currentShikiTheme(): "vitesse-dark" {
-  return "vitesse-dark";
+/** Code blocks follow the app theme instead of staying dark in light mode. */
+export function currentShikiTheme(): "vitesse-light" | "vitesse-dark" {
+  return document.documentElement.dataset.theme === "dark" ? "vitesse-dark" : "vitesse-light";
 }
+
+/** Short fence names models often use. */
+const ALIASES: Record<string, string> = {
+  ts: "typescript",
+  js: "javascript",
+  jsx: "javascript",
+  mjs: "javascript",
+  sh: "bash",
+  shell: "bash",
+  zsh: "bash",
+  console: "bash",
+  py: "python",
+  rs: "rust",
+  yml: "yaml",
+  md: "markdown",
+  golang: "go",
+};
 
 export function normalizeLanguage(language: string | undefined): string {
   if (!language) return "text";
-  const value = language.replace(/^language-/, "").toLowerCase();
+  const raw = language.replace(/^language-/, "").toLowerCase();
+  const value = ALIASES[raw] ?? raw;
   return LANGS.includes(value) ? value : "text";
 }

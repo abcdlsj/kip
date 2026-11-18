@@ -159,7 +159,7 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
             setForm({ ...EMPTY });
             setStatus(null);
           }}
-          className="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[var(--accent-action)] px-3 text-[12px] font-medium text-[var(--accent-action-fg)]"
+          className="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] bg-[var(--accent-ink)] px-3 text-[12px] font-medium text-[var(--accent-ink-fg)]"
         >
           <Plus size={13} strokeWidth={1.5} />
           Add provider
@@ -193,7 +193,7 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
             <button
               onClick={() => void test(provider)}
               disabled={busy === provider.id}
-              className="flex h-7 items-center gap-1 rounded-full border hairline px-2.5 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+              className="flex h-7 items-center gap-1 rounded-[8px] border hairline px-2.5 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
             >
               {busy === provider.id ? (
                 <Loader2 size={11} strokeWidth={1.5} className="animate-spin" />
@@ -204,7 +204,7 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
             </button>
             <button
               onClick={() => edit(provider)}
-              className="h-7 rounded-full px-2.5 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+              className="h-7 rounded-[8px] px-2.5 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
             >
               Edit
             </button>
@@ -292,14 +292,14 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
             <button
               onClick={() => void save()}
               disabled={busy === "save"}
-              className="h-8 rounded-full bg-[var(--accent-action)] px-3.5 text-[12px] font-medium text-[var(--accent-action-fg)]"
+              className="h-8 rounded-[8px] bg-[var(--accent-ink)] px-3.5 text-[12px] font-medium text-[var(--accent-ink-fg)]"
             >
               {busy === "save" ? "Saving..." : "Save provider"}
             </button>
             <button
               onClick={() => void fetchModels()}
               disabled={busy === "fetch" || !form.baseUrl}
-              className="flex h-8 items-center gap-1.5 rounded-full border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+              className="flex h-8 items-center gap-1.5 rounded-[8px] border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
             >
               {busy === "fetch" ? (
                 <Loader2 size={12} strokeWidth={1.5} className="animate-spin" />
@@ -310,7 +310,7 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
             </button>
             <button
               onClick={() => setForm(null)}
-              className="h-8 rounded-full px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+              className="h-8 rounded-[8px] px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
             >
               Cancel
             </button>
@@ -339,7 +339,7 @@ function splitIds(value: string): string[] {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-muted)]">
+      <span className="mb-1 block text-[12px] font-medium text-[var(--text-secondary)]">
         {label}
       </span>
       {children}
