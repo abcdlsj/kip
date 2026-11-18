@@ -45,6 +45,7 @@ for (const bundle of new Set(candidates)) {
   }
   renameSync(temp, launcher);
   patchPlist(bundle);
+  reSign(bundle);
   patched += 1;
 }
 
@@ -71,4 +72,34 @@ function patchPlist(bundle: string): void {
     ],
     { stdout: "pipe", stderr: "pipe" },
   );
+}
+
+/**
+ * vtool rewrites the launcher's Mach-O, which leaves the bundle with a linker
+ * signature that no longer seals the resources. Gatekeeper then reports the app
+ * as damaged instead of merely unidentified. Re-sign the whole bundle ad hoc so
+ * the signature verifies; a real Developer ID configured in electrobun's build
+ * config still replaces this signature afterwards, since postWrap runs before
+ * its codesign step.
+ */
+function reSign(bundle: string): void {
+  const sign = Bun.spawnSync(
+    ["codesign", "--force", "--deep", "--sign", "-", bundle],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (sign.exitCode !== 0) {
+    console.warn(
+      `Ad-hoc signing failed for ${bundle}: ${sign.stderr.toString().trim()}`,
+    );
+    return;
+  }
+  const verify = Bun.spawnSync(
+    ["codesign", "--verify", "--deep", "--strict", bundle],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (verify.exitCode !== 0) {
+    console.warn(
+      `Signature still invalid for ${bundle}: ${verify.stderr.toString().trim()}`,
+    );
+  }
 }
