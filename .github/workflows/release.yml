@@ -76,7 +76,9 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run icons
       - run: bun run build:view
-      - run: bunx electrobun build --env=stable
+      # The workspace CLI, not bunx: build hooks and the extractor/launcher
+      # binaries must resolve inside this install, not a bunx cache.
+      - run: bun run electrobun build --env=stable
 
       - name: Attach the dmg
         env:
@@ -110,7 +112,9 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run icons
       - run: bun run build:view
-      - run: bunx electrobun build --env=stable
+      # The workspace CLI, not bunx: build hooks and the extractor/launcher
+      # binaries must resolve inside this install, not a bunx cache.
+      - run: bun run electrobun build --env=stable
 
       - name: Attach the installer
         # bash, so the artifacts/*.zip glob expands; pwsh would pass it through literally

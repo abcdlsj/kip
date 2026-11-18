@@ -10,6 +10,9 @@ const config: ElectrobunConfig = {
     description: "A quiet desktop coding agent built with Electrobun and Pi",
   },
   scripts: {
+    // Our own rcedit pass: Electrobun's icon embedding cannot resolve its
+    // bundled rcedit, so Windows binaries keep the default icon without this.
+    postBuild: "scripts/patch-windows-icons.ts",
     postWrap: "scripts/patch-macos-launcher.ts",
   },
   build: {
