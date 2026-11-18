@@ -109,7 +109,7 @@ export function WorkLog({ blocks, running, approvals }: WorkLogProps) {
     >
       <button
         onClick={() => setOpen((value) => !value)}
-        className="group -ml-1.5 flex h-7 max-w-full items-center gap-1.5 rounded-[8px] px-1.5 text-[12.5px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
+        className="group -ml-1.5 flex h-7 max-w-full items-center gap-1.5 rounded-[8px] px-1.5 text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
       >
         <span className="flex h-4 w-4 items-center justify-center">
           {running ? (
@@ -134,7 +134,7 @@ export function WorkLog({ blocks, running, approvals }: WorkLogProps) {
                 : `Worked`}
         </span>
         {!running && toolCount > 0 && (
-          <span className="shrink-0 text-[var(--text-muted)] opacity-80">
+          <span className="shrink-0 text-[var(--text-muted)]">
             · {toolCount} {toolCount === 1 ? "step" : "steps"}
           </span>
         )}
