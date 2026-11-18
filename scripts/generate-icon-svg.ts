@@ -66,8 +66,8 @@ function makeShape(pinch: number) {
   ];
   const curve = (a: P, b: P) => `Q${f(rotate(ctrl(a, b)))} ${f(rotate(b))}`;
   const ring = (q: P[]) =>
-    `M${f(rotate(q[0]))}` +
-    q.map((p, i) => curve(p, q[(i + 1) % q.length])).join("") +
+    `M${f(rotate(q[0]!))}` +
+    q.map((p, i) => curve(p, q[(i + 1) % q.length]!)).join("") +
     "Z";
   const O = diamond(RADIUS);
   const M = diamond(RIDGE);
@@ -106,7 +106,7 @@ let faces = "";
 for (const [side, [s, e]] of Object.entries(SIDES)) {
   for (const layer of ["o", "i"] as const) {
     const id = `${side}-${layer}`;
-    const [dark, mid, hi] = TONES[id];
+    const [dark, mid, hi] = TONES[id]!;
     defs +=
       `\n    <linearGradient id="g-${id}" x1="0" y1="0" x2="1" y2="1">` +
       `<stop offset="0" stop-color="${mid}"/><stop offset="0.38" stop-color="${hi}"/>` +
