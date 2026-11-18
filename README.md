@@ -43,6 +43,14 @@ evidence when you don't. The interaction principles follow Anthropic's
 reveal complexity progressively, keep controls visible, and inherit the host's visual
 hierarchy. Kip keeps its own type system, palette, and layout.
 
+You can keep typing while the agent works. **Enter** queues a message until the current
+work is done; **Cmd+Enter** delivers it after the current tool call. Queued messages
+show above the composer. **Esc** stops the run and puts undelivered messages back in
+the composer.
+
+Message text uses San Francisco (the system UI face on other platforms); panels and
+chrome use Avenir Next.
+
 Motion is restrained: spring height transitions for folds, staggered rows on expand, a
 soft shimmer on the live action, and a caret on streaming text. No bounce, no confetti.
 
@@ -154,11 +162,18 @@ Additional guardrails:
 
 - Every file tool path is resolved through symlinks and checked against the workspace
   root. A path outside the workspace always requires approval, even in full auto.
+  Shell commands get the same check for path arguments such as `cat ~/.netrc`.
+- The approval policy is read on every tool call, so a change in Settings applies to
+  threads that are already open.
 - `~/.ssh`, `~/.aws`, `~/.gnupg`, and Kip's own credential file are hard-blocked.
 - Shell commands are split into sub-commands and classified. `rm -rf`, `sudo`,
   `git reset --hard`, `git push --force`, `mkfs`, `dd`, and `curl | sh` are marked
   high-risk and cannot be remembered for the session.
 - High-risk approvals are never silently repeated; the "remember" option is disabled.
+- "Remember for session" stores the program and its subcommand (`git commit`, not
+  `git`). A compound command runs without asking only if every part was approved.
+- Cmd+Enter approves the pending call only when focus is outside a text field, and
+  never for a high-risk call.
 - Tool output stays folded in a pill. Diffs render inline with line numbers.
 
 ## Local data
