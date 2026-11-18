@@ -14,6 +14,8 @@ import type {
 import {
   MUTATING_TOOLS,
   classifyCommand,
+  commandApprovalKeys,
+  commandPathsOutsideRoot,
   commandTouchesSensitivePath,
   countLineChanges,
   isSensitivePath,
@@ -26,7 +28,8 @@ import {
 export interface InterceptorOptions {
   workspaceRoot: string;
   threadId: string;
-  policy: ApprovalPolicy;
+  /** Read on every call so a change in Settings applies to open threads. */
+  policy: ApprovalPolicy | (() => ApprovalPolicy);
   requestApproval: (payload: ToolApprovalPayload) => void;
 }
 
@@ -39,6 +42,7 @@ interface CallMeta {
   diff?: { before: string; after: string; filePath: string };
   risk: "safe" | "standard" | "high-risk";
   outsideWorkspace: boolean;
+  command?: string;
 }
 
 const MAX_DIFF_BYTES = 512 * 1024;
@@ -88,9 +92,8 @@ export class ToolInterceptor {
     this.pending.delete(toolCallId);
     if (approved && rememberForSession) {
       const meta = this.callMeta.get(toolCallId);
-      if (meta?.summaryLabel.startsWith("Ran ")) {
-        const command = meta.summaryLabel.slice(4).split(/\s+/)[0] ?? "";
-        if (command) this.sessionAllowlist.add(command);
+      if (meta?.command && meta.risk !== "high-risk" && !meta.outsideWorkspace) {
+        for (const key of commandApprovalKeys(meta.command)) this.sessionAllowlist.add(key);
       }
     }
     pending.resolve(approved);
@@ -120,8 +123,11 @@ export class ToolInterceptor {
       throw new Error("This command touches a credential path blocked by Kip's safety policy");
     }
 
+    const command = toolName === "bash" ? String(args.command ?? "") : undefined;
     const outsideWorkspace =
-      targetPath !== null && !isWithinRoot(this.options.workspaceRoot, targetPath);
+      (targetPath !== null && !isWithinRoot(this.options.workspaceRoot, targetPath)) ||
+      (command !== undefined &&
+        commandPathsOutsideRoot(command, this.options.workspaceRoot).length > 0);
     const isMutation = MUTATING_TOOLS.has(toolName);
 
     let risk: "safe" | "standard" | "high-risk" = "safe";
@@ -142,16 +148,21 @@ export class ToolInterceptor {
       }
     }
 
-    const meta: CallMeta = { summaryLabel, diff: previewDiff, risk, outsideWorkspace };
+    const meta: CallMeta = { summaryLabel, diff: previewDiff, risk, outsideWorkspace, command };
     this.callMeta.set(toolCallId, meta);
 
-    const commandFirstToken =
-      toolName === "bash" ? String(args.command ?? "").trim().split(/\s+/)[0] ?? "" : "";
-    const allowlisted = commandFirstToken.length > 0 && this.sessionAllowlist.has(commandFirstToken);
+    // Remembered commands never cover high-risk or out-of-workspace calls, and
+    // every segment of a compound command must have been approved before.
+    const keys = command ? commandApprovalKeys(command) : [];
+    const allowlisted =
+      risk !== "high-risk" &&
+      !outsideWorkspace &&
+      keys.length > 0 &&
+      keys.every((key) => this.sessionAllowlist.has(key));
 
-    const mustAsk =
-      !allowlisted &&
-      needsApproval(this.options.policy, risk, outsideWorkspace, isMutation);
+    const policy =
+      typeof this.options.policy === "function" ? this.options.policy() : this.options.policy;
+    const mustAsk = !allowlisted && needsApproval(policy, risk, outsideWorkspace, isMutation);
 
     if (!mustAsk) return;
 
@@ -215,7 +226,8 @@ export class ToolInterceptor {
         const oldText = (edit as Record<string, unknown>).oldText;
         const newText = (edit as Record<string, unknown>).newText;
         if (typeof oldText === "string" && typeof newText === "string") {
-          after = after.replace(oldText, newText);
+          // A function replacement keeps `$&` and `$1` in newText literal.
+          after = after.replace(oldText, () => newText);
         }
       }
     }

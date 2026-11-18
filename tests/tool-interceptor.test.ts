@@ -129,4 +129,105 @@ describe("tool interceptor", () => {
     ).rejects.toThrow(/denied|blocked/i);
     expect(approvals).toHaveLength(0);
   });
+
+  test("remembered commands are scoped to program and subcommand", async () => {
+    const root = workspace();
+    const approvals: ToolApprovalPayload[] = [];
+    const guard = interceptor(root, approvals);
+    const tool = guard.wrap(fakeTool("bash"));
+    const run = (id: string, command: string) =>
+      tool.execute(id, { command } as never, undefined, undefined, {} as never);
+
+    const first = run("r1", "git commit -m wip");
+    await Bun.sleep(5);
+    guard.resolveApproval("r1", true, true);
+    await first;
+
+    await run("r2", "git commit --amend");
+    expect(approvals).toHaveLength(1);
+
+    const push = run("r3", "git push origin main");
+    await Bun.sleep(5);
+    expect(approvals).toHaveLength(2);
+    guard.resolveApproval("r3", false);
+    await expect(push).rejects.toThrow(/denied/i);
+  });
+
+  test("remembered commands never cover high-risk segments", async () => {
+    const root = workspace();
+    const approvals: ToolApprovalPayload[] = [];
+    const guard = interceptor(root, approvals);
+    const tool = guard.wrap(fakeTool("bash"));
+    const first = tool.execute("h1", { command: "npm test" } as never, undefined, undefined, {} as never);
+    await Bun.sleep(5);
+    guard.resolveApproval("h1", true, true);
+    await first;
+
+    const risky = tool.execute(
+      "h2",
+      { command: "npm test && rm -rf build" } as never,
+      undefined,
+      undefined,
+      {} as never,
+    );
+    await Bun.sleep(5);
+    expect(approvals).toHaveLength(2);
+    expect(approvals[1]?.risk).toBe("high-risk");
+    guard.resolveApproval("h2", false);
+    await expect(risky).rejects.toThrow(/denied/i);
+  });
+
+  test("reads the approval policy on every call", async () => {
+    const root = workspace();
+    const approvals: ToolApprovalPayload[] = [];
+    let policy: "full-auto" | "strict" = "full-auto";
+    const guard = new ToolInterceptor({
+      workspaceRoot: root,
+      threadId: "th_test",
+      policy: () => policy,
+      requestApproval: (payload) => approvals.push(payload),
+    });
+    const tool = guard.wrap(fakeTool("bash"));
+    await tool.execute("p1", { command: "npm test" } as never, undefined, undefined, {} as never);
+    expect(approvals).toHaveLength(0);
+    policy = "strict";
+    const second = tool.execute("p2", { command: "ls" } as never, undefined, undefined, {} as never);
+    await Bun.sleep(5);
+    expect(approvals).toHaveLength(1);
+    guard.resolveApproval("p2", true);
+    await second;
+  });
+
+  test("asks before shell reads outside the workspace", async () => {
+    const root = workspace();
+    const approvals: ToolApprovalPayload[] = [];
+    const guard = interceptor(root, approvals, "full-auto");
+    const tool = guard.wrap(fakeTool("bash"));
+    await tool.execute("o1", { command: "cat src/a.ts 2>/dev/null" } as never, undefined, undefined, {} as never);
+    expect(approvals).toHaveLength(0);
+    const running = tool.execute("o2", { command: "cat ~/.netrc" } as never, undefined, undefined, {} as never);
+    await Bun.sleep(5);
+    expect(approvals[0]?.outsideWorkspace).toBe(true);
+    guard.resolveApproval("o2", false);
+    await expect(running).rejects.toThrow(/denied/i);
+  });
+
+  test("edit preview keeps dollar patterns literal", async () => {
+    const root = workspace();
+    writeFileSync(join(root, "a.ts"), "const x = 1;\n");
+    const approvals: ToolApprovalPayload[] = [];
+    const guard = interceptor(root, approvals);
+    const tool = guard.wrap(fakeTool("edit"));
+    const running = tool.execute(
+      "d1",
+      { path: "a.ts", edits: [{ oldText: "1", newText: "'$&$1'" }] } as never,
+      undefined,
+      undefined,
+      {} as never,
+    );
+    await Bun.sleep(5);
+    expect(approvals[0]?.previewDiff?.after).toBe("const x = '$&$1';\n");
+    guard.resolveApproval("d1", false);
+    await expect(running).rejects.toThrow(/denied/i);
+  });
 });

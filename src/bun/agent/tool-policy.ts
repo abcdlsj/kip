@@ -85,7 +85,7 @@ export function isSensitivePath(targetPath: string): boolean {
   return false;
 }
 
-function splitShellSegments(command: string): string[] {
+export function splitShellSegments(command: string): string[] {
   const withoutSubshells = command
     .replace(/\$\(([^()]*)\)/g, (_, inner: string) => ` ; ${inner} ; `)
     .replace(/`([^`]*)`/g, (_, inner: string) => ` ; ${inner} ; `);
@@ -151,6 +151,58 @@ export function commandTouchesSensitivePath(command: string): boolean {
   ];
   if (markers.some((marker) => trimmed.includes(marker))) return true;
   return /(^|[\s/])~?\/\.ssh\b|(^|[\s/])~?\/\.aws\b|(^|[\s/])~?\/\.gnupg\b/.test(trimmed);
+}
+
+/** Programs whose second word picks the action (`git push`, `npm install`). */
+const SUBCOMMAND_PROGRAMS = new Set([
+  "git", "npm", "pnpm", "yarn", "bun", "bunx", "npx", "cargo", "go", "pip", "pip3", "uv",
+  "docker", "kubectl", "make", "brew", "gh", "deno", "python", "python3", "node",
+]);
+
+/**
+ * Key used by "remember for session". It names the program and, for tools with
+ * subcommands, the subcommand too, so approving `git commit` never covers
+ * `git push`.
+ */
+export function commandApprovalKey(segment: string): string {
+  const words = segment.trim().match(/[^\s]+/g) ?? [];
+  let index = 0;
+  while (index < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index] ?? "")) index++;
+  const program = (words[index] ?? "").replace(/^\(/, "");
+  if (!program) return "";
+  const sub = words[index + 1];
+  if (SUBCOMMAND_PROGRAMS.has(program) && sub && !sub.startsWith("-")) return `${program} ${sub}`;
+  return program;
+}
+
+export function commandApprovalKeys(command: string): string[] {
+  return [...new Set(splitShellSegments(command).map(commandApprovalKey).filter(Boolean))];
+}
+
+const DEVICE_PATHS = new Set(["/dev/null", "/dev/stdout", "/dev/stderr", "/dev/stdin", "/dev/tty"]);
+
+/**
+ * Path-like arguments in a shell command that resolve outside the workspace.
+ * The program word itself is skipped: running `/usr/bin/env` is not file access.
+ */
+export function commandPathsOutsideRoot(command: string, workspaceRoot: string): string[] {
+  const outside: string[] = [];
+  for (const segment of splitShellSegments(command)) {
+    const words = segment.match(/[^\s]+/g) ?? [];
+    for (const [index, raw] of words.entries()) {
+      if (index === 0) continue;
+      let word = raw.replace(/^[<>]+|^\d?>>?|^&>/, "").replace(/^["'(]+|["')]+$/g, "");
+      const eq = word.indexOf("=");
+      if (word.startsWith("-") && eq > 0) word = word.slice(eq + 1);
+      if (!word || word.startsWith("-") || word.includes("://")) continue;
+      const looksLikePath =
+        word.startsWith("/") || word.startsWith("~") || word === ".." || word.startsWith("../") || word.includes("/../");
+      if (!looksLikePath || DEVICE_PATHS.has(word)) continue;
+      const expanded = word.startsWith("~") ? join(homedir(), word.slice(1)) : word;
+      if (!isWithinRoot(workspaceRoot, expanded)) outside.push(word);
+    }
+  }
+  return outside;
 }
 
 export function needsApproval(

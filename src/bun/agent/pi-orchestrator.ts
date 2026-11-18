@@ -273,7 +273,7 @@ export class KipOrchestrator {
     const interceptor = new ToolInterceptor({
       workspaceRoot: workspace.rootPath,
       threadId,
-      policy: this.database.getSetting("approvalPolicy", "read-only-auto"),
+      policy: () => this.database.getSetting("approvalPolicy", "read-only-auto"),
       requestApproval: (payload) => this.requestApproval(threadId, payload),
     });
 
