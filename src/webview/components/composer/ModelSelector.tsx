@@ -21,7 +21,15 @@ export function ModelSelector() {
   );
   const updateThreadModel = useWorkspaceStore((state) => state.updateThreadModel);
   const setThreadThinking = useWorkspaceStore((state) => state.setThreadThinking);
+  const providers = useUiStore((state) => state.providers);
   const [open, setOpen] = useState(false);
+
+  // The model list is fetched at startup; reload it whenever the picker opens
+  // so providers added since then show up.
+  const onOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) void refreshSettings();
+  };
 
   if (!settings) return null;
   const models = settings.availableModels;
@@ -54,7 +62,7 @@ export function ModelSelector() {
   };
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger asChild>
         <button className="-ml-1 flex h-7 max-w-[260px] items-center gap-1.5 rounded-[8px] px-2 text-[12.5px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] data-[state=open]:bg-[var(--bg-subtle)]">
           <span className="truncate">{active?.displayName ?? "Select model"}</span>
@@ -92,8 +100,10 @@ export function ModelSelector() {
               );
             })}
             {models.length === 0 && (
-              <p className="px-2 py-2 text-[12px] text-[var(--text-muted)]">
-                Add a provider in Settings.
+              <p className="px-2 py-2 text-[12px] leading-[1.5] text-[var(--text-muted)]">
+                {providers.length > 0
+                  ? "No usable models. Check that each provider in Settings has an API key and at least one model ID."
+                  : "Add a provider in Settings."}
               </p>
             )}
           </div>

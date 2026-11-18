@@ -161,7 +161,10 @@ export function createKipRpc(deps: RpcDeps) {
         testProvider: ({ provider }) => deps.registry.testProvider(provider),
         fetchProviderModels: ({ baseUrl, apiKey }) =>
           fetchRemoteModels(baseUrl, apiKey ?? undefined),
-        getAvailableModels: () => deps.registry.listAvailable(),
+        getAvailableModels: async () => {
+          await deps.registry.syncWithDatabase();
+          return deps.registry.listAvailable();
+        },
         getSyncConfig: () => getSyncConfig(deps.database),
         updateSyncConfig: (input) => updateSyncConfig(deps.database, input),
         triggerSync: async () => {
@@ -234,6 +237,7 @@ async function createThread(deps: RpcDeps, input: CreateThreadInput): Promise<Th
 }
 
 async function settingsSnapshot(deps: RpcDeps): Promise<SettingsSnapshot> {
+  await deps.registry.syncWithDatabase();
   const providers = await withKeyFlags(deps, deps.database.listProviders());
   return {
     theme: deps.database.getSetting("theme", "system"),

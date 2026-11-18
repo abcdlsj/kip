@@ -415,6 +415,7 @@ export class KipOrchestrator {
   }
 
   private async resolveModel(thread: ThreadSummary) {
+    await this.registry.syncWithDatabase();
     let model = this.registry.getModel(thread.modelProvider, thread.modelId);
     if (model) return model;
     const fallback = await this.registry.ensureDefault();

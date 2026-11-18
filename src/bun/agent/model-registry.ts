@@ -104,6 +104,24 @@ export class ModelRegistry {
     }
   }
 
+  /**
+   * Registers providers that were written to the database by another process
+   * (for example `bun run seed`) and drops ones that were deleted. Providers
+   * saved through Settings are registered immediately and are skipped here.
+   */
+  async syncWithDatabase(): Promise<void> {
+    const stored = this.database.listProviders();
+    const storedIds = new Set(stored.map((provider) => provider.id));
+    for (const providerId of [...this.registered]) {
+      if (!storedIds.has(providerId)) this.removeProvider(providerId);
+    }
+    for (const provider of stored) {
+      if (this.registered.has(provider.id)) continue;
+      const apiKey = await getApiKey(provider.id);
+      if (apiKey) await this.register(provider, apiKey);
+    }
+  }
+
   async addOrUpdateProvider(provider: ProviderRecord, apiKey?: string): Promise<void> {
     const key = apiKey ?? (await getApiKey(provider.id));
     if (!key) return;
@@ -142,6 +160,7 @@ export class ModelRegistry {
   }
 
   async ensureDefault(): Promise<{ provider: string; modelId: string } | null> {
+    await this.syncWithDatabase();
     const available = this.listAvailable();
     const storedProvider = this.database.getSetting("defaultProvider", "");
     const storedModel = this.database.getSetting("defaultModelId", "");
