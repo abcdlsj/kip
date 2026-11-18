@@ -13,3 +13,6 @@ artifacts/
 credentials.enc
 .cottontail-tmp/
 *.log
+
+# local-only release runbook
+/RELEASING.local.md
