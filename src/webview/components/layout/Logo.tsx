@@ -7,7 +7,7 @@ export function Logo({ size = 24 }: { size?: number }) {
     <svg width={size} height={size} viewBox="100 100 824 824" aria-hidden="true">
       <path d={SQUIRCLE} fill="var(--accent-ink)" />
       <path
-        d="M512 276L748 512L512 748L276 512ZM512 421.86L421.86 512L512 602.14L602.14 512Z"
+        d="M512.00 244.00Q632.60 391.40 780.00 512.00Q632.60 632.60 512.00 780.00Q391.40 632.60 244.00 512.00Q391.40 391.40 512.00 244.00ZM512.00 409.63Q465.93 465.93 409.63 512.00Q465.93 558.07 512.00 614.37Q558.07 558.07 614.37 512.00Q558.07 465.93 512.00 409.63Z"
         fill="var(--accent-ink-fg)"
         fillRule="evenodd"
       />
