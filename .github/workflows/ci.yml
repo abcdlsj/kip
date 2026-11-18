@@ -38,3 +38,36 @@ jobs:
       - run: bun run typecheck
       - run: bun test
       - run: bun run build:view
+
+  windows:
+    name: windows package
+    # Electrobun only builds for the host OS, so the .exe has to be produced on
+    # Windows; the instabox box above is Linux and cannot cross-compile it.
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-windows-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-windows-
+
+      - run: bun install --frozen-lockfile
+      - run: bun run icons
+      - run: bun run build:view
+      - run: bunx electrobun build --env=stable
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kip-windows-x64
+          path: |
+            artifacts/**
+            build/stable-win-x64/**
+          if-no-files-found: error
