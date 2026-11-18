@@ -1,15 +1,16 @@
+// Same geometry as assets/icon.svg, cropped to the squircle body (no safe margin).
+const SQUIRCLE =
+  "M924 512L924 650L923 694L921 726L918 752L915 774L911 793L906 809L901 824L895 838L888 850L880 861L871 871L861 880L850 888L838 895L824 901L809 906L793 911L774 915L752 918L726 921L694 923L650 924L512 924L374 924L330 923L298 921L272 918L250 915L231 911L215 906L200 901L186 895L174 888L163 880L153 871L144 861L136 850L129 838L123 824L118 809L113 793L109 774L106 752L103 726L101 694L100 650L100 512L100 374L101 330L103 298L106 272L109 250L113 231L118 215L123 200L129 186L136 174L144 163L153 153L163 144L174 136L186 129L200 123L215 118L231 113L250 109L272 106L298 103L330 101L374 100L512 100L650 100L694 101L726 103L752 106L774 109L793 113L809 118L824 123L838 129L850 136L861 144L871 153L880 163L888 174L895 186L901 200L906 215L911 231L915 250L918 272L921 298L923 330L924 374Z";
+
 export function Logo({ size = 24 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <rect x="2" y="2" width="28" height="28" rx="8" fill="var(--accent-ink)" />
+    <svg width={size} height={size} viewBox="100 100 824 824" aria-hidden="true">
+      <path d={SQUIRCLE} fill="var(--accent-ink)" />
       <path
-        d="M16 8.5L23.5 16L16 23.5L8.5 16Z"
-        fill="none"
-        stroke="var(--accent-ink-fg)"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
+        d="M512 276L748 512L512 748L276 512ZM512 421.86L421.86 512L512 602.14L602.14 512Z"
+        fill="var(--accent-ink-fg)"
+        fillRule="evenodd"
       />
-      <path d="M16 13L19 16L16 19L13 16Z" fill="var(--accent-ink-fg)" />
     </svg>
   );
 }
