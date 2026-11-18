@@ -3,6 +3,7 @@ import { AppShell } from "./components/layout/AppShell";
 import { Logo } from "./components/layout/Logo";
 import { CommandPalette } from "./components/modals/CommandPalette";
 import { SettingsModal } from "./components/modals/SettingsModal";
+import { stopThread } from "./lib/send";
 import { onAgentStream, onSyncStatus } from "./rpc-client";
 import { useChatStore } from "./stores/chat-store";
 import { useUiStore } from "./stores/ui-store";
@@ -70,7 +71,7 @@ export default function App() {
         const threadId = workspace.activeThreadId;
         const view = threadId ? useChatStore.getState().threads[threadId] : undefined;
         if (threadId && view?.running) {
-          void useChatStore.getState().abort(threadId);
+          void stopThread(threadId);
         }
         return;
       }

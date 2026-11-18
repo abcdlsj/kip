@@ -25,6 +25,8 @@ import type {
   AgentStreamEvent,
   ChatTurn,
   ContextUsage,
+  PromptDelivery,
+  QueuedPrompt,
   SendPromptInput,
   ThinkingLevel,
   ThreadSummary,
@@ -58,6 +60,14 @@ interface ActiveSession {
   thinkingStartedAt: number | null;
   buffer: FrameBuffer;
   firstPrompt: string | null;
+  queued: QueuedEntry[];
+}
+
+/** A message sent during a run, waiting for Pi to deliver it. */
+interface QueuedEntry extends QueuedPrompt {
+  /** Exact text handed to Pi; matched against the delivered user message. */
+  promptText: string;
+  attachments?: ChatTurn["attachments"];
 }
 
 class FrameBuffer {
@@ -163,26 +173,32 @@ export class KipOrchestrator {
 
   async sendPrompt(input: SendPromptInput): Promise<void> {
     const active = await this.ensureSession(input.threadId);
-    if (active.running) throw new Error("This thread is already running");
-    active.running = true;
-    active.firstPrompt = null;
-    const thread = this.requireThread(input.threadId);
-    const workspace = this.database.getWorkspace(thread.workspaceId);
-    if (!workspace) throw new Error("Workspace missing");
-
     const referenced = input.referencedFiles?.length
       ? `Referenced files:\n${input.referencedFiles.map((file) => `- ${file}`).join("\n")}\n\n`
       : "";
     const promptText = `${referenced}${input.text}`;
-    if (thread.title === "New Thread") {
-      active.firstPrompt = input.text;
-    }
-
     const images: ImageContent[] = (input.images ?? []).map((image) => ({
       type: "image",
       data: image.base64Data,
       mimeType: image.mimeType,
     }));
+
+    if (active.running) {
+      await this.queuePrompt(active, input, promptText, images);
+      return;
+    }
+
+    active.running = true;
+    active.firstPrompt = null;
+    const thread = this.requireThread(input.threadId);
+    const workspace = this.database.getWorkspace(thread.workspaceId);
+    if (!workspace) {
+      active.running = false;
+      throw new Error("Workspace missing");
+    }
+    if (thread.title === "New Thread") {
+      active.firstPrompt = input.text;
+    }
 
     try {
       await active.session.prompt(promptText, images.length ? { images } : undefined);
@@ -200,12 +216,59 @@ export class KipOrchestrator {
     }
   }
 
-  async abort(threadId: string): Promise<void> {
+  private async queuePrompt(
+    active: ActiveSession,
+    input: SendPromptInput,
+    promptText: string,
+    images: ImageContent[],
+  ): Promise<void> {
+    const delivery: PromptDelivery = input.delivery ?? "followUp";
+    const attachments: NonNullable<ChatTurn["attachments"]> = [
+      ...(input.referencedFiles ?? []).map((path) => ({
+        name: path.split("/").pop() ?? path,
+        path,
+        mimeType: "text/plain",
+      })),
+      ...(input.images ?? []).map((image, index) => ({
+        name: `image-${index + 1}`,
+        path: `image-${index + 1}`,
+        mimeType: image.mimeType,
+      })),
+    ];
+    active.queued.push({
+      id: `q_${crypto.randomUUID().replaceAll("-", "").slice(0, 10)}`,
+      text: input.text,
+      delivery,
+      promptText,
+      attachments: attachments.length ? attachments : undefined,
+    });
+    this.emitQueue(active);
+    await active.session.prompt(promptText, {
+      images: images.length ? images : undefined,
+      streamingBehavior: delivery,
+    });
+  }
+
+  private emitQueue(active: ActiveSession): void {
+    this.emit(active.threadId, {
+      kind: "queue_update",
+      queued: active.queued.map(({ id, text, delivery }) => ({ id, text, delivery })),
+    });
+  }
+
+  async abort(threadId: string): Promise<string[]> {
     const active = this.sessions.get(threadId);
-    if (!active) return;
+    if (!active) return [];
     active.interceptor.cancelAll("aborted");
+    // Drop queued messages before aborting so Pi does not start them, and hand
+    // their text back to the composer instead of losing it.
+    const restored = active.queued.map((entry) => entry.text);
+    active.queued = [];
+    active.session.clearQueue();
+    this.emitQueue(active);
     await active.session.abort();
     active.running = false;
+    return restored;
   }
 
   async compact(threadId: string): Promise<ContextUsage> {
@@ -343,6 +406,7 @@ export class KipOrchestrator {
       thinkingStartedAt: null,
       firstPrompt: null,
       buffer,
+      queued: [],
     };
 
     active.unsubscribe = session.subscribe((event) => this.onSessionEvent(active, event));
@@ -381,6 +445,10 @@ export class KipOrchestrator {
   private onSessionEvent(active: ActiveSession, event: AgentSessionEvent): void {
     switch (event.type) {
       case "message_start": {
+        if (event.message.role === "user") {
+          this.onUserMessage(active, textOf(event.message.content));
+          return;
+        }
         if (event.message.role !== "assistant") return;
         if (!active.currentTurn) {
           const turn: ChatTurn = {
@@ -478,6 +546,10 @@ export class KipOrchestrator {
       case "agent_settled": {
         active.buffer.flush();
         active.running = false;
+        if (active.queued.length) {
+          active.queued = [];
+          this.emitQueue(active);
+        }
         this.emit(active.threadId, {
           kind: "usage_update",
           usage: toSharedUsage(active.session.getContextUsage()),
@@ -497,6 +569,33 @@ export class KipOrchestrator {
       default:
         return;
     }
+  }
+
+  /**
+   * Pi emits message_start for every user message, including the one that
+   * started the run. Only messages we queued mid-run split the transcript.
+   */
+  private onUserMessage(active: ActiveSession, text: string): void {
+    const index = active.queued.findIndex((entry) => text.startsWith(entry.promptText));
+    if (index === -1) return;
+    const [entry] = active.queued.splice(index, 1);
+    this.emitQueue(active);
+    if (!entry) return;
+    active.buffer.flush();
+    active.currentTurn = null;
+    active.textBlockId = null;
+    active.thinkingBlockId = null;
+    active.thinkingStartedAt = null;
+    this.emit(active.threadId, {
+      kind: "user_turn",
+      turn: {
+        id: `user_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`,
+        role: "user",
+        blocks: [{ type: "text", id: `utxt_${entry.id}`, text: entry.text }],
+        attachments: entry.attachments,
+        createdAt: Date.now(),
+      },
+    });
   }
 
   private ensureTextBlock(active: ActiveSession): string {

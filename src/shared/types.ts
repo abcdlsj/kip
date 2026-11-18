@@ -165,6 +165,9 @@ export type AgentStreamEvent =
   | { kind: "usage_update"; usage: ContextUsage }
   | { kind: "thread_title_updated"; title: string }
   | { kind: "turn_complete" }
+  /** A message sent during a run was delivered to the agent. */
+  | { kind: "user_turn"; turn: ChatTurn }
+  | { kind: "queue_update"; queued: QueuedPrompt[] }
   | { kind: "turn_error"; message: string };
 
 export interface AgentStreamEnvelope {
@@ -172,11 +175,25 @@ export interface AgentStreamEnvelope {
   event: AgentStreamEvent;
 }
 
+/**
+ * How a message sent during a run reaches the agent: `followUp` waits until the
+ * current work is done, `steer` is delivered after the current tool call.
+ */
+export type PromptDelivery = "followUp" | "steer";
+
 export interface SendPromptInput {
   threadId: string;
   text: string;
   referencedFiles?: string[];
   images?: Array<{ mimeType: string; base64Data: string }>;
+  /** Only used while the thread is running. Defaults to followUp. */
+  delivery?: PromptDelivery;
+}
+
+export interface QueuedPrompt {
+  id: string;
+  text: string;
+  delivery: PromptDelivery;
 }
 
 export interface CreateThreadInput {

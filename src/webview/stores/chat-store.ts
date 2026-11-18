@@ -5,6 +5,7 @@ import type {
   AgentStreamEvent,
   ChatTurn,
   ContextUsage,
+  QueuedPrompt,
   ToolApprovalPayload,
 } from "../../shared/types";
 import { request } from "../rpc-client";
@@ -14,6 +15,8 @@ export interface ThreadView {
   usage: ContextUsage;
   running: boolean;
   approvals: ToolApprovalPayload[];
+  /** Messages sent during the run that the agent has not picked up yet. */
+  queued: QueuedPrompt[];
   error: string | null;
   loaded: boolean;
 }
@@ -23,6 +26,7 @@ const emptyView = (): ThreadView => ({
   usage: { usedTokens: 0, maxTokens: 0, ratio: 0 },
   running: false,
   approvals: [],
+  queued: [],
   error: null,
   loaded: false,
 });
@@ -33,7 +37,8 @@ interface ChatState {
   appendUserTurn: (threadId: string, text: string, attachments?: ChatTurn["attachments"]) => void;
   applyEvent: (threadId: string, event: AgentStreamEvent) => void;
   removeApproval: (threadId: string, toolCallId: string) => void;
-  abort: (threadId: string) => Promise<void>;
+  /** Stops the run and returns the text of queued messages that were dropped. */
+  abort: (threadId: string) => Promise<string[]>;
   setError: (threadId: string, message: string) => void;
   resolveApproval: (
     threadId: string,
@@ -172,6 +177,7 @@ export const useChatStore = create<ChatState>()(
           case "turn_complete": {
             view.running = false;
             view.approvals = [];
+            view.queued = [];
             const lastTurn = view.turns[view.turns.length - 1];
             for (const block of lastTurn?.blocks ?? []) {
               if (block.type === "thinking") block.isComplete = true;
@@ -195,6 +201,12 @@ export const useChatStore = create<ChatState>()(
             }
             return;
           }
+          case "user_turn":
+            view.turns.push(event.turn);
+            return;
+          case "queue_update":
+            view.queued = event.queued;
+            return;
           case "thread_title_updated":
             return;
           default:
@@ -234,14 +246,16 @@ export const useChatStore = create<ChatState>()(
     },
 
     abort: async (threadId) => {
-      await request("abortThread", { threadId });
+      const { restored } = await request("abortThread", { threadId });
       set((state) => {
         const view = state.threads[threadId];
         if (view) {
           view.running = false;
           view.approvals = [];
+          view.queued = [];
         }
       });
+      return restored;
     },
 
     resolveApproval: async (threadId, toolCallId, approved, remember) => {

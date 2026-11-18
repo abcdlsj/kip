@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
+  CornerDownRight,
   FileText,
   Paperclip,
   Square,
   X,
 } from "lucide-react";
-import type { FileSuggestion } from "../../../shared/types";
+import type { FileSuggestion, PromptDelivery } from "../../../shared/types";
 import { MAX_ATTACHMENT_BYTES } from "../../../shared/constants";
-import { submitPrompt } from "../../lib/send";
+import { stopThread, submitPrompt } from "../../lib/send";
 import { request } from "../../rpc-client";
 import { useChatStore } from "../../stores/chat-store";
 import { NEW_THREAD_DRAFT, useUiStore } from "../../stores/ui-store";
@@ -35,7 +36,6 @@ export function Composer() {
   const view = useChatStore((state) =>
     activeThreadId ? state.threads[activeThreadId] : undefined,
   );
-  const abort = useChatStore((state) => state.abort);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -45,6 +45,8 @@ export function Composer() {
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
 
   const running = view?.running ?? false;
+  const queued = view?.queued ?? [];
+  const hasContent = draft.trim().length > 0 || images.length > 0;
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -109,10 +111,15 @@ export function Composer() {
     if (next.length) setImages((current) => [...current, ...next].slice(0, 6));
   };
 
-  const send = async () => {
+  /**
+   * While a run is active the message is queued: `followUp` waits for the
+   * current work, `steer` reaches the agent after the current tool call.
+   */
+  const send = async (steer = false) => {
     const text = draft.trim();
-    if (running || !activeWorkspaceId) return;
+    if (!activeWorkspaceId) return;
     if (!text && images.length === 0) return;
+    const delivery: PromptDelivery | undefined = running ? (steer ? "steer" : "followUp") : undefined;
     let threadId = activeThreadId;
     if (!threadId) {
       const thread = await newThread();
@@ -131,12 +138,13 @@ export function Composer() {
       text,
       referencedFiles,
       images: pending.map(({ name, mimeType, base64Data }) => ({ name, mimeType, base64Data })),
+      delivery,
     });
     setTimeout(() => void refreshThreads(), 400);
   };
 
   const stop = async () => {
-    if (activeThreadId) await abort(activeThreadId);
+    if (activeThreadId) await stopThread(activeThreadId);
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -167,7 +175,7 @@ export function Composer() {
     }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      void send();
+      void send(running && (event.metaKey || event.ctrlKey));
     }
   };
 
@@ -204,6 +212,25 @@ export function Composer() {
             borderColor: focused ? "var(--border-focus)" : "var(--border-hairline)",
           }}
         >
+          {queued.length > 0 && (
+            <div className="mb-2.5 space-y-1 border-b hairline pb-2.5">
+              {queued.map((item) => (
+                <div key={item.id} className="flex items-start gap-2 text-[13px] leading-[1.45]">
+                  <CornerDownRight
+                    size={13}
+                    strokeWidth={1.5}
+                    className="mt-[3px] shrink-0 text-[var(--text-muted)]"
+                  />
+                  <span className="shrink-0 text-[12px] font-medium text-[var(--text-muted)]">
+                    {item.delivery === "steer" ? "Next step" : "Queued"}
+                  </span>
+                  <span className="font-prose line-clamp-2 min-w-0 flex-1 text-[var(--text-secondary)]">
+                    {item.text}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           {images.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-2">
               {images.map((image, index) => (
@@ -278,22 +305,29 @@ export function Composer() {
             </button>
             <div className="ml-auto flex items-center gap-2">
               <span className="text-meta hidden text-[var(--text-muted)] sm:block">
-                {running ? "Esc to stop" : "Enter to send"}
+                {!running
+                  ? "Enter to send"
+                  : hasContent
+                    ? "Enter to queue · ⌘↵ next step"
+                    : "Esc to stop"}
               </span>
-              {running ? (
+              {running && (
                 <button
                   onClick={() => void stop()}
                   className="flex h-7 w-7 items-center justify-center rounded-[9px] border border-[var(--border-focus)] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)]"
                   aria-label="Stop"
+                  title="Stop (Esc)"
                 >
                   <Square size={10} strokeWidth={2} fill="currentColor" />
                 </button>
-              ) : (
+              )}
+              {(!running || hasContent) && (
                 <button
                   onClick={() => void send()}
-                  disabled={!activeWorkspaceId || (!draft.trim() && images.length === 0)}
+                  disabled={!activeWorkspaceId || !hasContent}
                   className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-action)] text-[var(--accent-action-fg)] transition-opacity disabled:opacity-30"
-                  aria-label="Send"
+                  aria-label={running ? "Queue message" : "Send"}
+                  title={running ? "Queue after the current work (Enter)" : "Send (Enter)"}
                 >
                   <ArrowUp size={15} strokeWidth={1.8} />
                 </button>

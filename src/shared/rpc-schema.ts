@@ -69,7 +69,8 @@ export interface KipRPCSchema {
       compactThread: { params: { threadId: string }; response: ContextUsage };
 
       sendPrompt: { params: SendPromptInput; response: { accepted: boolean } };
-      abortThread: { params: { threadId: string }; response: void };
+      /** Returns the text of queued messages that were dropped, so the view can restore them. */
+      abortThread: { params: { threadId: string }; response: { restored: string[] } };
       resolveToolApproval: {
         params: {
           threadId: string;

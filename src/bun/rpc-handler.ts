@@ -121,9 +121,9 @@ export function createKipRpc(deps: RpcDeps) {
           });
           return { accepted: true };
         },
-        abortThread: async ({ threadId }) => {
-          await deps.orchestrator.abort(threadId);
-        },
+        abortThread: async ({ threadId }) => ({
+          restored: await deps.orchestrator.abort(threadId),
+        }),
         resolveToolApproval: ({ threadId, toolCallId, approved, rememberForSession }) => {
           deps.orchestrator.resolveApproval(threadId, toolCallId, approved, rememberForSession);
         },
