@@ -52,7 +52,7 @@ export function Composer() {
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(220, Math.max(52, textarea.scrollHeight))}px`;
+    textarea.style.height = `${Math.min(220, Math.max(24, textarea.scrollHeight))}px`;
   }, [draft]);
 
   useEffect(() => {
@@ -207,7 +207,7 @@ export function Composer() {
           </div>
         )}
         <div
-          className="rounded-[18px] border bg-[var(--bg-elevated)] px-3.5 pb-2.5 pt-3 shadow-[var(--shadow-composer)] transition-colors duration-150"
+          className="rounded-[16px] border bg-[var(--bg-elevated)] px-3.5 pb-2 pt-2.5 shadow-[var(--shadow-composer)] transition-colors duration-150"
           style={{
             borderColor: focused ? "var(--border-focus)" : "var(--border-hairline)",
           }}
@@ -273,7 +273,7 @@ export function Composer() {
                 void addFiles(files);
               }
             }}
-            rows={2}
+            rows={1}
             placeholder={
               activeWorkspaceId
                 ? "Ask, @reference a file, or paste an image"
@@ -283,7 +283,7 @@ export function Composer() {
             className="selectable font-prose thin-scroll w-full resize-none bg-transparent text-[15px] leading-[1.6] placeholder:text-[var(--text-muted)] disabled:opacity-60"
             style={{ maxHeight: 220 }}
           />
-          <div className="mt-1 flex h-8 items-center gap-1">
+          <div className="mt-1 flex h-7 items-center gap-1">
             <ModelSelector />
             <input
               ref={fileInputRef}

@@ -108,7 +108,7 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className="thin-scroll h-full overflow-y-auto px-7 pt-[64px] pb-[220px]"
+        className="thin-scroll h-full overflow-y-auto px-7 pt-[64px] pb-[180px]"
       >
         <div className="mx-auto w-full max-w-[740px]">
           {isEmpty ? (

@@ -147,8 +147,8 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
           <h2 className="text-[15px] font-semibold">Model providers</h2>
           <p className="mt-1 text-[12px] text-[var(--text-secondary)]">
             Any endpoint that speaks the OpenAI, Anthropic, or Google wire format.
@@ -159,7 +159,7 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
             setForm({ ...EMPTY });
             setStatus(null);
           }}
-          className="flex h-8 items-center gap-1.5 rounded-full bg-[var(--accent-action)] px-3 text-[12px] font-medium text-[var(--accent-action-fg)]"
+          className="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[var(--accent-action)] px-3 text-[12px] font-medium text-[var(--accent-action-fg)]"
         >
           <Plus size={13} strokeWidth={1.5} />
           Add provider
