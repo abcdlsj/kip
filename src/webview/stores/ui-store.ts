@@ -21,8 +21,9 @@ interface UiState {
   settingsTab: SettingsTab;
   syncState: "idle" | "running" | "error";
   syncMessage: string | null;
-  draft: string;
-  setDraft: (draft: string) => void;
+  /** Unsent composer text per thread; NEW_THREAD_DRAFT holds text before a thread exists. */
+  drafts: Record<string, string>;
+  setDraft: (key: string, draft: string) => void;
   initialize: () => Promise<void>;
   refresh: () => Promise<void>;
   refreshProviders: () => Promise<void>;
@@ -48,6 +49,8 @@ function applyTheme(theme: ThemeMode): void {
 
 let systemListenerAttached = false;
 
+export const NEW_THREAD_DRAFT = "__new__";
+
 export const useUiStore = create<UiState>((set, get) => ({
   settings: null,
   providers: [],
@@ -58,9 +61,15 @@ export const useUiStore = create<UiState>((set, get) => ({
   settingsTab: "providers",
   syncState: "idle",
   syncMessage: null,
-  draft: "",
+  drafts: {},
 
-  setDraft: (draft) => set({ draft }),
+  setDraft: (key, draft) =>
+    set((state) => {
+      const drafts = { ...state.drafts };
+      if (draft) drafts[key] = draft;
+      else delete drafts[key];
+      return { drafts };
+    }),
 
   initialize: async () => {
     const settings = await request("getSettings", undefined);

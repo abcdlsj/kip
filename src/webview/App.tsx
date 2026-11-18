@@ -90,9 +90,12 @@ export default function App() {
       } else if (event.key === "Enter") {
         const threadId = workspace.activeThreadId;
         if (!threadId) return;
+        // Typing fields own ⌘↵; high-risk calls need an explicit click.
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("input, textarea, [contenteditable='true']")) return;
         const view = useChatStore.getState().threads[threadId];
         const pending = view?.approvals[0];
-        if (!pending) return;
+        if (!pending || pending.risk === "high-risk") return;
         event.preventDefault();
         void useChatStore
           .getState()

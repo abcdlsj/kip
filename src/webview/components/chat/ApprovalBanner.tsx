@@ -101,7 +101,7 @@ export function ApprovalBanner({ approval, threadId }: ApprovalBannerProps) {
                 onClick={() => void resolveApproval(threadId, approval.toolCallId, true, remember)}
                 className="h-7 rounded-full bg-[var(--accent-action)] px-3 text-[12px] font-medium text-[var(--accent-action-fg)] transition-opacity hover:opacity-90"
               >
-                Allow <span className="ml-0.5 text-[10.5px] opacity-70">⌘↵</span>
+                Allow{!highRisk && <span className="ml-1 text-[11px] opacity-70">⌘↵</span>}
               </button>
             </div>
           </div>

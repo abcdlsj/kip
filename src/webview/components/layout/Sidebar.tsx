@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -35,6 +35,14 @@ export function Sidebar() {
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
+  // Deleting removes the transcript from disk, so the first click only arms it.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!confirmDeleteId) return;
+    const timer = setTimeout(() => setConfirmDeleteId(null), 3000);
+    return () => clearTimeout(timer);
+  }, [confirmDeleteId]);
 
   const workspace = workspaces.find((item) => item.id === activeWorkspaceId) ?? null;
   const groups = groupThreads(threads);
@@ -161,11 +169,26 @@ export function Sidebar() {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            onClick={() => void deleteThread(thread.id)}
-                            className="ml-1 flex h-5 w-5 items-center justify-center rounded-[5px] text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-[var(--bg-subtle)] hover:text-[var(--status-err)] group-hover:opacity-100"
-                            aria-label="Delete thread"
+                            onClick={() => {
+                              if (confirmDeleteId === thread.id) {
+                                setConfirmDeleteId(null);
+                                void deleteThread(thread.id);
+                              } else {
+                                setConfirmDeleteId(thread.id);
+                              }
+                            }}
+                            className={`ml-1 flex h-5 shrink-0 items-center justify-center rounded-[5px] transition-opacity hover:bg-[var(--bg-subtle)] ${
+                              confirmDeleteId === thread.id
+                                ? "px-1.5 text-[11px] font-medium text-[var(--status-err)] opacity-100"
+                                : "w-5 text-[var(--text-muted)] opacity-0 hover:text-[var(--status-err)] group-hover:opacity-100"
+                            }`}
+                            aria-label={confirmDeleteId === thread.id ? "Confirm delete thread" : "Delete thread"}
                           >
-                            <Trash2 size={11} strokeWidth={1.5} />
+                            {confirmDeleteId === thread.id ? (
+                              "Delete?"
+                            ) : (
+                              <Trash2 size={12} strokeWidth={1.5} />
+                            )}
                           </motion.button>
                         )}
                       </AnimatePresence>

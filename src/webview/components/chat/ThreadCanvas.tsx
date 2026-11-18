@@ -6,7 +6,7 @@ import { SUGGESTIONS } from "../../../shared/constants";
 import { greeting } from "../../lib/format";
 import { submitPrompt } from "../../lib/send";
 import { useChatStore } from "../../stores/chat-store";
-import { useUiStore } from "../../stores/ui-store";
+import { NEW_THREAD_DRAFT, useUiStore } from "../../stores/ui-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
 import { MessageTurn } from "./MessageTurn";
 
@@ -151,7 +151,7 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
                   </div>
                   <button
                     onClick={() => {
-                      setDraft("");
+                      setDraft(NEW_THREAD_DRAFT, "");
                       void newThread();
                     }}
                     className="mt-6 text-[12px] text-[var(--text-muted)] underline decoration-[var(--border-focus)] underline-offset-4 hover:text-[var(--text-secondary)]"

@@ -11,7 +11,7 @@ import { MAX_ATTACHMENT_BYTES } from "../../../shared/constants";
 import { submitPrompt } from "../../lib/send";
 import { request } from "../../rpc-client";
 import { useChatStore } from "../../stores/chat-store";
-import { useUiStore } from "../../stores/ui-store";
+import { NEW_THREAD_DRAFT, useUiStore } from "../../stores/ui-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
 import { ModelSelector } from "./ModelSelector";
 
@@ -23,10 +23,12 @@ interface PendingImage {
 }
 
 export function Composer() {
-  const draft = useUiStore((state) => state.draft);
-  const setDraft = useUiStore((state) => state.setDraft);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeThreadId = useWorkspaceStore((state) => state.activeThreadId);
+  const draftKey = activeThreadId ?? NEW_THREAD_DRAFT;
+  const draft = useUiStore((state) => state.drafts[draftKey] ?? "");
+  const storeDraft = useUiStore((state) => state.setDraft);
+  const setDraft = (text: string) => storeDraft(draftKey, text);
   const newThread = useWorkspaceStore((state) => state.newThread);
   const selectThread = useWorkspaceStore((state) => state.selectThread);
   const refreshThreads = useWorkspaceStore((state) => state.refreshThreads);
@@ -156,6 +158,9 @@ export function Composer() {
         return;
       }
       if (event.key === "Escape") {
+        // Closing the file list must not reach the global Esc-to-stop handler.
+        event.preventDefault();
+        event.stopPropagation();
         setSuggestions([]);
         return;
       }
