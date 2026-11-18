@@ -9,12 +9,14 @@ import { spawnSync } from "node:child_process";
 
 const root = join(import.meta.dir, "..");
 const svg = readFileSync(join(root, "assets", "icon.svg"), "utf8");
+// Flat variant of the same geometry: metal gradients turn to mush at 16/32 px.
+const smallSvg = readFileSync(join(root, "assets", "icon-small.svg"), "utf8");
 const iconset = join(root, "icon.iconset");
 mkdirSync(iconset, { recursive: true });
 mkdirSync(join(root, "assets"), { recursive: true });
 
 function render(size: number): Buffer {
-  const resvg = new Resvg(svg, {
+  const resvg = new Resvg(size <= 32 ? smallSvg : svg, {
     fitTo: { mode: "width", value: size },
     background: "rgba(0,0,0,0)",
   });
