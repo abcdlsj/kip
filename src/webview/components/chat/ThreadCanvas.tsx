@@ -178,7 +178,7 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
                 !view.turns[view.turns.length - 1]?.blocks.some(
                   (block) => block.type !== "text",
                 ) && (
-                  <div className="mt-3 flex items-center gap-2 text-[11.5px] text-[var(--text-muted)]">
+                  <div className="mt-3 flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
                     <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-secondary)] pulse-dot" />
                     <span>Kip is thinking</span>
                   </div>
@@ -198,7 +198,7 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
               setPinned(true);
               scrollToBottom(true);
             }}
-            className="absolute bottom-[168px] left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border hairline bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] px-3 text-[11.5px] font-medium text-[var(--text-secondary)] shadow-[var(--shadow-composer)] backdrop-blur-md"
+            className="absolute bottom-[168px] left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border hairline bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] px-3 text-[12px] font-medium text-[var(--text-secondary)] shadow-[var(--shadow-composer)] backdrop-blur-md"
           >
             <ArrowDown size={12} strokeWidth={1.5} />
             Jump to latest

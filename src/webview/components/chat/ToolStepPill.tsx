@@ -78,14 +78,14 @@ export function ToolStepPill({ block, compact = false }: ToolStepPillProps) {
         }
       >
         <span className="flex items-center">{iconFor(block.toolName, block.risk === "high-risk")}</span>
-        <span className="truncate font-[var(--font-mono)] text-[11.5px]">{label}</span>
+        <span className="truncate font-[var(--font-mono)] text-[12px]">{label}</span>
         {block.risk === "high-risk" && (
-          <span className="rounded-full bg-[color-mix(in_srgb,var(--status-err)_12%,transparent)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--status-err)]">
+          <span className="rounded-full bg-[color-mix(in_srgb,var(--status-err)_12%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--status-err)]">
             Risky
           </span>
         )}
         {block.outsideWorkspace && (
-          <span className="rounded-full bg-[color-mix(in_srgb,var(--status-warn)_14%,transparent)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--status-warn)]">
+          <span className="rounded-full bg-[color-mix(in_srgb,var(--status-warn)_14%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--status-warn)]">
             Outside workspace
           </span>
         )}

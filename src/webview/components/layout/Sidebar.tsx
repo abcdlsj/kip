@@ -126,7 +126,7 @@ export function Sidebar() {
           <div className="mt-3 flex-1 overflow-y-auto px-2.5 pb-2 scrollbar-none">
             {groups.map((group) => (
               <div key={group.label} className="mb-3">
-                <p className="px-2 pb-1 text-[10.5px] font-medium uppercase tracking-[0.07em] text-[var(--text-muted)]">
+                <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-[0.07em] text-[var(--text-muted)]">
                   {group.label}
                 </p>
                 {group.items.map((thread) => {
@@ -179,7 +179,7 @@ export function Sidebar() {
                             }}
                             className={`ml-1 flex h-5 shrink-0 items-center justify-center rounded-[5px] transition-opacity hover:bg-[var(--bg-subtle)] ${
                               confirmDeleteId === thread.id
-                                ? "px-1.5 text-[11px] font-medium text-[var(--status-err)] opacity-100"
+                                ? "px-1.5 text-[11.5px] font-medium text-[var(--status-err)] opacity-100"
                                 : "w-5 text-[var(--text-muted)] opacity-0 hover:text-[var(--status-err)] group-hover:opacity-100"
                             }`}
                             aria-label={confirmDeleteId === thread.id ? "Confirm delete thread" : "Delete thread"}

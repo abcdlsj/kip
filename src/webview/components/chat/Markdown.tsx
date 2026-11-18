@@ -28,7 +28,7 @@ export function Markdown({ children, streaming = false }: MarkdownProps) {
               return <code className={className}>{codeChildren}</code>;
             }
             return (
-              <code className="rounded-[5px] bg-[var(--bg-code)] px-1.5 py-0.5 font-[var(--font-mono)] text-[13px]">
+              <code className="rounded-[5px] bg-[var(--bg-code)] px-1.5 py-0.5 font-[var(--font-mono)] text-[0.87em]">
                 {codeChildren}
               </code>
             );

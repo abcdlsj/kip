@@ -72,7 +72,7 @@ function MessageTurnInner({
               {turn.attachments.map((attachment) => (
                 <span
                   key={attachment.path}
-                  className="inline-flex h-[22px] items-center gap-1 rounded-[6px] border hairline px-1.5 text-[11px] text-[var(--text-secondary)]"
+                  className="inline-flex h-[22px] items-center gap-1 rounded-[6px] border hairline px-1.5 text-[11.5px] text-[var(--text-secondary)]"
                 >
                   <FileText size={11} strokeWidth={1.5} />
                   {attachment.name}
@@ -80,7 +80,7 @@ function MessageTurnInner({
               ))}
             </div>
           ) : null}
-          <p className="selectable whitespace-pre-wrap text-[16px] leading-[1.65]">{text}</p>
+          <p className="selectable font-prose whitespace-pre-wrap text-[15px] leading-[1.65]">{text}</p>
         </div>
       </div>
     );
@@ -154,7 +154,7 @@ function MessageTurnInner({
           {onRetry && (
             <button
               onClick={() => onRetry(turn.id)}
-              className="ml-1 inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--status-err)_30%,transparent)] px-2 py-0.5 text-[11px] transition-colors hover:bg-[color-mix(in_srgb,var(--status-err)_8%,transparent)]"
+              className="ml-1 inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--status-err)_30%,transparent)] px-2 py-0.5 text-[11.5px] transition-colors hover:bg-[color-mix(in_srgb,var(--status-err)_8%,transparent)]"
             >
               <RotateCcw size={10} strokeWidth={1.5} />
               Retry

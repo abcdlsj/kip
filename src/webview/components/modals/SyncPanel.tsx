@@ -209,11 +209,11 @@ export function SyncPanel() {
         </button>
       </div>
       {config?.lastSyncedAt && (
-        <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+        <p className="mt-2 text-[11.5px] text-[var(--text-muted)]">
           Last synced {new Date(config.lastSyncedAt).toLocaleString()}
         </p>
       )}
-      {status && <p className="mt-2 text-[11.5px] text-[var(--text-secondary)]">{status}</p>}
+      {status && <p className="mt-2 text-[12px] text-[var(--text-secondary)]">{status}</p>}
     </div>
   );
 }
@@ -221,7 +221,7 @@ export function SyncPanel() {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10.5px] font-medium uppercase tracking-[0.05em] text-[var(--text-muted)]">
+      <span className="mb-1 block text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-muted)]">
         {label}
       </span>
       {children}

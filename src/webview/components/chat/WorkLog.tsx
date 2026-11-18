@@ -134,12 +134,12 @@ export function WorkLog({ blocks, running, approvals }: WorkLogProps) {
                 : `Worked`}
         </span>
         {!running && toolCount > 0 && (
-          <span className="text-[11px] text-[var(--text-muted)]">
+          <span className="text-[11.5px] text-[var(--text-muted)]">
             · {toolCount} {toolCount === 1 ? "step" : "steps"}
           </span>
         )}
-        {hasError && <span className="text-[11px] text-[var(--status-err)]">· error</span>}
-        {hasDenied && <span className="text-[11px] text-[var(--status-warn)]">· denied</span>}
+        {hasError && <span className="text-[11.5px] text-[var(--status-err)]">· error</span>}
+        {hasDenied && <span className="text-[11.5px] text-[var(--status-warn)]">· denied</span>}
         {running && elapsed > 3000 && (
           <span className="text-meta text-[var(--text-muted)]">{durationLabel(elapsed)}</span>
         )}
@@ -170,7 +170,7 @@ export function WorkLog({ blocks, running, approvals }: WorkLogProps) {
                 >
                   {block.type === "thinking" ? (
                     <div className="my-1">
-                      <div className="flex h-5 items-center gap-1.5 text-[11.5px] text-[var(--text-muted)]">
+                      <div className="flex h-5 items-center gap-1.5 text-[12px] text-[var(--text-muted)]">
                         <Sparkles size={10} strokeWidth={1.5} />
                         <span>
                           {!block.isComplete
@@ -180,7 +180,7 @@ export function WorkLog({ blocks, running, approvals }: WorkLogProps) {
                               : "Thought"}
                         </span>
                       </div>
-                      <p className="selectable whitespace-pre-wrap pb-1 text-[13px] leading-[1.6] text-[var(--text-secondary)]">
+                      <p className="selectable font-prose whitespace-pre-wrap pb-1 text-[13.5px] leading-[1.65] text-[var(--text-secondary)]">
                         {block.thinking}
                       </p>
                     </div>

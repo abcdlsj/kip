@@ -64,13 +64,13 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
       </div>
       <div className="no-drag ml-auto flex items-center gap-2.5">
         {workspace?.gitBranch && (
-          <span className="flex h-6 items-center gap-1.5 rounded-full border hairline px-2 text-[11px] text-[var(--text-secondary)]">
+          <span className="flex h-6 items-center gap-1.5 rounded-full border hairline px-2 text-[11.5px] text-[var(--text-secondary)]">
             <GitBranch size={11} strokeWidth={1.5} />
-            <span className="max-w-[140px] truncate font-[var(--font-mono)] text-[10.5px]">
+            <span className="max-w-[140px] truncate font-[var(--font-mono)] text-[11px]">
               {workspace.gitBranch}
             </span>
             {workspace.dirtyFiles > 0 && (
-              <span className="text-[10px] text-[var(--status-warn)]">+{workspace.dirtyFiles}</span>
+              <span className="text-[11px] text-[var(--status-warn)]">+{workspace.dirtyFiles}</span>
             )}
           </span>
         )}

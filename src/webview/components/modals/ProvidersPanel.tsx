@@ -175,25 +175,25 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate text-[13px] font-medium">{provider.displayName}</span>
-                <span className="rounded-full bg-[var(--bg-subtle)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)]">
+                <span className="rounded-full bg-[var(--bg-subtle)] px-1.5 py-0.5 text-[11px] text-[var(--text-muted)]">
                   {provider.protocol}
                 </span>
                 {provider.hasApiKey ? (
-                  <span className="flex items-center gap-0.5 text-[10.5px] text-[var(--status-ok)]">
+                  <span className="flex items-center gap-0.5 text-[11px] text-[var(--status-ok)]">
                     <Check size={10} strokeWidth={2} /> key
                   </span>
                 ) : (
-                  <span className="text-[10.5px] text-[var(--status-warn)]">no key</span>
+                  <span className="text-[11px] text-[var(--status-warn)]">no key</span>
                 )}
               </div>
-              <p className="mt-0.5 truncate font-[var(--font-mono)] text-[11px] text-[var(--text-muted)]">
+              <p className="mt-0.5 truncate font-[var(--font-mono)] text-[11.5px] text-[var(--text-muted)]">
                 {provider.baseUrl} · {provider.models.length} models
               </p>
             </div>
             <button
               onClick={() => void test(provider)}
               disabled={busy === provider.id}
-              className="flex h-7 items-center gap-1 rounded-full border hairline px-2.5 text-[11.5px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+              className="flex h-7 items-center gap-1 rounded-full border hairline px-2.5 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
             >
               {busy === provider.id ? (
                 <Loader2 size={11} strokeWidth={1.5} className="animate-spin" />
@@ -204,7 +204,7 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
             </button>
             <button
               onClick={() => edit(provider)}
-              className="h-7 rounded-full px-2.5 text-[11.5px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+              className="h-7 rounded-full px-2.5 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
             >
               Edit
             </button>
@@ -319,7 +319,7 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
       )}
 
       {status && (
-        <p className="mt-3 text-[11.5px] text-[var(--text-secondary)]">{status}</p>
+        <p className="mt-3 text-[12px] text-[var(--text-secondary)]">{status}</p>
       )}
     </div>
   );
@@ -339,7 +339,7 @@ function splitIds(value: string): string[] {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10.5px] font-medium uppercase tracking-[0.05em] text-[var(--text-muted)]">
+      <span className="mb-1 block text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-muted)]">
         {label}
       </span>
       {children}

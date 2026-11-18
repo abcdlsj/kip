@@ -31,7 +31,7 @@ export function SettingsModal() {
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[580px] w-[720px] max-w-[calc(100vw-48px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[16px] border hairline bg-[var(--bg-elevated)] shadow-[var(--shadow-modal)]">
           <Dialog.Title className="sr-only">Kip settings</Dialog.Title>
           <nav className="flex w-[168px] shrink-0 flex-col border-r hairline bg-[var(--bg-sidebar)] p-2.5">
-            <p className="px-2 pb-3 pt-2 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            <p className="px-2 pb-3 pt-2 text-[11.5px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]">
               Settings
             </p>
             {TABS.map((item) => {
@@ -51,7 +51,7 @@ export function SettingsModal() {
                 </button>
               );
             })}
-            <div className="mt-auto px-2 pb-1 text-[10.5px] text-[var(--text-muted)]">Kip 0.1.0</div>
+            <div className="mt-auto px-2 pb-1 text-[11px] text-[var(--text-muted)]">Kip 0.1.0</div>
           </nav>
           <div className="relative min-w-0 flex-1 overflow-y-auto p-5 pr-10 thin-scroll">
             <Dialog.Close asChild>
@@ -96,7 +96,7 @@ export function SettingsModal() {
                   ))}
                 </div>
                 <h3 className="mt-6 text-[13px] font-medium">Default reasoning</h3>
-                <p className="mt-1 text-[11.5px] text-[var(--text-secondary)]">
+                <p className="mt-1 text-[12px] text-[var(--text-secondary)]">
                   Used for new threads. Existing threads keep their own level.
                 </p>
                 <div className="mt-2 flex gap-1.5">
@@ -104,7 +104,7 @@ export function SettingsModal() {
                     <button
                       key={level}
                       onClick={() => void setDefaultThinking(level)}
-                      className={`h-7 flex-1 rounded-[6px] text-[11.5px] capitalize transition-colors ${
+                      className={`h-7 flex-1 rounded-[6px] text-[12px] capitalize transition-colors ${
                         settings?.defaultThinkingLevel === level
                           ? "bg-[var(--bg-subtle)] font-medium"
                           : "text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
@@ -114,12 +114,12 @@ export function SettingsModal() {
                     </button>
                   ))}
                 </div>
-                <p className="mt-6 text-[11px] leading-relaxed text-[var(--text-muted)]">
+                <p className="mt-6 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
                   Tip: use ⌘B to collapse the sidebar and ⌘K for the command palette.
                 </p>
                 <button
                   onClick={() => void refresh()}
-                  className="mt-4 h-7 rounded-full border hairline px-3 text-[11.5px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+                  className="mt-4 h-7 rounded-full border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
                 >
                   Reload preferences
                 </button>
@@ -145,16 +145,16 @@ export function SettingsModal() {
                       <div className="flex items-center gap-2">
                         <span className="text-[12.5px] font-medium">{policy.title}</span>
                         {settings?.approvalPolicy === policy.id && (
-                          <span className="text-[10px] text-[var(--text-muted)]">active</span>
+                          <span className="text-[11px] text-[var(--text-muted)]">active</span>
                         )}
                       </div>
-                      <p className="mt-0.5 text-[11.5px] leading-relaxed text-[var(--text-secondary)]">
+                      <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--text-secondary)]">
                         {policy.description}
                       </p>
                     </button>
                   ))}
                 </div>
-                <p className="mt-4 text-[11px] leading-relaxed text-[var(--text-muted)]">
+                <p className="mt-4 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
                   Access outside the workspace always requires approval, and paths under ~/.ssh,
                   ~/.aws, ~/.gnupg, and the Kip credential store are always blocked.
                 </p>

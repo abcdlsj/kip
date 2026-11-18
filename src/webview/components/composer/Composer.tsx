@@ -184,7 +184,7 @@ export function Composer() {
       <div className="pointer-events-auto relative w-[min(740px,100%)]">
         {suggestions.length > 0 && (
           <div className="absolute bottom-full left-0 mb-2 w-[340px] overflow-hidden rounded-[10px] border hairline bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow-modal)]">
-            <p className="px-2 py-1 text-[10.5px] font-medium uppercase tracking-[0.07em] text-[var(--text-muted)]">
+            <p className="px-2 py-1 text-[11px] font-medium uppercase tracking-[0.07em] text-[var(--text-muted)]">
               Files
             </p>
             {suggestions.map((suggestion, index) => (
@@ -199,7 +199,7 @@ export function Composer() {
                 }`}
               >
                 <FileText size={12} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
-                <span className="truncate font-[var(--font-mono)] text-[11.5px] text-[var(--text-secondary)]">
+                <span className="truncate font-[var(--font-mono)] text-[12px] text-[var(--text-secondary)]">
                   {suggestion.path}
                 </span>
               </button>
@@ -280,7 +280,7 @@ export function Composer() {
                 : "Add a workspace to begin"
             }
             disabled={!activeWorkspaceId}
-            className="selectable thin-scroll w-full resize-none bg-transparent text-[16px] leading-[1.55] placeholder:text-[var(--text-muted)] disabled:opacity-60"
+            className="selectable font-prose thin-scroll w-full resize-none bg-transparent text-[15px] leading-[1.6] placeholder:text-[var(--text-muted)] disabled:opacity-60"
             style={{ maxHeight: 220 }}
           />
           <div className="mt-1 flex h-8 items-center gap-1">

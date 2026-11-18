@@ -108,9 +108,18 @@ body {
 }
 
 .text-prose {
-  font-size: 16px;
+  font-family: var(--font-prose);
+  font-size: 15px;
   font-weight: 400;
   line-height: 1.7;
+  letter-spacing: -0.006em;
+}
+
+/* SF for message text; panels and chrome keep Avenir Next. */
+.font-prose {
+  font-family: var(--font-prose);
+  letter-spacing: -0.006em;
+  font-feature-settings: normal;
 }
 
 .thinking-shimmer {
@@ -175,37 +184,70 @@ body {
 }
 
 .markdown-body {
-  font-size: 16px;
+  font-family: var(--font-prose);
+  font-size: 15px;
   line-height: 1.7;
+  letter-spacing: -0.006em;
+  font-feature-settings: normal;
+  color: var(--text-primary);
+  overflow-wrap: break-word;
 }
 
 .markdown-body > * + * {
-  margin-top: 16px;
+  margin-top: 14px;
+}
+
+.markdown-body strong {
+  font-weight: 600;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .markdown-body h1 {
-  font-size: 19px;
-  font-weight: 600;
+  font-size: 20px;
   letter-spacing: -0.02em;
-  margin-top: 26px;
+  margin-top: 28px;
 }
 
 .markdown-body h2 {
-  font-size: 16.5px;
-  font-weight: 600;
+  font-size: 17px;
   letter-spacing: -0.015em;
-  margin-top: 24px;
+  margin-top: 26px;
 }
 
 .markdown-body h3 {
   font-size: 15px;
-  font-weight: 600;
-  margin-top: 20px;
+  margin-top: 22px;
+}
+
+.markdown-body h4 {
+  font-size: 15px;
+  color: var(--text-secondary);
+  margin-top: 18px;
+}
+
+.markdown-body > :first-child {
+  margin-top: 0;
 }
 
 .markdown-body ul,
 .markdown-body ol {
-  padding-left: 18px;
+  padding-left: 22px;
+}
+
+.markdown-body li::marker {
+  color: var(--text-muted);
+}
+
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin-top: 4px;
 }
 
 .markdown-body ul {
@@ -217,7 +259,7 @@ body {
 }
 
 .markdown-body li + li {
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .markdown-body a {
@@ -235,7 +277,13 @@ body {
 .markdown-body table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13.5px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.markdown-body th {
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .markdown-body th,
@@ -264,7 +312,7 @@ body {
 
 .kbd {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.02em;
   padding: 1px 5px;

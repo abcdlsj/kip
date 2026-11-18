@@ -40,7 +40,7 @@ export function ThinkingTrace({ block, streaming }: ThinkingTraceProps) {
             transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}
             className="overflow-hidden"
           >
-            <div className="selectable mt-1.5 whitespace-pre-wrap border-l-[1.5px] border-[var(--border-hairline)] pl-3 text-[13.5px] leading-[1.6] text-[var(--text-secondary)]">
+            <div className="selectable mt-1.5 font-prose whitespace-pre-wrap border-l-[1.5px] border-[var(--border-hairline)] pl-3 text-[13.5px] leading-[1.65] text-[var(--text-secondary)]">
               {block.thinking}
             </div>
           </motion.div>

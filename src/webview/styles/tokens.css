@@ -70,6 +70,9 @@
 :root {
   --font-sans: "Avenir Next", "Avenir", "Plus Jakarta Sans", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", -apple-system, sans-serif;
+  /* Message text: San Francisco on Apple platforms, the system UI face elsewhere. */
+  --font-prose: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+    "Hiragino Sans GB", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
   --spring: cubic-bezier(0.32, 0.72, 0, 1);
 }

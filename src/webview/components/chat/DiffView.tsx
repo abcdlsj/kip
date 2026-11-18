@@ -23,10 +23,10 @@ export function DiffView({ before, after }: { before: string; after: string }) {
                     : "flex"
               }
             >
-              <span className="w-10 shrink-0 select-none pr-1 text-right text-[10.5px] text-[var(--text-muted)]">
+              <span className="w-10 shrink-0 select-none pr-1 text-right text-[11px] text-[var(--text-muted)]">
                 {oldNumber}
               </span>
-              <span className="w-10 shrink-0 select-none pr-2 text-right text-[10.5px] text-[var(--text-muted)]">
+              <span className="w-10 shrink-0 select-none pr-2 text-right text-[11px] text-[var(--text-muted)]">
                 {newNumber}
               </span>
               <span
