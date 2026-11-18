@@ -172,6 +172,8 @@ jobs:
             desc "Quiet, cross-platform desktop coding agent built with Electrobun and Pi"
             homepage "https://github.com/abcdlsj/kip"
 
+            depends_on :macos
+
             app "Kip.app"
 
             zap trash: [
