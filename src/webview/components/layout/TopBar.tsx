@@ -2,10 +2,12 @@ import { GitBranch, PanelLeftOpen } from "lucide-react";
 import { useState } from "react";
 import type { ContextUsage, ThreadSummary, Workspace } from "../../../shared/types";
 import { formatTokens } from "../../lib/format";
+import { needsWindowControls, platform } from "../../lib/platform";
 import { request } from "../../rpc-client";
 import { useChatStore } from "../../stores/chat-store";
 import { useUiStore } from "../../stores/ui-store";
 import { ChangesChip } from "./ChangesChip";
+import { WindowControls } from "./WindowControls";
 
 interface TopBarProps {
   workspace: Workspace | null;
@@ -36,6 +38,13 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
 
   return (
     <header
+      onDoubleClick={(event) => {
+        // The window is frameless off macOS, so nothing else handles the
+        // double-click-to-maximize gesture the system title bar would.
+        if (platform === "mac") return;
+        if ((event.target as HTMLElement).closest("button, a, input, textarea")) return;
+        void request("windowControl", { action: "maximize" });
+      }}
       className={`drag-region absolute inset-x-0 top-0 z-10 flex h-11 items-center gap-2 pr-3 transition-colors ${
         scrolled ? "border-b hairline" : "border-b border-transparent"
       } ${collapsed ? "pl-[84px]" : "pl-4"}`}
@@ -119,6 +128,7 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
           </button>
         )}
       </div>
+      {needsWindowControls && <WindowControls />}
     </header>
   );
 }

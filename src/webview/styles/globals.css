@@ -115,6 +115,18 @@ body {
   letter-spacing: -0.006em;
 }
 
+/*
+ * Negative tracking is tuned for SF Pro and Avenir Next. On Windows it only
+ * nudges DirectWrite glyphs onto fractional advances, which thickens and blurs
+ * them, so the platform keeps its natural spacing.
+ */
+[data-platform="win"] body,
+[data-platform="win"] .text-prose,
+[data-platform="win"] .font-prose,
+[data-platform="win"] .title-large {
+  letter-spacing: normal;
+}
+
 /* SF for message text; panels and chrome keep Avenir Next. */
 .font-prose {
   font-family: var(--font-prose);

@@ -21,6 +21,8 @@ interface UiState {
   settingsTab: SettingsTab;
   syncState: "idle" | "running" | "error";
   syncMessage: string | null;
+  /** Maximized state of the window, for the in-app buttons off macOS. */
+  windowMaximized: boolean;
   /** Unsent composer text per thread; NEW_THREAD_DRAFT holds text before a thread exists. */
   drafts: Record<string, string>;
   setDraft: (key: string, draft: string) => void;
@@ -35,6 +37,7 @@ interface UiState {
   closeSettings: () => void;
   setCommandOpen: (open: boolean) => void;
   setSyncState: (state: "idle" | "running" | "error", message?: string) => void;
+  setWindowMaximized: (maximized: boolean) => void;
 }
 
 function resolvedTheme(theme: ThemeMode): "light" | "dark" {
@@ -61,6 +64,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   settingsTab: "providers",
   syncState: "idle",
   syncMessage: null,
+  windowMaximized: false,
   drafts: {},
 
   setDraft: (key, draft) =>
@@ -137,4 +141,6 @@ export const useUiStore = create<UiState>((set, get) => ({
   setCommandOpen: (open) => set({ commandOpen: open }),
 
   setSyncState: (syncState, syncMessage) => set({ syncState, syncMessage: syncMessage ?? null }),
+
+  setWindowMaximized: (windowMaximized) => set({ windowMaximized }),
 }));

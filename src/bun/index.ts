@@ -10,6 +10,10 @@ import { createKipRpc } from "./rpc-handler";
 import type { AgentStreamEnvelope } from "../shared/types";
 import { triggerS3Sync } from "./sync/s3-sync";
 import { NotchIndicator, type NotchState } from "./system/notch";
+import { applyWindowsDpiAwareness } from "./system/windows-dpi";
+
+// Must run before the first window exists, so it cannot move below.
+applyWindowsDpiAwareness();
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
@@ -158,6 +162,12 @@ const window = new BrowserWindow({
   frame: { x: 120, y: 90, width: 1180, height: 780 },
 });
 windowRef.current = window;
+// Windows and Linux draw their own window buttons, so the view needs to know
+// whether the window is maximized to pick the right icon.
+const pushWindowState = (): void => {
+  rpc.send.windowState({ maximized: window.isMaximized() });
+};
+window.on("resize", pushWindowState);
 window.on("focus", () => {
   attention.focused = true;
   attention.done.clear();

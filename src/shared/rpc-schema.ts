@@ -150,6 +150,8 @@ export interface KipRPCSchema {
       syncStatus: { state: "idle" | "running" | "error"; message?: string };
       /** Sent when the user clicks the notch indicator. */
       focusThread: { threadId: string };
+      /** Window chrome state for the in-app buttons on Windows and Linux. */
+      windowState: { maximized: boolean };
     };
   };
 }

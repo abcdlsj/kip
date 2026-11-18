@@ -123,3 +123,17 @@
   --font-mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
   --spring: cubic-bezier(0.32, 0.72, 0, 1);
 }
+
+/*
+ * Windows: Segoe UI and Microsoft YaHei UI are hinted for DirectWrite and need
+ * no help, while the "Kip CJK" face above exists only to make PingFang and
+ * Hiragino match Latin x-height. Scaling a hinted face to 92% lands stems on
+ * fractional pixels, which is exactly what looks smeared and over-bold on a
+ * scaled 4K display, so the Windows stack skips that face entirely.
+ */
+[data-platform="win"] {
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
+    sans-serif;
+  --font-prose: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", "Consolas", monospace;
+}

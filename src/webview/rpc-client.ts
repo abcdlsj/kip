@@ -11,7 +11,10 @@ type SyncListener = (payload: { state: "idle" | "running" | "error"; message?: s
 
 type FocusListener = (payload: { threadId: string }) => void;
 
+type WindowStateListener = (payload: { maximized: boolean }) => void;
+
 const streamListeners = new Set<StreamListener>();
+const windowStateListeners = new Set<WindowStateListener>();
 const focusListeners = new Set<FocusListener>();
 
 /** The Bun side asks the view to open a thread (from the notch indicator). */
@@ -20,6 +23,12 @@ export function onFocusThread(listener: FocusListener): () => void {
   return () => focusListeners.delete(listener);
 }
 const syncListeners = new Set<SyncListener>();
+
+/** Window chrome state, so the in-app buttons can swap the maximize icon. */
+export function onWindowState(listener: WindowStateListener): () => void {
+  windowStateListeners.add(listener);
+  return () => windowStateListeners.delete(listener);
+}
 
 export function onAgentStream(listener: StreamListener): () => void {
   streamListeners.add(listener);
@@ -44,6 +53,9 @@ const rpc = Electroview.defineRPC<KipRPCSchema>({
       },
       focusThread: (payload) => {
         for (const listener of focusListeners) listener(payload);
+      },
+      windowState: (payload) => {
+        for (const listener of windowStateListeners) listener(payload);
       },
     },
   },
