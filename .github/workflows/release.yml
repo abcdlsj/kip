@@ -1,0 +1,139 @@
+name: Release
+
+# Push a tag like v0.1.0 to publish a release. The tag must match the version in
+# electrobun.config.ts and package.json; the job fails early when it does not.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.ref_name }}
+  BUN_VERSION: 1.4.4
+
+jobs:
+  prepare:
+    name: check version and open draft
+    runs-on: instabox-medium
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Fail unless the tag matches the app version
+        run: |
+          set -euo pipefail
+          tag="${TAG#v}"
+          cfg=$(bun -e 'import c from "./electrobun.config.ts"; console.log(c.app.version)')
+          pkg=$(bun -e 'console.log((await Bun.file("package.json").json()).version)')
+          echo "tag=$tag electrobun.config.ts=$cfg package.json=$pkg"
+          if [ "$tag" != "$cfg" ] || [ "$tag" != "$pkg" ]; then
+            echo "::error::tag v$tag does not match app version (config $cfg, package $pkg)"
+            exit 1
+          fi
+
+      # A draft keeps half-uploaded assets invisible until every build is done.
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --draft --title "Kip $TAG" --generate-notes
+
+  macos:
+    name: macos ${{ matrix.arch }} dmg
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15 # M1, arm64
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-macos-${{ matrix.arch }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-macos-${{ matrix.arch }}-
+
+      - run: bun install --frozen-lockfile
+      - run: bun run icons
+      - run: bun run build:view
+      - run: bunx electrobun build --env=stable
+
+      - name: Attach the dmg
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" artifacts/*.dmg --clobber
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kip-macos-${{ matrix.arch }}
+          path: artifacts/**
+          if-no-files-found: error
+
+  windows:
+    name: windows x64 installer
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-windows-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-windows-
+
+      - run: bun install --frozen-lockfile
+      - run: bun run icons
+      - run: bun run build:view
+      - run: bunx electrobun build --env=stable
+
+      - name: Attach the installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" artifacts/*-Kip-Setup.zip --clobber
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kip-windows-x64
+          path: artifacts/**
+          if-no-files-found: error
+
+  publish:
+    name: publish
+    needs: [macos, windows]
+    runs-on: instabox-medium
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Drop the draft flag and list the assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit "$TAG" --draft=false
+          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size)"'
