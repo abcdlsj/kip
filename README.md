@@ -48,6 +48,23 @@ work is done; **Cmd+Enter** delivers it after the current tool call. Queued mess
 show above the composer. **Esc** stops the run and puts undelivered messages back in
 the composer.
 
+Type **/** in the composer for commands: `/new`, `/compact`, `/undo`, `/export`,
+`/settings`, and `/read-only-auto`, `/full-auto`, `/strict` to switch the approval policy.
+Hover a message you sent to **Edit** it; Kip reruns the thread from that point and keeps the
+old branch in the JSONL file. File changes are not undone by an edit.
+
+**Undo.** In a Git workspace Kip snapshots the working tree before each run (a tree object
+through a temporary index, so HEAD, the index, and refs are untouched). When a run changes
+files, the top bar shows `2 files +14 −3`; click it for the list and **Undo**. Undo refuses
+when one of those files changed again after the run.
+
+**Status.** The sidebar shows a spinner while a thread works, a yellow dot while it waits
+for approval, and a blue dot when it finished while you were elsewhere. On macOS 14+ the
+same signal hangs from the notch (or the top centre of the menu bar) while Kip is in the
+background; click it to jump to that thread. Set `KIP_NOTCH=0` to turn it off.
+
+When you deny a tool call you can say why; the reason goes back to the model.
+
 Message text uses San Francisco (the system UI face on other platforms); panels and
 chrome use Avenir Next.
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { titleFromPrompt } from "../src/bun/agent/session-bridge";
+import { stripKipNotes, titleFromPrompt } from "../src/bun/agent/session-bridge";
 
 describe("thread titles", () => {
   test("keeps short prompts intact", () => {
@@ -20,5 +20,12 @@ describe("thread titles", () => {
 
   test("falls back for empty prompts", () => {
     expect(titleFromPrompt("   ")).toBe("New Thread");
+  });
+});
+
+describe("kip notes", () => {
+  test("hides notes Kip prepended to a prompt", () => {
+    expect(stripKipNotes("[Kip note] The user undid a.ts.\n\nNow add tests")).toBe("Now add tests");
+    expect(stripKipNotes("Plain prompt")).toBe("Plain prompt");
   });
 });

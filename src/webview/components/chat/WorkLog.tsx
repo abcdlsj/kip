@@ -13,6 +13,7 @@ import type {
   ToolApprovalPayload,
   ToolCallBlock,
 } from "../../../shared/types";
+import { activeLabel } from "../../lib/tool-label";
 import { ToolStepPill } from "./ToolStepPill";
 
 type WorkBlock = ThinkingBlock | ToolCallBlock;
@@ -21,6 +22,8 @@ interface WorkLogProps {
   blocks: WorkBlock[];
   running: boolean;
   approvals: ToolApprovalPayload[];
+  /** Wall time of the whole run, when this log is the run's only work. */
+  durationMs?: number;
 }
 
 function durationLabel(ms: number): string {
@@ -31,41 +34,13 @@ function durationLabel(ms: number): string {
   return `${minutes}m ${seconds % 60}s`;
 }
 
-function shortPath(value: string): string {
-  const parts = value.split("/");
-  const source = parts.indexOf("src");
-  if (source >= 0) return parts.slice(source).join("/");
-  if (parts.length > 4) return `…/${parts.slice(-3).join("/")}`;
-  return value;
-}
-
 function currentAction(block: WorkBlock | undefined): string {
   if (!block) return "Working";
   if (block.type === "thinking") return "Thinking";
-  const path = typeof block.args.path === "string" ? shortPath(block.args.path) : "";
-  switch (block.toolName) {
-    case "bash": {
-      const command = typeof block.args.command === "string" ? block.args.command : "";
-      return command ? `Running ${command.length > 40 ? `${command.slice(0, 37)}…` : command}` : "Running a command";
-    }
-    case "read":
-      return path ? `Reading ${path}` : "Reading a file";
-    case "edit":
-      return path ? `Editing ${path}` : "Editing";
-    case "write":
-      return path ? `Writing ${path}` : "Writing";
-    case "grep":
-      return "Searching the codebase";
-    case "find":
-      return "Finding files";
-    case "ls":
-      return "Listing files";
-    default:
-      return `Using ${block.toolName}`;
-  }
+  return activeLabel(block);
 }
 
-export function WorkLog({ blocks, running, approvals }: WorkLogProps) {
+export function WorkLog({ blocks, running, approvals, durationMs }: WorkLogProps) {
   const [open, setOpen] = useState(false);
   const [, setTick] = useState(0);
   const startedAt = useRef(Date.now());
@@ -95,7 +70,9 @@ export function WorkLog({ blocks, running, approvals }: WorkLogProps) {
     if (block.type === "thinking") return sum + (block.durationMs ?? 0);
     return sum + (block.durationMs ?? 0);
   }, 0);
-  const elapsed = running ? Math.max(measured, Date.now() - startedAt.current) : measured;
+  const elapsed = running
+    ? Math.max(measured, Date.now() - startedAt.current)
+    : Math.max(measured, durationMs ?? 0);
   const last = blocks[blocks.length - 1];
   const action = currentAction(last);
   const waiting = pending.length > 0;
@@ -133,7 +110,7 @@ export function WorkLog({ blocks, running, approvals }: WorkLogProps) {
                 ? `Worked for ${durationLabel(elapsed)}`
                 : `Worked`}
         </span>
-        {!running && toolCount > 0 && (
+        {toolCount > 0 && (
           <span className="shrink-0 text-[var(--text-muted)]">
             · {toolCount} {toolCount === 1 ? "step" : "steps"}
           </span>

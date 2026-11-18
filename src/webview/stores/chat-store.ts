@@ -6,6 +6,7 @@ import type {
   ChatTurn,
   ContextUsage,
   QueuedPrompt,
+  RunChanges,
   ToolApprovalPayload,
 } from "../../shared/types";
 import { request } from "../rpc-client";
@@ -19,6 +20,8 @@ export interface ThreadView {
   queued: QueuedPrompt[];
   error: string | null;
   loaded: boolean;
+  /** The latest run with undoable file changes (Git workspaces only). */
+  changes: RunChanges | null;
 }
 
 const emptyView = (): ThreadView => ({
@@ -29,6 +32,7 @@ const emptyView = (): ThreadView => ({
   queued: [],
   error: null,
   loaded: false,
+  changes: null,
 });
 
 interface ChatState {
@@ -45,7 +49,11 @@ interface ChatState {
     toolCallId: string,
     approved: boolean,
     remember: boolean,
+    reason?: string,
   ) => Promise<void>;
+  /** Replaces a user message and everything after it, then reruns from there. */
+  editUserTurn: (threadId: string, turnId: string, text: string) => Promise<void>;
+  undoChanges: (threadId: string) => Promise<string | null>;
   clear: (threadId: string) => void;
   setUsage: (threadId: string, usage: ContextUsage) => void;
   view: (threadId: string | null) => ThreadView;
@@ -58,13 +66,22 @@ export const useChatStore = create<ChatState>()(
     view: (threadId) => (threadId ? get().threads[threadId] ?? emptyView() : emptyView()),
 
     load: async (threadId) => {
-      const result = await request("loadThreadTurns", { threadId });
+      const [result, changes] = await Promise.all([
+        request("loadThreadTurns", { threadId }),
+        request("getRunChanges", { threadId }).catch(() => null),
+      ]);
       set((state) => {
+        const previous = state.threads[threadId];
         state.threads[threadId] = {
           ...emptyView(),
           turns: result.turns,
           usage: result.usage,
           loaded: true,
+          changes,
+          // A run keeps going while the view reloads; keep its live state.
+          running: previous?.running ?? false,
+          approvals: previous?.approvals ?? [],
+          queued: previous?.queued ?? [],
         };
       });
     },
@@ -182,8 +199,15 @@ export const useChatStore = create<ChatState>()(
             for (const block of lastTurn?.blocks ?? []) {
               if (block.type === "thinking") block.isComplete = true;
             }
+            const lastUser = [...view.turns].reverse().find((turn) => turn.role === "user");
+            if (lastTurn?.role === "assistant" && lastUser) {
+              lastTurn.durationMs = Date.now() - lastUser.createdAt;
+            }
             return;
           }
+          case "changes_update":
+            view.changes = event.changes;
+            return;
           case "turn_error": {
             view.running = false;
             view.error = event.message;
@@ -258,14 +282,54 @@ export const useChatStore = create<ChatState>()(
       return restored;
     },
 
-    resolveApproval: async (threadId, toolCallId, approved, remember) => {
+    resolveApproval: async (threadId, toolCallId, approved, remember, reason) => {
       await request("resolveToolApproval", {
         threadId,
         toolCallId,
         approved,
         rememberForSession: remember,
+        reason,
       });
       get().removeApproval(threadId, toolCallId);
+    },
+
+    editUserTurn: async (threadId, turnId, text) => {
+      const view = get().threads[threadId];
+      if (!view || view.running) return;
+      const index = view.turns.findIndex((turn) => turn.id === turnId);
+      const target = view.turns[index];
+      if (!target || target.role !== "user") return;
+      const userIndex = view.turns.slice(0, index).filter((turn) => turn.role === "user").length;
+      set((state) => {
+        const current = state.threads[threadId];
+        if (!current) return;
+        current.turns = current.turns.slice(0, index);
+        current.turns.push({
+          id: `user_${crypto.randomUUID()}`,
+          role: "user",
+          blocks: [{ type: "text", id: `user_txt_${crypto.randomUUID()}`, text }],
+          attachments: target.attachments,
+          createdAt: Date.now(),
+        });
+        current.running = true;
+        current.error = null;
+      });
+      try {
+        await request("editPrompt", { threadId, userIndex, text });
+      } catch (error) {
+        get().setError(threadId, error instanceof Error ? error.message : "Could not edit the message");
+      }
+    },
+
+    undoChanges: async (threadId) => {
+      const runId = get().threads[threadId]?.changes?.id;
+      if (!runId) return null;
+      const result = await request("undoRunChanges", { threadId, runId });
+      set((state) => {
+        const view = state.threads[threadId];
+        if (view) view.changes = result.next;
+      });
+      return result.ok ? null : (result.error ?? "Undo failed");
     },
 
     clear: (threadId) => {

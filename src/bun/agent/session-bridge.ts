@@ -19,15 +19,30 @@ export function projectSessionTurns(
 ): ChatTurn[] {
   const turns: ChatTurn[] = [];
   const toolMeta = new Map<string, ToolMeta>();
+  // Run timing: from a user message to the last entry before the next one.
+  let runStart: number | null = null;
+  let runTurn: ChatTurn | null = null;
+  let runEnd: number | null = null;
+  const closeRun = () => {
+    if (runTurn && runStart !== null && runEnd !== null && runEnd > runStart) {
+      runTurn.durationMs = runEnd - runStart;
+    }
+    runTurn = null;
+    runEnd = null;
+  };
 
   for (const entry of entries) {
     if (entry.type !== "message") continue;
     const message = entry.message as AgentMessage;
+    const stamp = Date.parse(entry.timestamp);
 
     if (message.role === "user") {
+      closeRun();
+      runStart = Number.isFinite(stamp) ? stamp : null;
       turns.push(projectUser(entry.id, message));
       continue;
     }
+    if (Number.isFinite(stamp)) runEnd = stamp;
 
     if (message.role === "toolResult") {
       const result = message as ToolResultMessage;
@@ -55,6 +70,7 @@ export function projectSessionTurns(
               return turn;
             })();
       appendAssistantBlocks(target, assistant, entry.id, workspaceRoot);
+      runTurn = target;
       if (assistant.errorMessage) target.error = assistant.errorMessage;
       continue;
     }
@@ -79,6 +95,8 @@ export function projectSessionTurns(
         });
     }
   }
+
+  closeRun();
 
   for (const turn of turns) {
     for (const block of turn.blocks) {
@@ -106,6 +124,9 @@ function projectUser(entryId: string, message: UserMessage): ChatTurn {
         blocks.push({ type: "text", id: `${entryId}_${index}`, text: part.text });
       }
     });
+  }
+  for (const block of blocks) {
+    if (block.type === "text") block.text = stripKipNotes(block.text);
   }
   return {
     id: entryId,
@@ -151,6 +172,18 @@ function appendAssistantBlocks(
     }
   });
 }
+
+/** Removes notes Kip prepended to a prompt; they are for the model only. */
+export function stripKipNotes(text: string): string {
+  if (!text.startsWith(KIP_NOTE_MARK)) return text;
+  const lines = text.split("\n");
+  let index = 0;
+  while (index < lines.length && lines[index]?.startsWith(KIP_NOTE_MARK)) index += 1;
+  while (index < lines.length && lines[index]?.trim() === "") index += 1;
+  return lines.slice(index).join("\n");
+}
+
+const KIP_NOTE_MARK = "[Kip note] ";
 
 export function textOf(content: unknown): string {
   if (typeof content === "string") return content;

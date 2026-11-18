@@ -9,6 +9,11 @@ interface WorkspaceState {
   threads: ThreadSummary[];
   activeThreadId: string | null;
   loading: boolean;
+  /** Threads whose run finished while the user was looking elsewhere. */
+  unread: Record<string, true>;
+  markUnread: (threadId: string) => void;
+  /** Opens a thread, switching workspace first when it belongs to another one. */
+  openThread: (threadId: string) => Promise<void>;
   initialize: () => Promise<void>;
   selectWorkspace: (workspaceId: string) => Promise<void>;
   pickWorkspace: () => Promise<void>;
@@ -33,6 +38,24 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   threads: [],
   activeThreadId: null,
   loading: true,
+  unread: {},
+
+  markUnread: (threadId) =>
+    set((state) => ({ unread: { ...state.unread, [threadId]: true } })),
+
+  openThread: async (threadId) => {
+    if (get().threads.some((thread) => thread.id === threadId)) {
+      get().selectThread(threadId);
+      return;
+    }
+    for (const workspace of get().workspaces) {
+      const threads = await request("listThreads", { workspaceId: workspace.id });
+      if (!threads.some((thread) => thread.id === threadId)) continue;
+      set({ activeWorkspaceId: workspace.id, threads });
+      get().selectThread(threadId);
+      return;
+    }
+  },
 
   initialize: async () => {
     const workspaces = await request("listWorkspaces", undefined);
@@ -83,7 +106,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     return thread;
   },
 
-  selectThread: (threadId) => set({ activeThreadId: threadId }),
+  selectThread: (threadId) =>
+    set((state) => {
+      if (!threadId || !state.unread[threadId]) return { activeThreadId: threadId };
+      const unread = { ...state.unread };
+      delete unread[threadId];
+      return { activeThreadId: threadId, unread };
+    }),
 
   deleteThread: async (threadId) => {
     await request("deleteThread", { threadId });

@@ -70,6 +70,25 @@ export interface ChatTurn {
   attachments?: Array<{ name: string; path: string; mimeType: string }>;
   createdAt: number;
   error?: string;
+  /** Wall time of the whole assistant run, set once the run has finished. */
+  durationMs?: number;
+}
+
+export interface FileChange {
+  path: string;
+  status: "added" | "modified" | "deleted";
+  added: number;
+  removed: number;
+}
+
+/** File changes made during one agent run, captured as Git tree snapshots. */
+export interface RunChanges {
+  id: string;
+  threadId: string;
+  files: FileChange[];
+  added: number;
+  removed: number;
+  createdAt: number;
 }
 
 export interface ContextUsage {
@@ -168,6 +187,8 @@ export type AgentStreamEvent =
   /** A message sent during a run was delivered to the agent. */
   | { kind: "user_turn"; turn: ChatTurn }
   | { kind: "queue_update"; queued: QueuedPrompt[] }
+  /** The latest run with undoable file changes, or null when there is none. */
+  | { kind: "changes_update"; changes: RunChanges | null }
   | { kind: "turn_error"; message: string };
 
 export interface AgentStreamEnvelope {

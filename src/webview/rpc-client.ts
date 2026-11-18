@@ -9,7 +9,16 @@ import type { AgentStreamEnvelope } from "../shared/types";
 type StreamListener = (payload: AgentStreamEnvelope) => void;
 type SyncListener = (payload: { state: "idle" | "running" | "error"; message?: string }) => void;
 
+type FocusListener = (payload: { threadId: string }) => void;
+
 const streamListeners = new Set<StreamListener>();
+const focusListeners = new Set<FocusListener>();
+
+/** The Bun side asks the view to open a thread (from the notch indicator). */
+export function onFocusThread(listener: FocusListener): () => void {
+  focusListeners.add(listener);
+  return () => focusListeners.delete(listener);
+}
 const syncListeners = new Set<SyncListener>();
 
 export function onAgentStream(listener: StreamListener): () => void {
@@ -32,6 +41,9 @@ const rpc = Electroview.defineRPC<KipRPCSchema>({
       },
       syncStatus: (payload) => {
         for (const listener of syncListeners) listener(payload);
+      },
+      focusThread: (payload) => {
+        for (const listener of focusListeners) listener(payload);
       },
     },
   },

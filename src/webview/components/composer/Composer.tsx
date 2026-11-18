@@ -15,6 +15,7 @@ import { useChatStore } from "../../stores/chat-store";
 import { NEW_THREAD_DRAFT, useUiStore } from "../../stores/ui-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
 import { ModelSelector } from "./ModelSelector";
+import { SlashMenu, matchCommands, slashQuery, type SlashCommand } from "./SlashMenu";
 
 interface PendingImage {
   name: string;
@@ -43,6 +44,29 @@ export function Composer() {
   const [images, setImages] = useState<PendingImage[]>([]);
   const [suggestions, setSuggestions] = useState<FileSuggestion[]>([]);
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
+  const [selectedCommand, setSelectedCommand] = useState(0);
+  const [dismissedSlash, setDismissedSlash] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const settings = useUiStore((state) => state.settings);
+  const setApprovalPolicy = useUiStore((state) => state.setApprovalPolicy);
+  const openSettings = useUiStore((state) => state.openSettings);
+  const setUsage = useChatStore((state) => state.setUsage);
+  const undoChanges = useChatStore((state) => state.undoChanges);
+  const refreshWorkspaces = useWorkspaceStore((state) => state.refreshWorkspaces);
+
+  const query = slashQuery(draft);
+  const slashOpen = query !== null && dismissedSlash !== draft;
+  const commands = slashOpen ? matchCommands(query, Boolean(activeThreadId)) : [];
+
+  useEffect(() => {
+    setSelectedCommand(0);
+  }, [query]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 3200);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const running = view?.running ?? false;
   const queued = view?.queued ?? [];
@@ -143,11 +167,90 @@ export function Composer() {
     setTimeout(() => void refreshThreads(), 400);
   };
 
+  const runCommand = async (command: SlashCommand) => {
+    setDraft("");
+    const threadId = activeThreadId;
+    try {
+      switch (command.id) {
+        case "new":
+          await newThread();
+          break;
+        case "compact": {
+          if (!threadId) return;
+          setNotice({ text: "Compacting context…" });
+          const usage = await request("compactThread", { threadId });
+          setUsage(threadId, usage);
+          setNotice({ text: `Context compacted to ${Math.round(usage.ratio * 100)}%` });
+          break;
+        }
+        case "undo": {
+          if (!threadId) return;
+          const changes = view?.changes;
+          if (!changes) {
+            setNotice({ text: "No file changes to undo" });
+            break;
+          }
+          const failure = await undoChanges(threadId);
+          void refreshWorkspaces();
+          setNotice(
+            failure
+              ? { text: failure, error: true }
+              : { text: `Restored ${changes.files.length} ${changes.files.length === 1 ? "file" : "files"}` },
+          );
+          break;
+        }
+        case "export": {
+          if (!threadId) return;
+          const { savedPath } = await request("exportThreadMarkdown", { threadId });
+          if (savedPath) setNotice({ text: `Saved ${savedPath.split("/").pop() ?? savedPath}` });
+          break;
+        }
+        case "settings":
+          openSettings();
+          break;
+        default:
+          if (command.policy) {
+            await setApprovalPolicy(command.policy);
+            setNotice({ text: `Approval: ${command.description.toLowerCase()}` });
+          }
+      }
+    } catch (error) {
+      setNotice({ text: error instanceof Error ? error.message : "Command failed", error: true });
+    }
+    textareaRef.current?.focus();
+  };
+
   const stop = async () => {
     if (activeThreadId) await stopThread(activeThreadId);
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (slashOpen) {
+      if (event.key === "ArrowDown" && commands.length) {
+        event.preventDefault();
+        setSelectedCommand((index) => (index + 1) % commands.length);
+        return;
+      }
+      if (event.key === "ArrowUp" && commands.length) {
+        event.preventDefault();
+        setSelectedCommand((index) => (index - 1 + commands.length) % commands.length);
+        return;
+      }
+      if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
+        const command = commands[selectedCommand];
+        if (command) {
+          event.preventDefault();
+          void runCommand(command);
+          return;
+        }
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setDismissedSlash(draft);
+        return;
+      }
+    }
     if (suggestions.length > 0) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
@@ -182,7 +285,17 @@ export function Composer() {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-6 pb-5">
       <div className="pointer-events-auto relative w-[min(740px,100%)]">
-        {suggestions.length > 0 && (
+        {slashOpen && (
+          <SlashMenu
+            commands={commands}
+            selected={selectedCommand}
+            grouped={!query}
+            policy={settings?.approvalPolicy}
+            onHover={setSelectedCommand}
+            onRun={(command) => void runCommand(command)}
+          />
+        )}
+        {!slashOpen && suggestions.length > 0 && (
           <div className="absolute bottom-full left-0 mb-2 w-[360px] overflow-hidden rounded-[12px] border hairline bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow-modal)]">
             <p className="px-2 py-1 text-[11.5px] font-medium text-[var(--text-muted)]">
               Files
@@ -276,7 +389,7 @@ export function Composer() {
             rows={1}
             placeholder={
               activeWorkspaceId
-                ? "Ask, @reference a file, or paste an image"
+                ? "Ask, @ a file, or / for commands"
                 : "Add a workspace to begin"
             }
             disabled={!activeWorkspaceId}
@@ -305,7 +418,17 @@ export function Composer() {
               <Paperclip size={14} strokeWidth={1.5} />
             </button>
             <div className="ml-auto flex items-center gap-2">
-              {running && (
+              {notice && (
+                <span
+                  className={`text-meta max-w-[320px] truncate ${
+                    notice.error ? "text-[var(--status-err)]" : "text-[var(--text-muted)]"
+                  }`}
+                  title={notice.text}
+                >
+                  {notice.text}
+                </span>
+              )}
+              {running && !notice && (
                 <span className="text-meta hidden text-[var(--text-muted)] sm:block">
                   {hasContent ? "Enter to queue · ⌘↵ next step" : "Esc to stop"}
                 </span>

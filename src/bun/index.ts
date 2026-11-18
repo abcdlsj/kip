@@ -9,6 +9,7 @@ import { KipOrchestrator } from "./agent/pi-orchestrator";
 import { createKipRpc } from "./rpc-handler";
 import type { AgentStreamEnvelope } from "../shared/types";
 import { triggerS3Sync } from "./sync/s3-sync";
+import { NotchIndicator, type NotchState } from "./system/notch";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
@@ -31,8 +32,54 @@ const orchestrator = new KipOrchestrator(database, registry, (threadId, event) =
 const windowRef: { current: BrowserWindow | null } = { current: null };
 const rpc = createKipRpc({ database, registry, orchestrator, windowRef });
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Background attention state for the notch indicator. Approvals outrank
+ * finished runs, which outrank running ones. Finished runs count only while
+ * the main window is in the background and clear when it comes forward.
+ */
+const attention = {
+  awaiting: new Map<string, Set<string>>(),
+  done: new Set<string>(),
+  focused: true,
+};
+let notch: NotchIndicator | null = null;
+
+function topThread(): { threadId: string | null; state: NotchState } {
+  for (const [threadId, calls] of attention.awaiting) {
+    if (calls.size > 0) return { threadId, state: "attention" };
+  }
+  const done = [...attention.done].pop();
+  if (done) return { threadId: done, state: "done" };
+  const running = orchestrator.runningThreadIds()[0];
+  if (running) return { threadId: running, state: "working" };
+  return { threadId: null, state: "idle" };
+}
+
+function refreshNotch(): void {
+  if (!notch) return;
+  if (process.env.KIP_NOTCH_PREVIEW) return notch.set(process.env.KIP_NOTCH_PREVIEW as NotchState);
+  notch.set(attention.focused ? "idle" : topThread().state);
+}
+
+function trackAttention(payload: AgentStreamEnvelope): void {
+  const { threadId, event } = payload;
+  if (event.kind === "text_delta" || event.kind === "thinking_delta") return;
+  const calls = attention.awaiting.get(threadId) ?? new Set<string>();
+  attention.awaiting.set(threadId, calls);
+  if (event.kind === "tool_approval_required") calls.add(event.approval.toolCallId);
+  else if (event.kind === "tool_end") calls.delete(event.toolCallId);
+  else if (event.kind === "turn_complete" || event.kind === "turn_error") {
+    calls.clear();
+    if (!attention.focused) attention.done.add(threadId);
+  } else if (event.kind === "turn_start") {
+    attention.done.delete(threadId);
+  }
+  refreshNotch();
+}
+
 streamHolder.send = (payload) => {
   rpc.send.agentStreamEvent(payload);
+  trackAttention(payload);
   if (payload.event.kind === "turn_complete" && database.getSetting("sync.enabled", false)) {
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
@@ -111,6 +158,22 @@ const window = new BrowserWindow({
   frame: { x: 120, y: 90, width: 1180, height: 780 },
 });
 windowRef.current = window;
+window.on("focus", () => {
+  attention.focused = true;
+  attention.done.clear();
+  refreshNotch();
+});
+window.on("blur", () => {
+  attention.focused = false;
+  refreshNotch();
+});
+notch = new NotchIndicator(() => {
+  const { threadId } = topThread();
+  if (window.isMinimized()) window.unminimize();
+  window.activate();
+  if (threadId) rpc.send.focusThread({ threadId });
+});
+refreshNotch();
 window.on("close", () => {
   void shutdown();
 });

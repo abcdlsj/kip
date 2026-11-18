@@ -32,6 +32,16 @@ export function Sidebar() {
   const deleteThread = useWorkspaceStore((state) => state.deleteThread);
   const renameThread = useWorkspaceStore((state) => state.renameThread);
   const load = useChatStore((state) => state.load);
+  const unread = useWorkspaceStore((state) => state.unread);
+  // Only the ids are needed; avoid re-rendering on every streamed token.
+  const awaiting = useChatStore(
+    (state) =>
+      Object.entries(state.threads)
+        .filter(([, view]) => view.approvals.length > 0)
+        .map(([id]) => id)
+        .join(","),
+  );
+  const awaitingIds = new Set(awaiting ? awaiting.split(",") : []);
 
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -161,12 +171,6 @@ export function Sidebar() {
                         active ? "bg-[var(--bg-active)]" : "hover:bg-[var(--bg-subtle)]"
                       }`}
                     >
-                      {thread.isRunning && (
-                        <span
-                          className="pulse-dot h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent-action)]"
-                          aria-label="Running"
-                        />
-                      )}
                       {editingId === thread.id ? (
                         <input
                           autoFocus
@@ -192,6 +196,17 @@ export function Sidebar() {
                           {thread.title}
                         </button>
                       )}
+                      <ThreadStatus
+                        state={
+                          awaitingIds.has(thread.id)
+                            ? "attention"
+                            : thread.isRunning
+                              ? "working"
+                              : unread[thread.id] && !active
+                                ? "done"
+                                : null
+                        }
+                      />
                       <AnimatePresence>
                         {active && editingId !== thread.id && (
                           <motion.button
@@ -245,5 +260,22 @@ export function Sidebar() {
         </>
       )}
     </motion.aside>
+  );
+}
+
+function ThreadStatus({ state }: { state: "working" | "attention" | "done" | null }) {
+  if (!state) return null;
+  if (state === "working") {
+    return <span className="ring-spin h-[11px] w-[11px] shrink-0" aria-label="Working" title="Working" />;
+  }
+  return (
+    <span
+      className="h-[7px] w-[7px] shrink-0 rounded-full"
+      style={{
+        background: state === "attention" ? "var(--signal-attention)" : "var(--signal-done)",
+      }}
+      aria-label={state === "attention" ? "Waiting for approval" : "Finished"}
+      title={state === "attention" ? "Waiting for approval" : "Finished"}
+    />
   );
 }

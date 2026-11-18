@@ -14,6 +14,7 @@ import type {
   ProviderModel,
   ProviderProtocol,
   ProviderRecord,
+  RunChanges,
   SendPromptInput,
   SettingsSnapshot,
   SyncConfig,
@@ -77,8 +78,20 @@ export interface KipRPCSchema {
           toolCallId: string;
           approved: boolean;
           rememberForSession?: boolean;
+          /** Optional reason shown to the model when the call is denied. */
+          reason?: string;
         };
         response: void;
+      };
+      /** Rewinds the thread to before the given user message and sends new text. */
+      editPrompt: {
+        params: { threadId: string; userIndex: number; text: string };
+        response: { accepted: boolean };
+      };
+      getRunChanges: { params: { threadId: string }; response: RunChanges | null };
+      undoRunChanges: {
+        params: { threadId: string; runId: string };
+        response: { ok: boolean; error?: string; next: RunChanges | null };
       };
 
       getSettings: { params: void; response: SettingsSnapshot };
@@ -135,6 +148,8 @@ export interface KipRPCSchema {
     messages: {
       agentStreamEvent: AgentStreamEnvelope;
       syncStatus: { state: "idle" | "running" | "error"; message?: string };
+      /** Sent when the user clicks the notch indicator. */
+      focusThread: { threadId: string };
     };
   };
 }

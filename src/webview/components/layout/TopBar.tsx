@@ -5,6 +5,7 @@ import { formatTokens } from "../../lib/format";
 import { request } from "../../rpc-client";
 import { useChatStore } from "../../stores/chat-store";
 import { useUiStore } from "../../stores/ui-store";
+import { ChangesChip } from "./ChangesChip";
 
 interface TopBarProps {
   workspace: Workspace | null;
@@ -17,6 +18,8 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
   const setUsage = useChatStore((state) => state.setUsage);
+  const changes = useChatStore((state) => (thread ? state.threads[thread.id]?.changes : null));
+  const running = useChatStore((state) => (thread ? state.threads[thread.id]?.running : false));
   const [compacting, setCompacting] = useState(false);
   const percent = Math.round(usage.ratio * 100);
 
@@ -63,7 +66,10 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
           </>
         )}
       </div>
-      <div className="no-drag ml-auto flex items-center gap-2.5">
+      <div className="no-drag ml-auto flex items-center gap-1.5">
+        {thread && changes && (
+          <ChangesChip threadId={thread.id} changes={changes} running={running ?? false} />
+        )}
         {workspace?.gitBranch && (
           <span className="flex h-6 items-center gap-1.5 rounded-[7px] bg-[var(--bg-subtle)] px-2 text-[11.5px] text-[var(--text-secondary)]">
             <GitBranch size={11} strokeWidth={1.5} />

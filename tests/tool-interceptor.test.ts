@@ -230,4 +230,35 @@ describe("tool interceptor", () => {
     guard.resolveApproval("d1", false);
     await expect(running).rejects.toThrow(/denied/i);
   });
+
+  test("passes the denial reason back to the model", async () => {
+    const root = workspace();
+    const approvals: ToolApprovalPayload[] = [];
+    const guard = interceptor(root, approvals);
+    const tool = guard.wrap(fakeTool("bash"));
+    const running = tool.execute("call_r", { command: "bun test" } as never, undefined, undefined, {} as never);
+    await Bun.sleep(5);
+    guard.resolveApproval("call_r", false, false, "  run only the db tests  ");
+    await expect(running).rejects.toThrow("Their reason: run only the db tests");
+  });
+
+  test("remembers file approvals per file only", async () => {
+    const root = workspace();
+    writeFileSync(join(root, "a.ts"), "a\n");
+    writeFileSync(join(root, "b.ts"), "b\n");
+    const approvals: ToolApprovalPayload[] = [];
+    const guard = interceptor(root, approvals);
+    const tool = guard.wrap(fakeTool("write"));
+    const first = tool.execute("w1", { path: "a.ts", content: "x\n" } as never, undefined, undefined, {} as never);
+    await Bun.sleep(5);
+    guard.resolveApproval("w1", true, true);
+    await first;
+    await tool.execute("w2", { path: "a.ts", content: "y\n" } as never, undefined, undefined, {} as never);
+    expect(approvals).toHaveLength(1);
+    const other = tool.execute("w3", { path: "b.ts", content: "z\n" } as never, undefined, undefined, {} as never);
+    await Bun.sleep(5);
+    expect(approvals).toHaveLength(2);
+    guard.resolveApproval("w3", true);
+    await other;
+  });
 });

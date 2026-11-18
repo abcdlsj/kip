@@ -31,10 +31,12 @@ export interface InterceptorOptions {
   /** Read on every call so a change in Settings applies to open threads. */
   policy: ApprovalPolicy | (() => ApprovalPolicy);
   requestApproval: (payload: ToolApprovalPayload) => void;
+  /** Awaited before every tool runs; used to finish the pre-run Git snapshot. */
+  beforeTool?: () => Promise<void>;
 }
 
 interface PendingApproval {
-  resolve: (approved: boolean) => void;
+  resolve: (decision: { approved: boolean; reason?: string }) => void;
 }
 
 interface CallMeta {
@@ -43,6 +45,8 @@ interface CallMeta {
   risk: "safe" | "standard" | "high-risk";
   outsideWorkspace: boolean;
   command?: string;
+  /** Resolved target of a file tool; remembered approvals are scoped to it. */
+  filePath?: string;
 }
 
 const MAX_DIFF_BYTES = 512 * 1024;
@@ -75,6 +79,7 @@ export class ToolInterceptor {
         ctx: never,
       ) => {
         const args = params as unknown as Record<string, unknown>;
+        await this.options.beforeTool?.();
         await this.authorize(toolCallId, tool.name, args, signal);
         return (await original(toolCallId, params, signal, onUpdate, ctx)) as never;
       },
@@ -86,23 +91,32 @@ export class ToolInterceptor {
     return this.callMeta.get(toolCallId);
   }
 
-  resolveApproval(toolCallId: string, approved: boolean, rememberForSession = false): void {
+  resolveApproval(
+    toolCallId: string,
+    approved: boolean,
+    rememberForSession = false,
+    reason?: string,
+  ): void {
     const pending = this.pending.get(toolCallId);
     if (!pending) return;
     this.pending.delete(toolCallId);
     if (approved && rememberForSession) {
       const meta = this.callMeta.get(toolCallId);
-      if (meta?.command && meta.risk !== "high-risk" && !meta.outsideWorkspace) {
-        for (const key of commandApprovalKeys(meta.command)) this.sessionAllowlist.add(key);
+      if (meta && meta.risk !== "high-risk" && !meta.outsideWorkspace) {
+        if (meta.command) {
+          for (const key of commandApprovalKeys(meta.command)) this.sessionAllowlist.add(key);
+        } else if (meta.filePath) {
+          this.sessionAllowlist.add(fileApprovalKey(meta.filePath));
+        }
       }
     }
-    pending.resolve(approved);
+    pending.resolve({ approved, reason: reason?.trim().slice(0, 600) || undefined });
   }
 
   cancelAll(reason: string): void {
     for (const [id, pending] of this.pending) {
       this.pending.delete(id);
-      pending.resolve(false);
+      pending.resolve({ approved: false });
       void reason;
     }
   }
@@ -148,7 +162,15 @@ export class ToolInterceptor {
       }
     }
 
-    const meta: CallMeta = { summaryLabel, diff: previewDiff, risk, outsideWorkspace, command };
+    const filePath = isMutation && targetPath ? targetPath : undefined;
+    const meta: CallMeta = {
+      summaryLabel,
+      diff: previewDiff,
+      risk,
+      outsideWorkspace,
+      command,
+      filePath,
+    };
     this.callMeta.set(toolCallId, meta);
 
     // Remembered commands never cover high-risk or out-of-workspace calls, and
@@ -157,8 +179,9 @@ export class ToolInterceptor {
     const allowlisted =
       risk !== "high-risk" &&
       !outsideWorkspace &&
-      keys.length > 0 &&
-      keys.every((key) => this.sessionAllowlist.has(key));
+      (filePath
+        ? this.sessionAllowlist.has(fileApprovalKey(filePath))
+        : keys.length > 0 && keys.every((key) => this.sessionAllowlist.has(key)));
 
     const policy =
       typeof this.options.policy === "function" ? this.options.policy() : this.options.policy;
@@ -166,7 +189,7 @@ export class ToolInterceptor {
 
     if (!mustAsk) return;
 
-    const approved = await new Promise<boolean>((resolve) => {
+    const decision = await new Promise<{ approved: boolean; reason?: string }>((resolve) => {
       this.pending.set(toolCallId, { resolve });
       signal?.addEventListener(
         "abort",
@@ -174,7 +197,7 @@ export class ToolInterceptor {
           const pending = this.pending.get(toolCallId);
           if (!pending) return;
           this.pending.delete(toolCallId);
-          pending.resolve(false);
+          pending.resolve({ approved: false });
         },
         { once: true },
       );
@@ -197,7 +220,13 @@ export class ToolInterceptor {
       });
     });
 
-    if (!approved) throw new Error("The user denied this tool call");
+    if (!decision.approved) {
+      throw new Error(
+        decision.reason
+          ? `The user denied this tool call. Their reason: ${decision.reason}`
+          : "The user denied this tool call",
+      );
+    }
   }
 
   private buildDiff(
@@ -233,6 +262,10 @@ export class ToolInterceptor {
     }
     return { before, after, filePath: targetPath };
   }
+}
+
+function fileApprovalKey(path: string): string {
+  return `file:${path}`;
 }
 
 export function blockToRunningTool(block: ToolCallBlock): ToolCallBlock {

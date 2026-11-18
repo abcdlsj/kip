@@ -357,3 +357,17 @@ textarea:focus {
 .settings-input::placeholder {
   color: var(--text-muted);
 }
+
+/* Small ring spinner for the sidebar; quieter than an icon spinner. */
+.ring-spin {
+  border-radius: 9999px;
+  border: 1.5px solid color-mix(in srgb, var(--text-muted) 28%, transparent);
+  border-top-color: var(--text-secondary);
+  animation: kip-spin 0.85s linear infinite;
+}
+
+@keyframes kip-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

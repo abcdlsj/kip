@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
   ApprovalPolicy,
+  FileChange,
   ProviderModel,
   ProviderProtocol,
   ProviderRecord,
@@ -42,6 +43,43 @@ interface ThreadRow {
   model_id: string;
   thinking_level: ThinkingLevel;
   updated_at: number;
+}
+
+interface RunChangesRow {
+  id: string;
+  thread_id: string;
+  before_tree: string;
+  after_tree: string;
+  files_json: string;
+  reverted: number;
+  created_at: number;
+}
+
+export interface StoredRunChanges {
+  id: string;
+  threadId: string;
+  beforeTree: string;
+  afterTree: string;
+  files: FileChange[];
+  createdAt: number;
+}
+
+function toStoredRunChanges(row: RunChangesRow): StoredRunChanges {
+  let files: FileChange[] = [];
+  try {
+    const parsed = JSON.parse(row.files_json) as unknown;
+    if (Array.isArray(parsed)) files = parsed as FileChange[];
+  } catch {
+    files = [];
+  }
+  return {
+    id: row.id,
+    threadId: row.thread_id,
+    beforeTree: row.before_tree,
+    afterTree: row.after_tree,
+    files,
+    createdAt: row.created_at,
+  };
 }
 
 interface ProviderRow {
@@ -121,6 +159,20 @@ export class KipDatabase {
         models_json TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS run_changes (
+        id TEXT PRIMARY KEY,
+        thread_id TEXT NOT NULL,
+        before_tree TEXT NOT NULL,
+        after_tree TEXT NOT NULL,
+        files_json TEXT NOT NULL,
+        reverted INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_run_changes_thread
+        ON run_changes(thread_id, reverted, created_at DESC);
     `);
     this.seedSettings();
     this.ensureScratchpad();
@@ -346,7 +398,45 @@ export class KipDatabase {
   }
 
   deleteThread(id: string): void {
+    this.db.prepare("DELETE FROM run_changes WHERE thread_id = ?").run(id);
     this.db.prepare("DELETE FROM threads WHERE id = ?").run(id);
+  }
+
+  addRunChanges(input: StoredRunChanges): void {
+    this.db
+      .prepare(
+        "INSERT INTO run_changes (id, thread_id, before_tree, after_tree, files_json, reverted, created_at) " +
+          "VALUES (?, ?, ?, ?, ?, 0, ?)",
+      )
+      .run(
+        input.id,
+        input.threadId,
+        input.beforeTree,
+        input.afterTree,
+        JSON.stringify(input.files),
+        input.createdAt,
+      );
+  }
+
+  /** The newest run in a thread whose changes have not been undone. */
+  latestRunChanges(threadId: string): StoredRunChanges | null {
+    const row = this.db
+      .query<RunChangesRow, [string]>(
+        "SELECT * FROM run_changes WHERE thread_id = ? AND reverted = 0 ORDER BY created_at DESC LIMIT 1",
+      )
+      .get(threadId);
+    return row ? toStoredRunChanges(row) : null;
+  }
+
+  getRunChanges(id: string): StoredRunChanges | null {
+    const row = this.db
+      .query<RunChangesRow, [string]>("SELECT * FROM run_changes WHERE id = ?")
+      .get(id);
+    return row ? toStoredRunChanges(row) : null;
+  }
+
+  markRunReverted(id: string): void {
+    this.db.prepare("UPDATE run_changes SET reverted = 1 WHERE id = ?").run(id);
   }
 
   listProviders(): ProviderRecord[] {

@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import type { ToolCallBlock } from "../../../shared/types";
+import { stepLabel } from "../../lib/tool-label";
 import { DiffView } from "./DiffView";
 
 interface ToolStepPillProps {
@@ -48,6 +49,7 @@ function statusIcon(block: ToolCallBlock) {
   if (block.status === "completed") {
     return <Check size={11} strokeWidth={1.7} className="text-[var(--status-ok)]" />;
   }
+  if (block.status === "denied") return null;
   return <X size={11} strokeWidth={1.7} className="text-[var(--status-err)]" />;
 }
 
@@ -58,8 +60,7 @@ function stripAnsi(value: string): string {
 export function ToolStepPill({ block, compact = false }: ToolStepPillProps) {
   const [open, setOpen] = useState(false);
   const hasDetail = Boolean(block.output || block.diff);
-  const label =
-    block.status === "denied" ? `Denied · ${block.summaryLabel}` : block.summaryLabel;
+  const label = stepLabel(block);
   const seconds =
     block.durationMs === undefined
       ? null
@@ -82,6 +83,16 @@ export function ToolStepPill({ block, compact = false }: ToolStepPillProps) {
         {block.risk === "high-risk" && (
           <span className="rounded-full bg-[color-mix(in_srgb,var(--status-err)_12%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--status-err)]">
             Risky
+          </span>
+        )}
+        {block.status === "awaiting_approval" && (
+          <span className="rounded-full bg-[color-mix(in_srgb,var(--signal-attention)_16%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--status-warn)]">
+            Waiting
+          </span>
+        )}
+        {block.status === "denied" && (
+          <span className="rounded-full bg-[var(--bg-active)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--text-muted)]">
+            Denied
           </span>
         )}
         {block.outsideWorkspace && (

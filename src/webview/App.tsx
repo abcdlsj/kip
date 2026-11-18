@@ -4,7 +4,7 @@ import { Logo } from "./components/layout/Logo";
 import { CommandPalette } from "./components/modals/CommandPalette";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { stopThread } from "./lib/send";
-import { onAgentStream, onSyncStatus } from "./rpc-client";
+import { onAgentStream, onFocusThread, onSyncStatus } from "./rpc-client";
 import { useChatStore } from "./stores/chat-store";
 import { useUiStore } from "./stores/ui-store";
 import { useWorkspaceStore } from "./stores/workspace-store";
@@ -43,9 +43,30 @@ export default function App() {
       if (event.kind === "turn_start") {
         useWorkspaceStore.getState().setThreadRunning(threadId, true);
       } else if (event.kind === "turn_complete" || event.kind === "turn_error") {
-        useWorkspaceStore.getState().setThreadRunning(threadId, false);
+        const workspace = useWorkspaceStore.getState();
+        workspace.setThreadRunning(threadId, false);
+        if (threadId !== workspace.activeThreadId || !document.hasFocus()) {
+          workspace.markUnread(threadId);
+        }
+        // The run may have changed files; refresh the branch and dirty count.
+        void workspace.refreshWorkspaces();
       }
     });
+  }, []);
+
+  useEffect(() => {
+    const clearActive = () => {
+      const { activeThreadId: active, selectThread } = useWorkspaceStore.getState();
+      if (active) selectThread(active);
+    };
+    window.addEventListener("focus", clearActive);
+    const off = onFocusThread(({ threadId }) => {
+      void useWorkspaceStore.getState().openThread(threadId);
+    });
+    return () => {
+      window.removeEventListener("focus", clearActive);
+      off();
+    };
   }, []);
 
   useEffect(() => {

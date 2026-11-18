@@ -25,6 +25,7 @@ import type {
   AgentStreamEvent,
   ChatTurn,
   ContextUsage,
+  RunChanges,
   PromptDelivery,
   QueuedPrompt,
   SendPromptInput,
@@ -34,8 +35,9 @@ import type {
   ToolApprovalPayload,
 } from "../../shared/types";
 import { DEFAULT_SYSTEM_PROMPT, STREAM_FRAME_MS } from "../../shared/constants";
-import type { KipDatabase } from "../storage/db";
-import { getDataDir, getSessionDir } from "../storage/db";
+import type { KipDatabase, StoredRunChanges } from "../storage/db";
+import { getDataDir, getSessionDir, newId } from "../storage/db";
+import { diffTrees, restoreRun, snapshotTree } from "../system/git-snapshot";
 import type { ModelRegistry } from "./model-registry";
 import { ToolInterceptor } from "./tool-interceptor";
 import {
@@ -61,7 +63,12 @@ interface ActiveSession {
   buffer: FrameBuffer;
   firstPrompt: string | null;
   queued: QueuedEntry[];
+  /** Git tree of the workspace when the current run started; null outside Git. */
+  runBefore: Promise<string | null> | null;
 }
+
+/** Prefix for notes Kip adds to a prompt; the transcript view hides these lines. */
+const KIP_NOTE_PREFIX = "[Kip note] ";
 
 /** A message sent during a run, waiting for Pi to deliver it. */
 interface QueuedEntry extends QueuedPrompt {
@@ -112,12 +119,18 @@ class FrameBuffer {
 
 export class KipOrchestrator {
   private readonly sessions = new Map<string, ActiveSession>();
+  /** Notes for the model, delivered with the next prompt (for example after an undo). */
+  private readonly pendingNotes = new Map<string, string[]>();
 
   constructor(
     private readonly database: KipDatabase,
     private readonly registry: ModelRegistry,
     private readonly emit: Emit,
   ) {}
+
+  runningThreadIds(): string[] {
+    return [...this.sessions.values()].filter((item) => item.running).map((item) => item.threadId);
+  }
 
   isRunning(threadId: string): boolean {
     return this.sessions.get(threadId)?.running ?? false;
@@ -146,12 +159,13 @@ export class KipOrchestrator {
     const active = this.sessions.get(threadId);
     if (active) {
       return {
-        turns: projectSessionTurns(active.session.sessionManager.getEntries(), workspace.rootPath),
+        turns: projectSessionTurns(active.session.sessionManager.getBranch(), workspace.rootPath),
         usage: toSharedUsage(active.session.getContextUsage()),
       };
     }
     const manager = SessionManager.open(thread.sessionFilePath, undefined, workspace.rootPath);
-    const entries = manager.getEntries();
+    // Only the active branch is shown; edited messages leave older branches in the file.
+    const entries = manager.getBranch();
     const model = this.registry.getModel(thread.modelProvider, thread.modelId);
     const contextWindow = (model as { contextWindow?: number } | undefined)?.contextWindow ?? 0;
     let used = 0;
@@ -176,7 +190,10 @@ export class KipOrchestrator {
     const referenced = input.referencedFiles?.length
       ? `Referenced files:\n${input.referencedFiles.map((file) => `- ${file}`).join("\n")}\n\n`
       : "";
-    const promptText = `${referenced}${input.text}`;
+    const notes = this.pendingNotes.get(input.threadId) ?? [];
+    this.pendingNotes.delete(input.threadId);
+    const noteText = notes.length ? `${notes.map((note) => KIP_NOTE_PREFIX + note).join("\n")}\n\n` : "";
+    const promptText = `${noteText}${referenced}${input.text}`;
     const images: ImageContent[] = (input.images ?? []).map((image) => ({
       type: "image",
       data: image.base64Data,
@@ -199,6 +216,9 @@ export class KipOrchestrator {
     if (thread.title === "New Thread") {
       active.firstPrompt = input.text;
     }
+    // Snapshot in parallel with the model's first response; every tool call
+    // waits for it (see beforeTool), so the snapshot always precedes changes.
+    active.runBefore = snapshotTree(workspace.rootPath).catch(() => null);
 
     try {
       await active.session.prompt(promptText, images.length ? { images } : undefined);
@@ -212,6 +232,8 @@ export class KipOrchestrator {
     } finally {
       active.buffer.flush();
       active.running = false;
+      // A failed run may never settle; still record what it changed.
+      if ((active.runBefore as ActiveSession["runBefore"]) !== null) void this.recordRunChanges(active).catch(() => undefined);
       this.database.touchThread(input.threadId);
     }
   }
@@ -271,6 +293,83 @@ export class KipOrchestrator {
     return restored;
   }
 
+  /**
+   * Moves the thread back to just before one of its user messages and sends
+   * new text from there. The old branch stays in the JSONL file.
+   */
+  async editPrompt(threadId: string, userIndex: number, text: string): Promise<void> {
+    const active = await this.ensureSession(threadId);
+    if (active.running) throw new Error("Stop the current run before editing a message");
+    const users = active.session.sessionManager
+      .getBranch()
+      .filter((entry) => entry.type === "message" && entry.message.role === "user");
+    const target = users[userIndex];
+    if (!target) throw new Error("That message is no longer in this thread");
+    await active.session.navigateTree(target.id);
+    await this.sendPrompt({ threadId, text });
+  }
+
+  latestChanges(threadId: string): RunChanges | null {
+    const stored = this.database.latestRunChanges(threadId);
+    return stored ? toRunChanges(stored) : null;
+  }
+
+  async undoChanges(
+    threadId: string,
+    runId: string,
+  ): Promise<{ ok: boolean; error?: string; next: RunChanges | null }> {
+    if (this.isRunning(threadId)) {
+      return { ok: false, error: "Wait for the run to finish.", next: this.latestChanges(threadId) };
+    }
+    const stored = this.database.getRunChanges(runId);
+    const thread = this.requireThread(threadId);
+    const workspace = this.database.getWorkspace(thread.workspaceId);
+    if (!stored || stored.threadId !== threadId || !workspace) {
+      return { ok: false, error: "Nothing to undo.", next: this.latestChanges(threadId) };
+    }
+    const result = await restoreRun(
+      workspace.rootPath,
+      stored.beforeTree,
+      stored.afterTree,
+      stored.files,
+    );
+    if (!result.ok) {
+      return { ok: false, error: result.error, next: this.latestChanges(threadId) };
+    }
+    this.database.markRunReverted(runId);
+    const list = stored.files.map((file) => file.path).join(", ");
+    const notes = this.pendingNotes.get(threadId) ?? [];
+    notes.push(`The user undid your file changes from an earlier turn (${list}). Those files are back to their previous content.`);
+    this.pendingNotes.set(threadId, notes);
+    const next = this.latestChanges(threadId);
+    this.emit(threadId, { kind: "changes_update", changes: next });
+    return { ok: true, next };
+  }
+
+  private async recordRunChanges(active: ActiveSession): Promise<void> {
+    const pendingBefore = active.runBefore;
+    active.runBefore = null;
+    if (!pendingBefore) return;
+    const before = await pendingBefore;
+    if (!before) return;
+    const thread = this.database.getThread(active.threadId);
+    const workspace = thread ? this.database.getWorkspace(thread.workspaceId) : null;
+    if (!workspace) return;
+    const after = await snapshotTree(workspace.rootPath);
+    if (!after || after === before) return;
+    const files = await diffTrees(workspace.rootPath, before, after);
+    if (files.length === 0) return;
+    this.database.addRunChanges({
+      id: newId("run"),
+      threadId: active.threadId,
+      beforeTree: before,
+      afterTree: after,
+      files,
+      createdAt: Date.now(),
+    });
+    this.emit(active.threadId, { kind: "changes_update", changes: this.latestChanges(active.threadId) });
+  }
+
   async compact(threadId: string): Promise<ContextUsage> {
     const active = await this.ensureSession(threadId);
     await active.session.compact();
@@ -282,9 +381,10 @@ export class KipOrchestrator {
     toolCallId: string,
     approved: boolean,
     rememberForSession = false,
+    reason?: string,
   ): void {
     const active = this.sessions.get(threadId);
-    active?.interceptor.resolveApproval(toolCallId, approved, rememberForSession);
+    active?.interceptor.resolveApproval(toolCallId, approved, rememberForSession, reason);
   }
 
   async updateThreadModel(threadId: string, provider: string, modelId: string): Promise<void> {
@@ -338,6 +438,9 @@ export class KipOrchestrator {
       threadId,
       policy: () => this.database.getSetting("approvalPolicy", "read-only-auto"),
       requestApproval: (payload) => this.requestApproval(threadId, payload),
+      beforeTool: async () => {
+        await this.sessions.get(threadId)?.runBefore;
+      },
     });
 
     const tools = [
@@ -407,6 +510,7 @@ export class KipOrchestrator {
       firstPrompt: null,
       buffer,
       queued: [],
+      runBefore: null,
     };
 
     active.unsubscribe = session.subscribe((event) => this.onSessionEvent(active, event));
@@ -556,6 +660,7 @@ export class KipOrchestrator {
           usage: toSharedUsage(active.session.getContextUsage()),
         });
         this.emit(active.threadId, { kind: "turn_complete" });
+        void this.recordRunChanges(active).catch(() => undefined);
         active.currentTurn = null;
         active.textBlockId = null;
         active.thinkingBlockId = null;
@@ -626,6 +731,17 @@ export class KipOrchestrator {
     if (!thread) throw new Error("Thread not found");
     return thread;
   }
+}
+
+function toRunChanges(stored: StoredRunChanges): RunChanges {
+  return {
+    id: stored.id,
+    threadId: stored.threadId,
+    files: stored.files,
+    added: stored.files.reduce((sum, file) => sum + file.added, 0),
+    removed: stored.files.reduce((sum, file) => sum + file.removed, 0),
+    createdAt: stored.createdAt,
+  };
 }
 
 function findToolBlock(turn: ChatTurn | null, toolCallId: string): ToolCallBlock | undefined {

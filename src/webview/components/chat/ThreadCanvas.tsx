@@ -73,6 +73,9 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
     onScrolled?.(container.scrollTop > 8);
   };
 
+  const editTurn = useChatStore((state) => state.editUserTurn);
+
+  /** Reruns the prompt in place instead of appending a duplicate message. */
   const retry = async (turnId: string) => {
     if (!threadId || !view) return;
     const index = view.turns.findIndex((turn) => turn.id === turnId);
@@ -84,7 +87,11 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
       .join("\n")
       .trim();
     if (!text) return;
-    await submitPrompt({ threadId, text });
+    await editTurn(threadId, source.id, text);
+  };
+
+  const edit = (turnId: string, text: string) => {
+    if (threadId) void editTurn(threadId, turnId, text);
   };
 
   const startSuggestion = async (suggestion: string) => {
@@ -172,6 +179,7 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
                   running={view.running}
                   isLast={index === view.turns.length - 1}
                   onRetry={threadId ? retry : undefined}
+                  onEdit={threadId && !view.running ? edit : undefined}
                 />
               ))}
               {view?.running &&

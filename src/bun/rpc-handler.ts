@@ -124,9 +124,29 @@ export function createKipRpc(deps: RpcDeps) {
         abortThread: async ({ threadId }) => ({
           restored: await deps.orchestrator.abort(threadId),
         }),
-        resolveToolApproval: ({ threadId, toolCallId, approved, rememberForSession }) => {
-          deps.orchestrator.resolveApproval(threadId, toolCallId, approved, rememberForSession);
+        resolveToolApproval: ({ threadId, toolCallId, approved, rememberForSession, reason }) => {
+          deps.orchestrator.resolveApproval(
+            threadId,
+            toolCallId,
+            approved,
+            rememberForSession,
+            reason,
+          );
         },
+        editPrompt: async ({ threadId, userIndex, text }) => {
+          void deps.orchestrator.editPrompt(threadId, userIndex, text).catch((error: unknown) => {
+            sendStream({
+              threadId,
+              event: {
+                kind: "turn_error",
+                message: error instanceof Error ? error.message : "Unable to edit the message",
+              },
+            });
+          });
+          return { accepted: true };
+        },
+        getRunChanges: ({ threadId }) => deps.orchestrator.latestChanges(threadId),
+        undoRunChanges: ({ threadId, runId }) => deps.orchestrator.undoChanges(threadId, runId),
         getSettings: () => settingsSnapshot(deps),
         updateSettings: async (patch) => {
           for (const [key, value] of Object.entries(patch)) {
