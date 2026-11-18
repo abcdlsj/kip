@@ -8,10 +8,16 @@
  * desktop shortcut shows the wrong one. We run rcedit ourselves instead.
  *
  * Targets:
- *   bin/launcher.exe            — what the desktop/start-menu shortcut runs
- *   bin/bun.exe                 — what the taskbar groups under
+ *   bin/launcher.exe            — what the desktop/start-menu shortcut runs.
+ *                                 It ships with no resources at all, so the
+ *                                 install fell back to Electrobun's default.
  *   <dist>/extractor.exe        — copied into Kip-Setup.exe right after this
- *                                 hook, so the installer gets the icon too
+ *                                 hook, so the installer gets the icon too.
+ *
+ * bun.exe is deliberately left alone: rcedit can only add a second icon group
+ * next to bun's own (Explorer keeps showing the first), so patching it would
+ * rewrite a 116 MB runtime for nothing. The taskbar therefore still shows the
+ * Bun icon until Electrobun exposes its native setWindowIcon.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
@@ -60,7 +66,6 @@ if (targetOS !== "win" || process.platform !== "win32") {
   console.warn("Windows icon: ELECTROBUN_BUILD_DIR/APP_NAME not set, skipping.");
 } else {
   embedIcon(join(buildDir, appName, "bin", "launcher.exe"));
-  embedIcon(join(buildDir, appName, "bin", "bun.exe"));
   embedIcon(
     join(root, "node_modules", "electrobun", `dist-win-${targetArch}`, "extractor.exe"),
   );
