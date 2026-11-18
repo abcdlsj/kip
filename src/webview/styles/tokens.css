@@ -76,11 +76,44 @@
   --shadow-modal: 0 28px 70px -12px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
 }
 
+/*
+ * CJK glyphs fill the em box while Latin x-height is about half of it, so at
+ * the same font-size Chinese reads a size larger. This face covers only CJK
+ * characters and punctuation and scales them down; Latin text falls through
+ * to the next family unchanged.
+ */
+@font-face {
+  font-family: "Kip CJK";
+  src: local("PingFang SC Regular"), local("PingFangSC-Regular"), local("Hiragino Sans GB"), local("Microsoft YaHei");
+  font-weight: 400;
+  size-adjust: 92%;
+  unicode-range: U+2E80-2FDF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31C0-31FF,
+    U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE30-FE4F, U+FF00-FFEF, U+20000-2FA1F;
+}
+
+@font-face {
+  font-family: "Kip CJK";
+  src: local("PingFang SC Medium"), local("PingFangSC-Medium"), local("Hiragino Sans GB"), local("Microsoft YaHei");
+  font-weight: 500;
+  size-adjust: 92%;
+  unicode-range: U+2E80-2FDF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31C0-31FF,
+    U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE30-FE4F, U+FF00-FFEF, U+20000-2FA1F;
+}
+
+@font-face {
+  font-family: "Kip CJK";
+  src: local("PingFang SC Semibold"), local("PingFangSC-Semibold"), local("Hiragino Sans GB"), local("Microsoft YaHei");
+  font-weight: 600 700;
+  size-adjust: 92%;
+  unicode-range: U+2E80-2FDF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31C0-31FF,
+    U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE30-FE4F, U+FF00-FFEF, U+20000-2FA1F;
+}
+
 :root {
-  --font-sans: "Avenir Next", "Avenir", "Plus Jakarta Sans", "PingFang SC",
+  --font-sans: "Avenir Next", "Avenir", "Kip CJK", "Plus Jakarta Sans", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", -apple-system, sans-serif;
   /* Message text: San Francisco on Apple platforms, the system UI face elsewhere. */
-  --font-prose: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+  --font-prose: "Kip CJK", -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
     "Hiragino Sans GB", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
   --spring: cubic-bezier(0.32, 0.72, 0, 1);
