@@ -13,8 +13,8 @@
  *   <dist>/extractor.exe        — copied into Kip-Setup.exe right after this
  *                                 hook, so the installer gets the icon too
  */
-import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 
 const root = join(import.meta.dir, "..");
@@ -35,8 +35,19 @@ function embedIcon(exePath: string): void {
     console.warn(`Windows icon: ${basename(exePath)} not found, skipping.`);
     return;
   }
-  execFileSync(rceditBinary(), [exePath, "--set-icon", iconPath], { stdio: "inherit" });
-  console.log(`Windows icon: embedded into ${basename(exePath)}.`);
+  const before = statSync(exePath).size;
+  const result = spawnSync(rceditBinary(), [exePath, "--set-icon", iconPath], {
+    encoding: "utf8",
+  });
+  const after = statSync(exePath).size;
+  const detail = [result.stdout, result.stderr].map((part) => part?.trim()).filter(Boolean).join(" ");
+  if (result.status !== 0 || after === before) {
+    throw new Error(
+      `rcedit did not embed the icon into ${basename(exePath)} ` +
+        `(status ${result.status}, ${before} -> ${after} bytes)${detail ? `: ${detail}` : ""}`,
+    );
+  }
+  console.log(`Windows icon: embedded into ${basename(exePath)} (${before} -> ${after} bytes).`);
 }
 
 // Electrobun's own embed only runs on Windows hosts, and rcedit.exe is a Windows
