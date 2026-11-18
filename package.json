@@ -5,7 +5,7 @@
   "type": "module",
   "description": "A quiet, cross-platform desktop coding agent built with Electrobun and Pi",
   "scripts": {
-    "icons": "bun run scripts/generate-icons.ts",
+    "icons": "bun run scripts/generate-icon-svg.ts && bun run scripts/generate-icons.ts",
     "dev": "bun run icons && bun run build:view && electrobun dev",
     "dev:hmr": "concurrently -k \"vite --port 5173\" \"KIP_DEV_SERVER=1 bun run dev:main\"",
     "dev:main": "electrobun dev --watch",
