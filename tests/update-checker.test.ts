@@ -271,6 +271,8 @@ describe("self-update", () => {
       await checker.check();
       await waitFor(() => checker.statusSnapshot().state === "available");
       expect(checker.statusSnapshot().progress).toBe(0);
+      // The arrow falls back to opening the release page.
+      expect(checker.statusSnapshot().installSource).toBe("manual");
       expect(warnings).toEqual(["Update download failed: dmg download failed"]);
     } finally {
       console.warn = warn;

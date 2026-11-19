@@ -265,7 +265,9 @@ export class UpdateChecker {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`Update download failed: ${message}`);
       this.preparedFor = null;
-      this.publish({ state: "available", progress: 0 });
+      // No usable asset: leave the arrow pointing at the release page instead
+      // of spinning forever on a download that cannot succeed.
+      this.publish({ state: "available", progress: 0, installSource: "manual" });
     }
   }
 

@@ -236,11 +236,18 @@ arrow at the bottom of the sidebar, and how it updates depends on how Kip was in
 
 - **Homebrew cask** — the arrow opens `brew upgrade --cask kip` (click to copy). Brew owns
   the versioned Caskroom bundle, so Kip does not replace it behind brew's back.
-- **dmg install** — the release is downloaded and staged in the background; the arrow
-  becomes a restart prompt. Kip never restarts silently, because quitting stops every
-  running agent: the prompt says how many are still working before you confirm.
-- **Anything unwritable** (Windows, Linux, read-only bundle) — the arrow opens the release
-  page.
+- **dmg (macOS)** — the release is downloaded, verified with `codesign`, and staged in the
+  background; the arrow becomes a restart prompt.
+- **Setup installer (Windows) / tar.zst (Linux)** — the `*-Kip.tar.zst` asset is downloaded
+  and staged, then swapped into the `app` directory through a detached helper (Task
+  Scheduler on Windows, `sh` on Linux).
+- **Anything unwritable, or a release without the matching asset** — the arrow opens the
+  release page instead.
+
+Kip never restarts silently, because quitting stops every running agent: the prompt shows
+how many threads are still working before you confirm, and the shutdown path aborts them
+cleanly. Linux archives are produced by an experimental `continue-on-error` CI job; macOS
+and Windows releases never depend on it.
 
 Checks are skipped on the `dev` channel; set `KIP_UPDATE_CURRENT_VERSION` to exercise the
 flow locally.
@@ -270,6 +277,8 @@ bun run build
 - macOS builds are unsigned and not notarized. Signing is intentionally left to the
   distributor.
 - Homebrew installs are updated through `brew upgrade --cask kip`, not by Kip itself.
+- Windows and Linux update archives carry no signature or checksum check (the macOS dmg
+  is verified with `codesign`); they are fetched over TLS from the same GitHub release.
 - The macOS 13 fallback bundles CEF, which increases the app size. macOS 14+ can switch
   to the native WebKit renderer by setting `defaultRenderer: "native"` in
   `electrobun.config.ts` and `renderer: "native"` in `src/bun/index.ts`.

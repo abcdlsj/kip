@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createUpdateInstaller, detectInstalledBundle } from "../src/bun/system/update-installer";
+import {
+  createUpdateInstaller,
+  detectInstalledBundle,
+  extractBundleArchive,
+} from "../src/bun/system/update-installer";
 
 const onDarwin = process.platform === "darwin";
 
@@ -72,5 +76,51 @@ describe("update install source", () => {
     expect(createUpdateInstaller({ onQuit: () => {}, execPath: join(root, "bun") }).source).toBe(
       "manual",
     );
+  });
+});
+
+describe("release archive", () => {
+  const zstd = Bun as unknown as { zstdCompressSync(data: Uint8Array): Uint8Array };
+
+  async function makeArchive(archivePath: string, bundleName: string): Promise<void> {
+    const source = join(root, "source");
+    mkdirSync(join(source, bundleName, "bin"), { recursive: true });
+    writeFileSync(join(source, bundleName, "bin", "launcher"), "#!/bin/sh\n");
+    const tarPath = join(root, "bundle.tar");
+    const tar = Bun.spawnSync(["tar", "-cf", tarPath, "-C", source, bundleName]);
+    expect(tar.success).toBe(true);
+    const bytes = new Uint8Array(await Bun.file(tarPath).arrayBuffer());
+    await Bun.write(archivePath, zstd.zstdCompressSync(bytes));
+  }
+
+  test("extracts the tar.zst and returns the bundle inside it", async () => {
+    const archivePath = join(root, "stable-linux-x64-Kip.tar.zst");
+    await makeArchive(archivePath, "Kip");
+    const bundle = await extractBundleArchive(archivePath, join(root, "extracted"));
+    expect(bundle).toBe(join(root, "extracted", "Kip"));
+    expect(existsSync(join(bundle, "bin", "launcher"))).toBe(true);
+  });
+
+  test("rejects an archive without a launcher", async () => {
+    const archivePath = join(root, "broken.tar.zst");
+    const tarPath = join(root, "broken.tar");
+    mkdirSync(join(root, "empty"), { recursive: true });
+    Bun.spawnSync(["tar", "-cf", tarPath, "-C", join(root, "empty"), "."]);
+    const bytes = new Uint8Array(await Bun.file(tarPath).arrayBuffer());
+    await Bun.write(archivePath, zstd.zstdCompressSync(bytes));
+    await expect(extractBundleArchive(archivePath, join(root, "extracted"))).rejects.toThrow();
+  });
+});
+
+describe("Electrobun app directory", () => {
+  test.skipIf(process.platform === "darwin")("is replaceable when bin/ is writable", () => {
+    const appDir = join(root, "ai.kip.desktop", "stable", "app");
+    mkdirSync(join(appDir, "bin"), { recursive: true });
+    const launcher = process.platform === "win32" ? "launcher.exe" : "launcher";
+    writeFileSync(join(appDir, "bin", launcher), "");
+    writeFileSync(join(appDir, "bin", "bun"), "");
+    const info = detectInstalledBundle(join(appDir, "bin", "bun"));
+    expect(info.source).toBe("direct");
+    expect(info.appPath).toBe(appDir);
   });
 });
