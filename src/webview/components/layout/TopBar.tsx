@@ -1,4 +1,5 @@
-import { GitBranch, PanelLeftOpen } from "lucide-react";
+import * as Popover from "@radix-ui/react-popover";
+import { Check, FileDown, GitBranch, MoreHorizontal, PanelLeftOpen } from "lucide-react";
 import { useState } from "react";
 import type { ContextUsage, ThreadSummary, Workspace } from "../../../shared/types";
 import { formatTokens } from "../../lib/format";
@@ -23,7 +24,25 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
   const changes = useChatStore((state) => (thread ? state.threads[thread.id]?.changes : null));
   const running = useChatStore((state) => (thread ? state.threads[thread.id]?.running : false));
   const [compacting, setCompacting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState(false);
   const percent = Math.round(usage.ratio * 100);
+
+  const exportThread = async () => {
+    if (!thread || exporting) return;
+    setExporting(true);
+    setMenuOpen(false);
+    try {
+      const { savedPath } = await request("exportThreadMarkdown", { threadId: thread.id });
+      if (savedPath) {
+        setExported(true);
+        setTimeout(() => setExported(false), 2000);
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const compact = async () => {
     if (!thread || compacting) return;
@@ -126,6 +145,40 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
               {percent}%
             </span>
           </button>
+        )}
+        {thread && (
+          <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
+            <Popover.Trigger asChild>
+              <button
+                className="flex h-6 w-6 items-center justify-center rounded-[7px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)] data-[state=open]:bg-[var(--bg-subtle)]"
+                aria-label="Thread options"
+                title="Thread options"
+              >
+                {exported ? (
+                  <Check size={13} strokeWidth={1.7} className="text-[var(--status-ok)]" />
+                ) : (
+                  <MoreHorizontal size={14} strokeWidth={1.6} />
+                )}
+              </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                side="bottom"
+                align="end"
+                sideOffset={6}
+                className="z-50 w-[168px] rounded-[10px] border hairline bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow-modal)]"
+              >
+                <button
+                  onClick={() => void exportThread()}
+                  disabled={exporting}
+                  className="flex h-7 w-full items-center gap-2 rounded-[6px] px-2 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] disabled:opacity-50"
+                >
+                  <FileDown size={13} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+                  <span>{exporting ? "Exporting…" : "Export Markdown"}</span>
+                </button>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
         )}
       </div>
       {needsWindowControls && <WindowControls />}

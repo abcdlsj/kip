@@ -18,6 +18,7 @@ import type {
   SendPromptInput,
   SettingsSnapshot,
   SyncConfig,
+  SyncProvider,
   ThemeMode,
   ThinkingLevel,
   ThreadSummary,
@@ -67,6 +68,10 @@ export interface KipRPCSchema {
         response: void;
       };
       setThinkingLevel: { params: { threadId: string; level: ThinkingLevel }; response: void };
+      setThreadApprovalPolicy: {
+        params: { threadId: string; policy: ApprovalPolicy | null };
+        response: void;
+      };
       compactThread: { params: { threadId: string }; response: ContextUsage };
 
       sendPrompt: { params: SendPromptInput; response: { accepted: boolean } };
@@ -117,16 +122,29 @@ export interface KipRPCSchema {
       getSyncConfig: { params: void; response: SyncConfig };
       updateSyncConfig: {
         params: {
+          provider?: SyncProvider;
           enabled: boolean;
-          endpoint: string;
-          region: string;
-          bucket: string;
-          prefix: string;
+          endpoint?: string;
+          region?: string;
+          bucket?: string;
+          prefix?: string;
           accessKeyId?: string;
           secretAccessKey?: string;
+          googleClientId?: string;
+          googleClientSecret?: string;
+          googleFolderName?: string;
         };
         response: { connected: boolean; error?: string };
       };
+      connectGoogleDrive: {
+        params: {
+          clientId: string;
+          clientSecret?: string;
+          folderName?: string;
+        };
+        response: { connected: boolean; email?: string | null; error?: string };
+      };
+      disconnectGoogleDrive: { params: void; response: void };
       triggerSync: {
         params: void;
         response: { pushed: number; pulled: number; syncedAt: number };

@@ -1,6 +1,11 @@
 /** Workspace and thread navigation state. */
 import { create } from "zustand";
-import type { ThinkingLevel, ThreadSummary, Workspace } from "../../shared/types";
+import type {
+  ApprovalPolicy,
+  ThinkingLevel,
+  ThreadSummary,
+  Workspace,
+} from "../../shared/types";
 import { request } from "../rpc-client";
 
 interface WorkspaceState {
@@ -30,6 +35,7 @@ interface WorkspaceState {
   setThreadRunning: (threadId: string, running: boolean) => void;
   updateThreadModel: (threadId: string, provider: string, modelId: string) => Promise<void>;
   setThreadThinking: (threadId: string, level: ThinkingLevel) => Promise<void>;
+  setThreadApprovalPolicy: (threadId: string, policy: ApprovalPolicy | null) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -168,6 +174,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set((state) => ({
       threads: state.threads.map((thread) =>
         thread.id === threadId ? { ...thread, thinkingLevel: level } : thread,
+      ),
+    }));
+  },
+
+  setThreadApprovalPolicy: async (threadId, policy) => {
+    await request("setThreadApprovalPolicy", { threadId, policy });
+    set((state) => ({
+      threads: state.threads.map((thread) =>
+        thread.id === threadId ? { ...thread, approvalPolicy: policy } : thread,
       ),
     }));
   },

@@ -15,6 +15,7 @@ import { useChatStore } from "../../stores/chat-store";
 import { NEW_THREAD_DRAFT, useUiStore } from "../../stores/ui-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
 import { ModelSelector } from "./ModelSelector";
+import { PermissionSelector } from "./PermissionSelector";
 import { SlashMenu, matchCommands, slashQuery, type SlashCommand } from "./SlashMenu";
 
 interface PendingImage {
@@ -49,6 +50,10 @@ export function Composer() {
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const settings = useUiStore((state) => state.settings);
   const setApprovalPolicy = useUiStore((state) => state.setApprovalPolicy);
+  const activeThread = useWorkspaceStore((state) =>
+    state.threads.find((item) => item.id === state.activeThreadId),
+  );
+  const setThreadApprovalPolicy = useWorkspaceStore((state) => state.setThreadApprovalPolicy);
   const openSettings = useUiStore((state) => state.openSettings);
   const setUsage = useChatStore((state) => state.setUsage);
   const undoChanges = useChatStore((state) => state.undoChanges);
@@ -210,7 +215,8 @@ export function Composer() {
           break;
         default:
           if (command.policy) {
-            await setApprovalPolicy(command.policy);
+            if (threadId) await setThreadApprovalPolicy(threadId, command.policy);
+            else await setApprovalPolicy(command.policy);
             setNotice({ text: `Approval: ${command.description.toLowerCase()}` });
           }
       }
@@ -290,7 +296,7 @@ export function Composer() {
             commands={commands}
             selected={selectedCommand}
             grouped={!query}
-            policy={settings?.approvalPolicy}
+            policy={activeThread?.approvalPolicy ?? settings?.approvalPolicy}
             onHover={setSelectedCommand}
             onRun={(command) => void runCommand(command)}
           />
@@ -398,6 +404,7 @@ export function Composer() {
           />
           <div className="mt-1 flex h-7 items-center gap-1">
             <ModelSelector />
+            <PermissionSelector />
             <input
               ref={fileInputRef}
               type="file"

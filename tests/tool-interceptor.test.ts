@@ -261,4 +261,32 @@ describe("tool interceptor", () => {
     guard.resolveApproval("w3", true);
     await other;
   });
+
+  test("reevaluatePending immediately approves suspended calls when policy relaxes", async () => {
+    const root = workspace();
+    const approvals: ToolApprovalPayload[] = [];
+    let policy: "read-only-auto" | "full-auto" | "strict" = "read-only-auto";
+    const guard = new ToolInterceptor({
+      workspaceRoot: root,
+      threadId: "th_test",
+      policy: () => policy,
+      requestApproval: (payload) => approvals.push(payload),
+    });
+    const bash = guard.wrap(fakeTool("bash"));
+    const read = guard.wrap(fakeTool("read"));
+    const pendingInWorkspace = bash.execute("e1", { command: "bun test" } as never, undefined, undefined, {} as never);
+    const outside = join(tmpdir(), `kip-out-${Date.now()}.txt`);
+    const pendingOutside = read.execute("e2", { path: outside } as never, undefined, undefined, {} as never);
+    await Bun.sleep(5);
+    expect(approvals).toHaveLength(2);
+
+    policy = "full-auto";
+    const approved = guard.reevaluatePending();
+    expect(approved).toEqual(["e1"]);
+    await expect(pendingInWorkspace).resolves.toBeDefined();
+
+    // Outside-workspace calls still require explicit approval even in full-auto.
+    guard.resolveApproval("e2", false);
+    await expect(pendingOutside).rejects.toThrow(/denied/i);
+  });
 });

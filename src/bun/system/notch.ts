@@ -6,7 +6,12 @@
  */
 import { BrowserWindow, Screen } from "electrobun/bun";
 import { release } from "node:os";
-import { isNSWindow, setPropertiesOnMainThread } from "./objc";
+import {
+  getMacScreens,
+  getWindowReferenceScreenHeight,
+  isNSWindow,
+  setPropertiesOnMainThread,
+} from "./objc";
 
 export type NotchState = "idle" | "working" | "attention" | "done";
 
@@ -19,6 +24,12 @@ const NOTCH_WIDTH = 190;
 const WING = 30;
 const HIDE_DELAY_MS = 240;
 
+/** Kip aperture mark from logoPaths.ts (viewBox 220 220 584 584). */
+const KIP_ICON_SVG =
+  `<svg class="logo" width="13" height="13" viewBox="220 220 584 584" aria-hidden="true">` +
+  `<path d="M581.36 253.13Q659.70 426.72 770.87 581.36Q597.28 659.70 442.64 770.87Q364.30 597.28 253.13 442.64Q426.72 364.30 581.36 253.13ZM538.49 413.12Q479.43 455.58 413.12 485.51Q455.58 544.57 485.51 610.88Q544.57 568.42 610.88 538.49Q568.42 479.43 538.49 413.12Z" fill="rgba(250, 249, 246, 0.88)" fill-rule="evenodd"/>` +
+  `</svg>`;
+
 const HTML = `<!doctype html>
 <html><head><meta charset="utf-8"><style>
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
@@ -29,7 +40,9 @@ const HTML = `<!doctype html>
   .shell.on { transform: translateY(0); }
   .wing { position: absolute; top: 0; bottom: 0; width: ${WING}px;
     display: flex; align-items: center; justify-content: center; }
+  .wing.left { left: 0; }
   .wing.right { right: 0; }
+  .logo { display: block; opacity: 0.92; }
   .dot { width: 7px; height: 7px; border-radius: 50%; opacity: 0;
     transition: opacity 160ms ease, background-color 160ms ease; }
   .dot.attention { opacity: 1; background: #ffc53d;
@@ -43,6 +56,7 @@ const HTML = `<!doctype html>
   @keyframes breathe { 50% { opacity: 0.55; } }
 </style></head><body>
 <div class="shell" id="shell">
+  <div class="wing left">${KIP_ICON_SVG}</div>
   <div class="wing right"><div class="spin" id="spin"></div><div class="dot" id="dot"></div></div>
 </div>
 <script>
@@ -65,20 +79,79 @@ function supported(): boolean {
   return Number.isFinite(major) && major >= 23;
 }
 
-function pickDisplay() {
+interface NotchPlacement {
+  x: number;
+  /** Target bottom-left Y in AppKit screen coordinates (when fromAppKit is true), or top-left Y otherwise. */
+  y: number;
+  width: number;
+  height: number;
+  fromAppKit: boolean;
+}
+
+function computeNotchPlacement(): NotchPlacement {
+  const screens = getMacScreens();
+  if (screens.length > 0) {
+    // Prefer the built-in display with a hardware notch (safeAreaInsets.top > 0
+    // works even when the menu bar is auto-hidden or on secondary displays).
+    const notched = screens.find(
+      (screen) =>
+        screen.safeAreaTop > 0 &&
+        screen.auxLeft !== null &&
+        screen.auxRight !== null &&
+        screen.auxLeft.width > 0 &&
+        screen.auxRight.width > 0,
+    );
+    if (notched && notched.auxLeft && notched.auxRight) {
+      const notchLeft = notched.auxLeft.x + notched.auxLeft.width;
+      const notchRight = notched.auxRight.x;
+      const notchWidth = Math.max(NOTCH_WIDTH, notchRight - notchLeft);
+      const width = Math.round(notchWidth + WING * 2);
+      const height = Math.round(
+        Math.max(
+          notched.safeAreaTop,
+          notched.frame.y + notched.frame.height - notched.auxLeft.y,
+        ),
+      );
+      const notchCenterX = (notchLeft + notchRight) / 2;
+      const x = Math.round(notchCenterX - width / 2);
+      const y = Math.round(notched.frame.y + notched.frame.height - height);
+      return { x, y, width, height, fromAppKit: true };
+    }
+    const primary = screens[0]!;
+    const menuBar = Math.max(
+      24,
+      Math.round(
+        primary.frame.y +
+          primary.frame.height -
+          (primary.visibleFrame.y + primary.visibleFrame.height),
+      ),
+    );
+    const width = WING * 2;
+    const x = Math.round(primary.frame.x + (primary.frame.width - width) / 2);
+    const y = Math.round(primary.frame.y + primary.frame.height - menuBar);
+    return { x, y, width, height: menuBar, fromAppKit: true };
+  }
+
+  // Fallback to Electrobun's Screen API if AppKit introspection is unavailable.
   const displays = Screen.getAllDisplays();
   const withInset = displays
     .map((display) => ({ display, inset: display.workArea.y - display.bounds.y }))
     .sort((a, b) => b.inset - a.inset);
-  // A notched built-in display has the tallest menu bar (about 37 pt vs 24 pt).
   const notched = withInset.find((item) => item.inset >= 30);
-  if (notched) return { ...notched, notched: true };
-  const primary = Screen.getPrimaryDisplay();
-  return {
-    display: primary,
-    inset: Math.max(22, primary.workArea.y - primary.bounds.y),
-    notched: false,
-  };
+  const chosen = notched
+    ? { ...notched, notched: true }
+    : (() => {
+        const primary = Screen.getPrimaryDisplay();
+        return {
+          display: primary,
+          inset: Math.max(22, primary.workArea.y - primary.bounds.y),
+          notched: false,
+        };
+      })();
+  const width = (chosen.notched ? NOTCH_WIDTH : 0) + WING * 2;
+  const height = Math.round(chosen.inset);
+  const x = Math.round(chosen.display.bounds.x + (chosen.display.bounds.width - width) / 2);
+  return { x, y: chosen.display.bounds.y, width, height, fromAppKit: false };
 }
 
 export class NotchIndicator {
@@ -99,10 +172,7 @@ export class NotchIndicator {
   }
 
   private create(): void {
-    const { display, inset, notched } = pickDisplay();
-    const width = (notched ? NOTCH_WIDTH : 0) + WING * 2;
-    const height = Math.round(inset);
-    const x = Math.round(display.bounds.x + (display.bounds.width - width) / 2);
+    const placement = computeNotchPlacement();
     const window = new BrowserWindow({
       title: "Kip Indicator",
       html: HTML,
@@ -111,8 +181,13 @@ export class NotchIndicator {
       hidden: true,
       activate: false,
       renderer: "native",
-      frame: { x, y: display.bounds.y, width, height },
-      styleMask: { Resizable: false, Closable: false, Miniaturizable: false },
+      frame: { x: placement.x, y: 0, width: placement.width, height: placement.height },
+      styleMask: {
+        Borderless: true,
+        Resizable: false,
+        Closable: false,
+        Miniaturizable: false,
+      },
     });
     this.window = window;
 
@@ -123,8 +198,7 @@ export class NotchIndicator {
         hasShadow: 0,
       });
     }
-    // The menu bar would push a titled window down; keep it at the very top.
-    window.setFrame(x, display.bounds.y, width, height);
+    this.position();
 
     window.webview.on("dom-ready", () => {
       this.ready = true;
@@ -134,6 +208,28 @@ export class NotchIndicator {
     (window.webview.on as (name: string, handler: () => void) => void)("host-message", () =>
       this.onOpen(),
     );
+  }
+
+  /**
+   * Aligns the indicator with the current notch geometry. Electrobun's
+   * setWindowFrame converts Y via `refScreenHeight - y - height`, so passing
+   * `refScreenHeight - appKitY - height` lands on the exact AppKit Y even on
+   * multi-display setups where the notched screen is not primary.
+   */
+  private position(): void {
+    const window = this.window;
+    if (!window) return;
+    const placement = computeNotchPlacement();
+    let electrobunY = placement.y;
+    if (placement.fromAppKit) {
+      const refHeight = getWindowReferenceScreenHeight(window.ptr);
+      if (refHeight !== null) {
+        electrobunY = refHeight - placement.y - placement.height;
+      } else {
+        electrobunY = 0;
+      }
+    }
+    window.setFrame(placement.x, electrobunY, placement.width, placement.height);
   }
 
   set(state: NotchState): void {
@@ -162,6 +258,7 @@ export class NotchIndicator {
       this.hideTimer = null;
     }
     if (!this.visible) {
+      this.position();
       window.showInactive();
       this.visible = true;
     }

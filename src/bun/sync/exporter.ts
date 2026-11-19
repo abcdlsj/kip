@@ -48,7 +48,7 @@ export async function exportThreadMarkdown(
   let turns: ChatTurn[] = [];
   if (thread.sessionFilePath && existsSync(thread.sessionFilePath)) {
     const manager = SessionManager.open(thread.sessionFilePath, undefined, workspace.rootPath);
-    turns = projectSessionTurns(manager.getEntries(), workspace.rootPath);
+    turns = projectSessionTurns(manager.getBranch(), workspace.rootPath);
   }
 
   const lines: string[] = [
@@ -68,7 +68,7 @@ export async function exportThreadMarkdown(
     }
   }
 
-  const safeName = thread.title.replace(/[^a-zA-Z0-9 _-]/g, "").trim() || "thread";
+  const safeName = thread.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim() || "thread";
   const target = join(directory, `${safeName}.md`);
   await Bun.write(target, lines.join("\n"));
   return target;

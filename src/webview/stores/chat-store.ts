@@ -171,6 +171,19 @@ export const useChatStore = create<ChatState>()(
             }
             return;
           }
+          case "tool_approved": {
+            const turn = view.turns.find((item) => item.id === event.turnId);
+            const block = turn?.blocks.find(
+              (item) => item.type === "tool_call" && item.id === event.toolCallId,
+            );
+            if (block?.type === "tool_call" && block.status === "awaiting_approval") {
+              block.status = event.approved === false ? "denied" : "running";
+            }
+            view.approvals = view.approvals.filter(
+              (item) => item.toolCallId !== event.toolCallId,
+            );
+            return;
+          }
           case "tool_end": {
             const turn = view.turns.find((item) => item.id === event.turnId);
             const block = turn?.blocks.find(
@@ -290,7 +303,19 @@ export const useChatStore = create<ChatState>()(
         rememberForSession: remember,
         reason,
       });
-      get().removeApproval(threadId, toolCallId);
+      set((state) => {
+        const view = state.threads[threadId];
+        if (!view) return;
+        view.approvals = view.approvals.filter((item) => item.toolCallId !== toolCallId);
+        for (const turn of view.turns) {
+          const block = turn.blocks.find(
+            (item) => item.type === "tool_call" && item.id === toolCallId,
+          );
+          if (block?.type === "tool_call" && block.status === "awaiting_approval") {
+            block.status = approved ? "running" : "denied";
+          }
+        }
+      });
     },
 
     editUserTurn: async (threadId, turnId, text) => {

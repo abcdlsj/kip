@@ -42,6 +42,7 @@ interface ThreadRow {
   model_provider: string;
   model_id: string;
   thinking_level: ThinkingLevel;
+  approval_policy: ApprovalPolicy | null;
   updated_at: number;
 }
 
@@ -136,6 +137,7 @@ export class KipDatabase {
         model_provider TEXT NOT NULL,
         model_id TEXT NOT NULL,
         thinking_level TEXT NOT NULL DEFAULT 'medium',
+        approval_policy TEXT DEFAULT NULL,
         is_archived INTEGER NOT NULL DEFAULT 0,
         updated_at INTEGER NOT NULL,
         created_at INTEGER NOT NULL,
@@ -174,8 +176,19 @@ export class KipDatabase {
       CREATE INDEX IF NOT EXISTS idx_run_changes_thread
         ON run_changes(thread_id, reverted, created_at DESC);
     `);
+    this.ensureMigrations();
     this.seedSettings();
     this.ensureScratchpad();
+  }
+
+  private ensureMigrations(): void {
+    const columns = this.db
+      .query<{ name: string }, []>("PRAGMA table_info(threads)")
+      .all()
+      .map((col) => col.name);
+    if (!columns.includes("approval_policy")) {
+      this.db.exec("ALTER TABLE threads ADD COLUMN approval_policy TEXT DEFAULT NULL");
+    }
   }
 
   private seedSettings(): void {
@@ -331,12 +344,13 @@ export class KipDatabase {
     modelProvider: string;
     modelId: string;
     thinkingLevel: ThinkingLevel;
+    approvalPolicy?: ApprovalPolicy | null;
   }): ThreadSummary {
     const now = Date.now();
     this.db
       .prepare(
-        "INSERT INTO threads (id, workspace_id, title, session_file_path, model_provider, model_id, thinking_level, updated_at, created_at) " +
-          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO threads (id, workspace_id, title, session_file_path, model_provider, model_id, thinking_level, approval_policy, updated_at, created_at) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         input.id,
@@ -346,6 +360,7 @@ export class KipDatabase {
         input.modelProvider,
         input.modelId,
         input.thinkingLevel,
+        input.approvalPolicy ?? null,
         now,
         now,
       );
@@ -361,11 +376,12 @@ export class KipDatabase {
       modelProvider: string;
       modelId: string;
       thinkingLevel: ThinkingLevel;
+      approvalPolicy: ApprovalPolicy | null;
       sessionFilePath: string;
     }>,
   ): void {
     const sets: string[] = [];
-    const values: Array<string | number> = [];
+    const values: Array<string | number | null> = [];
     if (patch.title !== undefined) {
       sets.push("title = ?");
       values.push(patch.title);
@@ -381,6 +397,10 @@ export class KipDatabase {
     if (patch.thinkingLevel !== undefined) {
       sets.push("thinking_level = ?");
       values.push(patch.thinkingLevel);
+    }
+    if (patch.approvalPolicy !== undefined) {
+      sets.push("approval_policy = ?");
+      values.push(patch.approvalPolicy);
     }
     if (patch.sessionFilePath !== undefined) {
       sets.push("session_file_path = ?");
@@ -517,6 +537,7 @@ export class KipDatabase {
       modelProvider: row.model_provider,
       modelId: row.model_id,
       thinkingLevel: row.thinking_level,
+      approvalPolicy: row.approval_policy ?? null,
       updatedAt: row.updated_at,
       isRunning: false,
     };

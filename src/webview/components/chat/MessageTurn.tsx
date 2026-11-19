@@ -206,9 +206,9 @@ function UserMessage({
   };
 
   return (
-    <div className="group/user mb-3 mt-8 first:mt-2">
+    <div className="group/user mb-3 mt-8 flex flex-col items-end first:mt-2">
       {turn.attachments?.length ? (
-        <div className="mb-2 flex flex-wrap gap-1.5 pl-[15px]">
+        <div className="mb-2 flex max-w-[85%] flex-wrap justify-end gap-1.5">
           {turn.attachments.map((attachment) => (
             <span
               key={attachment.path}
@@ -221,7 +221,7 @@ function UserMessage({
         </div>
       ) : null}
       {editing ? (
-        <div className="rounded-[12px] border border-[var(--border-focus)] bg-[var(--bg-elevated)] px-3.5 pb-2 pt-2.5 shadow-[var(--shadow-composer)]">
+        <div className="w-full rounded-[12px] border border-[var(--border-focus)] bg-[var(--bg-elevated)] px-3.5 pb-2 pt-2.5 shadow-[var(--shadow-composer)]">
           <textarea
             ref={inputRef}
             value={draft}
@@ -266,12 +266,12 @@ function UserMessage({
         </div>
       ) : (
         <>
-          <div className="border-l-2 border-[var(--border-focus)] pl-[13px]">
-            <p className="selectable font-prose whitespace-pre-wrap text-[15px] leading-[1.65] text-[var(--text-primary)]">
+          <div className="max-w-[85%] rounded-[14px] bg-[var(--bg-subtle)] px-3.5 py-2.5">
+            <p className="selectable font-prose whitespace-pre-wrap break-words text-[15px] leading-[1.65] text-[var(--text-primary)]">
               {text}
             </p>
           </div>
-          <div className="mt-1 flex h-6 items-center gap-0.5 pl-[9px] opacity-0 transition-opacity duration-150 group-hover/user:opacity-100 group-focus-within/user:opacity-100">
+          <div className="mt-1 flex h-6 items-center justify-end gap-0.5 opacity-0 transition-opacity duration-150 group-hover/user:opacity-100 group-focus-within/user:opacity-100">
             {onEdit && (
               <button
                 onClick={() => {

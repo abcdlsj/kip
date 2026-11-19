@@ -29,6 +29,8 @@ export interface ThreadSummary {
   modelProvider: string;
   modelId: string;
   thinkingLevel: ThinkingLevel;
+  /** Per-thread permission override; null/undefined inherits the global policy. */
+  approvalPolicy?: ApprovalPolicy | null;
   updatedAt: number;
   isRunning: boolean;
 }
@@ -139,13 +141,20 @@ export interface FileSuggestion {
   name: string;
 }
 
+export type SyncProvider = "s3" | "google-drive";
+
 export interface SyncConfig {
+  provider: SyncProvider;
   enabled: boolean;
   endpoint: string;
   region: string;
   bucket: string;
   prefix: string;
   hasCredentials: boolean;
+  googleClientId: string;
+  googleFolderName: string;
+  googleConnected: boolean;
+  googleEmail: string | null;
   lastSyncedAt: number | null;
 }
 
@@ -170,6 +179,12 @@ export type AgentStreamEvent =
       kind: "tool_approval_required";
       turnId: string;
       approval: ToolApprovalPayload;
+    }
+  | {
+      kind: "tool_approved";
+      turnId: string;
+      toolCallId: string;
+      approved?: boolean;
     }
   | {
       kind: "tool_end";
@@ -222,6 +237,7 @@ export interface CreateThreadInput {
   modelProvider?: string;
   modelId?: string;
   thinkingLevel?: ThinkingLevel;
+  approvalPolicy?: ApprovalPolicy | null;
 }
 
 export type WindowAction = "minimize" | "maximize" | "close";

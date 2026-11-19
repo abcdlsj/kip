@@ -1,44 +1,51 @@
 /**
- * Incremental S3-compatible backup using Bun's native S3 client. Metadata,
+ * Incremental S3-compatible backup using Bun's native S3 client, plus unified
+ * sync configuration and dispatch across S3 and Google Drive. Metadata,
  * sessions, and custom provider definitions sync; API keys never leave the
  * machine.
  */
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
-import type { SyncConfig } from "../../shared/types";
+import type { SyncConfig, SyncProvider } from "../../shared/types";
 import type { KipDatabase } from "../storage/db";
 import { getSessionDir } from "../storage/db";
 import { getApiKey, setApiKey } from "../storage/keychain";
+import {
+  getGoogleDriveSettings,
+  isGoogleDriveConnected,
+  saveGoogleDriveSettings,
+  testGoogleDriveConnection,
+  triggerGoogleDriveSync,
+} from "./gdrive-sync";
+import {
+  hash,
+  localSessionFiles,
+  mergeSnapshot,
+  metadataSnapshot,
+  settingKey,
+  type Manifest,
+  type SyncResult,
+} from "./sync-common";
+
+export type { SyncResult };
 
 const ACCESS_KEY_ID = "s3.access-key-id";
 const SECRET_ACCESS_KEY = "s3.secret-access-key";
 
-export interface SyncResult {
-  pushed: number;
-  pulled: number;
-  syncedAt: number;
-}
-
-interface Manifest {
-  version: 1;
-  deviceId: string;
-  syncedAt: number;
-  files: Record<string, { sha256: string; updatedAt: number }>;
-}
-
-function settingKey(key: string): string {
-  return `sync.${key}`;
-}
-
 export async function getSyncConfig(database: KipDatabase): Promise<SyncConfig> {
+  const gdrive = getGoogleDriveSettings(database);
   return {
+    provider: database.getSetting<SyncProvider>(settingKey("provider"), "s3"),
     enabled: database.getSetting(settingKey("enabled"), false),
     endpoint: database.getSetting(settingKey("endpoint"), ""),
     region: database.getSetting(settingKey("region"), "auto"),
     bucket: database.getSetting(settingKey("bucket"), ""),
     prefix: database.getSetting(settingKey("prefix"), "kip-sync/"),
     hasCredentials: (await getApiKey(ACCESS_KEY_ID)) !== null,
+    googleClientId: gdrive.clientId,
+    googleFolderName: gdrive.folderName,
+    googleConnected: await isGoogleDriveConnected(),
+    googleEmail: gdrive.email,
     lastSyncedAt: database.getSetting(settingKey("lastSyncedAt"), null),
   };
 }
@@ -46,30 +53,64 @@ export async function getSyncConfig(database: KipDatabase): Promise<SyncConfig> 
 export async function updateSyncConfig(
   database: KipDatabase,
   input: {
+    provider?: SyncProvider;
     enabled: boolean;
-    endpoint: string;
-    region: string;
-    bucket: string;
-    prefix: string;
+    endpoint?: string;
+    region?: string;
+    bucket?: string;
+    prefix?: string;
     accessKeyId?: string;
     secretAccessKey?: string;
+    googleClientId?: string;
+    googleClientSecret?: string;
+    googleFolderName?: string;
   },
 ): Promise<{ connected: boolean; error?: string }> {
+  const provider: SyncProvider =
+    input.provider ?? database.getSetting<SyncProvider>(settingKey("provider"), "s3");
+  database.setSetting(settingKey("provider"), provider);
   database.setSetting(settingKey("enabled"), input.enabled);
-  database.setSetting(settingKey("endpoint"), input.endpoint);
-  database.setSetting(settingKey("region"), input.region);
-  database.setSetting(settingKey("bucket"), input.bucket);
-  database.setSetting(settingKey("prefix"), normalizePrefix(input.prefix));
+
+  if (provider === "google-drive") {
+    await saveGoogleDriveSettings(database, {
+      clientId: input.googleClientId,
+      clientSecret: input.googleClientSecret,
+      folderName: input.googleFolderName,
+    });
+    if (!(await isGoogleDriveConnected())) {
+      return { connected: false, error: "Sign in with Google to connect Google Drive" };
+    }
+    return testGoogleDriveConnection(database);
+  }
+
+  const endpoint = input.endpoint ?? database.getSetting(settingKey("endpoint"), "");
+  const region = input.region ?? database.getSetting(settingKey("region"), "auto");
+  const bucket = input.bucket ?? database.getSetting(settingKey("bucket"), "");
+  const prefix = normalizePrefix(
+    input.prefix ?? database.getSetting(settingKey("prefix"), "kip-sync/"),
+  );
+  database.setSetting(settingKey("endpoint"), endpoint);
+  database.setSetting(settingKey("region"), region);
+  database.setSetting(settingKey("bucket"), bucket);
+  database.setSetting(settingKey("prefix"), prefix);
   if (input.accessKeyId) await setApiKey(ACCESS_KEY_ID, input.accessKeyId);
   if (input.secretAccessKey) await setApiKey(SECRET_ACCESS_KEY, input.secretAccessKey);
-  if (!input.endpoint || !input.bucket) return { connected: false, error: "Endpoint and bucket are required" };
+  if (!endpoint || !bucket) return { connected: false, error: "Endpoint and bucket are required" };
   try {
     const client = await createClient(database);
-    await client.write(`${normalizePrefix(input.prefix)}.kip-probe`, String(Date.now()));
+    await client.write(`${prefix}.kip-probe`, String(Date.now()));
     return { connected: true };
   } catch (error) {
     return { connected: false, error: error instanceof Error ? error.message : "Connection failed" };
   }
+}
+
+export async function triggerSync(database: KipDatabase): Promise<SyncResult> {
+  const provider = database.getSetting<SyncProvider>(settingKey("provider"), "s3");
+  if (provider === "google-drive") {
+    return triggerGoogleDriveSync(database);
+  }
+  return triggerS3Sync(database);
 }
 
 function normalizePrefix(prefix: string): string {
@@ -88,53 +129,6 @@ async function createClient(database: KipDatabase) {
     throw new Error("Sync is not configured");
   }
   return new Bun.S3Client({ endpoint, region, bucket, accessKeyId, secretAccessKey });
-}
-
-function hash(content: Buffer | string): string {
-  return createHash("sha256").update(content).digest("hex");
-}
-
-function localSessionFiles(database: KipDatabase): Array<{
-  key: string;
-  path: string;
-  content: Buffer;
-  updatedAt: number;
-}> {
-  const files: Array<{ key: string; path: string; content: Buffer; updatedAt: number }> = [];
-  for (const workspace of database.listWorkspaces()) {
-    for (const thread of database.listThreads(workspace.id)) {
-      if (!thread.sessionFilePath || !existsSync(thread.sessionFilePath)) continue;
-      try {
-        const content = readFileSync(thread.sessionFilePath);
-        files.push({
-          key: `sessions/${workspace.id}/${basename(thread.sessionFilePath)}`,
-          path: thread.sessionFilePath,
-          content,
-          updatedAt: thread.updatedAt,
-        });
-      } catch {
-        // Skip unreadable session files without breaking the whole sync.
-      }
-    }
-  }
-  return files;
-}
-
-function metadataSnapshot(database: KipDatabase): string {
-  return JSON.stringify({
-    workspaces: database.listWorkspaces(),
-    threads: database.db.query("SELECT * FROM threads").all(),
-    providers: database.listProviders(),
-    settings: {
-      theme: database.getSetting("theme", "system"),
-      approvalPolicy: database.getSetting("approvalPolicy", "read-only-auto"),
-      defaultProvider: database.getSetting("defaultProvider", ""),
-      defaultModelId: database.getSetting("defaultModelId", ""),
-      defaultThinkingLevel: database.getSetting("defaultThinkingLevel", "medium"),
-      sidebarCollapsed: database.getSetting("sidebarCollapsed", false),
-    },
-    exportedAt: Date.now(),
-  });
 }
 
 export async function triggerS3Sync(database: KipDatabase): Promise<SyncResult> {
@@ -219,61 +213,6 @@ export async function triggerS3Sync(database: KipDatabase): Promise<SyncResult> 
   return { pushed, pulled, syncedAt: manifest.syncedAt };
 }
 
-function mergeSnapshot(
-  database: KipDatabase,
-  snapshot: {
-    workspaces?: unknown[];
-    threads?: unknown[];
-  },
-): number {
-  let merged = 0;
-  const workspaceMap = new Map<string, string>();
-  for (const raw of snapshot.workspaces ?? []) {
-    const workspace = raw as { id?: string; name?: string; rootPath?: string };
-    if (!workspace.name || !workspace.rootPath) continue;
-    if (!existsSync(workspace.rootPath)) continue;
-    const stored = database.upsertWorkspace(
-      workspace.id ?? crypto.randomUUID(),
-      workspace.name,
-      workspace.rootPath,
-    );
-    if (workspace.id) workspaceMap.set(workspace.id, stored.id);
-  }
-  for (const raw of snapshot.threads ?? []) {
-    const row = raw as {
-      id?: string;
-      workspace_id?: string;
-      title?: string;
-      session_file_path?: string;
-      model_provider?: string;
-      model_id?: string;
-      thinking_level?: string;
-      updated_at?: number;
-    };
-    if (!row.id || !row.workspace_id || !row.title) continue;
-    const mappedId = workspaceMap.get(row.workspace_id);
-    const workspace = mappedId ? database.getWorkspace(mappedId) : database.getWorkspace(row.workspace_id);
-    if (!workspace) continue;
-    if (database.getThread(row.id)) continue;
-    if (!row.session_file_path) continue;
-    const directory = getSessionDir(workspace.id);
-    mkdirSync(directory, { recursive: true });
-    const target = join(directory, basename(row.session_file_path));
-    if (!existsSync(target)) continue;
-    database.createThread({
-      id: row.id,
-      workspaceId: workspace.id,
-      title: row.title,
-      sessionFilePath: target,
-      modelProvider: row.model_provider ?? "",
-      modelId: row.model_id ?? "",
-      thinkingLevel: (row.thinking_level ?? "medium") as never,
-    });
-    merged += 1;
-  }
-  return merged;
-}
-
 export function countLocalSessions(): number {
   const root = join(process.env.KIP_DATA_DIR ?? `${Bun.env.HOME}/.kip`, "sessions");
   if (!existsSync(root)) return 0;
@@ -281,7 +220,9 @@ export function countLocalSessions(): number {
   for (const workspace of readdirSync(root)) {
     const dir = join(root, workspace);
     try {
-      if (statSync(dir).isDirectory()) count += readdirSync(dir).filter((f) => f.endsWith(".jsonl")).length;
+      if (statSync(dir).isDirectory()) {
+        count += readdirSync(dir).filter((f) => f.endsWith(".jsonl")).length;
+      }
     } catch {
       // Ignore directories that disappear during the scan.
     }

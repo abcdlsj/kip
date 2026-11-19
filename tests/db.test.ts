@@ -49,8 +49,12 @@ describe("KipDatabase", () => {
       thinkingLevel: "high",
     });
     expect(thread.thinkingLevel).toBe("high");
-    db.updateThread("th_test", { title: "Refactor parser" });
+    expect(thread.approvalPolicy).toBeNull();
+    db.updateThread("th_test", { title: "Refactor parser", approvalPolicy: "full-auto" });
     expect(db.getThread("th_test")?.title).toBe("Refactor parser");
+    expect(db.getThread("th_test")?.approvalPolicy).toBe("full-auto");
+    db.updateThread("th_test", { approvalPolicy: null });
+    expect(db.getThread("th_test")?.approvalPolicy).toBeNull();
     expect(db.listThreads(workspace.id)).toHaveLength(1);
     db.deleteThread("th_test");
     expect(db.getThread("th_test")).toBeNull();

@@ -14,6 +14,7 @@ import type {
   ToolCallBlock,
 } from "../../../shared/types";
 import { activeLabel } from "../../lib/tool-label";
+import { ThinkingTrace } from "./ThinkingTrace";
 import { ToolStepPill } from "./ToolStepPill";
 
 type WorkBlock = ThinkingBlock | ToolCallBlock;
@@ -55,10 +56,6 @@ export function WorkLog({ blocks, running, approvals, durationMs }: WorkLogProps
     (block) => block.type === "tool_call" && block.status === "denied",
   );
   const toolCount = blocks.filter((block) => block.type === "tool_call").length;
-
-  useEffect(() => {
-    if (pending.length > 0) setOpen(true);
-  }, [pending.length]);
 
   useEffect(() => {
     if (!running) return;
@@ -146,21 +143,7 @@ export function WorkLog({ blocks, running, approvals, durationMs }: WorkLogProps
                   transition={{ delay: Math.min(index, 8) * 0.018, duration: 0.16 }}
                 >
                   {block.type === "thinking" ? (
-                    <div className="my-1">
-                      <div className="flex h-5 items-center gap-1.5 text-[12px] text-[var(--text-muted)]">
-                        <Sparkles size={10} strokeWidth={1.5} />
-                        <span>
-                          {!block.isComplete
-                            ? "Thinking"
-                            : block.durationMs
-                              ? `Thought for ${durationLabel(block.durationMs)}`
-                              : "Thought"}
-                        </span>
-                      </div>
-                      <p className="selectable font-prose whitespace-pre-wrap pb-1 text-[13.5px] leading-[1.65] text-[var(--text-secondary)]">
-                        {block.thinking}
-                      </p>
-                    </div>
+                    <ThinkingTrace block={block} streaming={running && !block.isComplete} />
                   ) : (
                     <ToolStepPill block={block} compact />
                   )}

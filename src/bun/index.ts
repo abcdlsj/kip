@@ -8,7 +8,7 @@ import { ModelRegistry } from "./agent/model-registry";
 import { KipOrchestrator } from "./agent/pi-orchestrator";
 import { createKipRpc } from "./rpc-handler";
 import type { AgentStreamEnvelope } from "../shared/types";
-import { triggerS3Sync } from "./sync/s3-sync";
+import { triggerSync } from "./sync/s3-sync";
 import { NotchIndicator, type NotchState } from "./system/notch";
 import { applyWindowsDpiAwareness } from "./system/windows-dpi";
 
@@ -71,7 +71,7 @@ function trackAttention(payload: AgentStreamEnvelope): void {
   const calls = attention.awaiting.get(threadId) ?? new Set<string>();
   attention.awaiting.set(threadId, calls);
   if (event.kind === "tool_approval_required") calls.add(event.approval.toolCallId);
-  else if (event.kind === "tool_end") calls.delete(event.toolCallId);
+  else if (event.kind === "tool_approved" || event.kind === "tool_end") calls.delete(event.toolCallId);
   else if (event.kind === "turn_complete" || event.kind === "turn_error") {
     calls.clear();
     if (!attention.focused) attention.done.add(threadId);
@@ -88,7 +88,7 @@ streamHolder.send = (payload) => {
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       rpc.send.syncStatus({ state: "running" });
-      void triggerS3Sync(database)
+      void triggerSync(database)
         .then(() => rpc.send.syncStatus({ state: "idle" }))
         .catch((error: unknown) =>
           rpc.send.syncStatus({

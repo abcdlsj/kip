@@ -29,7 +29,8 @@ import {
   exportThreadMarkdown,
   importBackupBundle,
 } from "./sync/exporter";
-import { getSyncConfig, triggerS3Sync, updateSyncConfig } from "./sync/s3-sync";
+import { connectGoogleDrive, disconnectGoogleDrive } from "./sync/gdrive-sync";
+import { getSyncConfig, triggerSync, updateSyncConfig } from "./sync/s3-sync";
 
 export interface RpcDeps {
   database: KipDatabase;
@@ -44,7 +45,7 @@ export function createKipRpc(deps: RpcDeps) {
     () => {};
 
   const rpc = BrowserView.defineRPC<KipRPCSchema>({
-    maxRequestTime: 60_000,
+    maxRequestTime: 180_000,
     handlers: {
       requests: {
         listWorkspaces: async () => {
@@ -108,6 +109,9 @@ export function createKipRpc(deps: RpcDeps) {
         setThinkingLevel: ({ threadId, level }) => {
           deps.orchestrator.setThinkingLevel(threadId, level);
         },
+        setThreadApprovalPolicy: ({ threadId, policy }) => {
+          deps.orchestrator.setThreadApprovalPolicy(threadId, policy);
+        },
         compactThread: async ({ threadId }) => deps.orchestrator.compact(threadId),
         sendPrompt: async (input: SendPromptInput) => {
           void deps.orchestrator.sendPrompt(input).catch((error: unknown) => {
@@ -152,6 +156,9 @@ export function createKipRpc(deps: RpcDeps) {
           for (const [key, value] of Object.entries(patch)) {
             if (value !== undefined) deps.database.setSetting(key, value);
           }
+          if (patch.approvalPolicy !== undefined) {
+            deps.orchestrator.reevaluateApprovals();
+          }
           return settingsSnapshot(deps);
         },
         setProviderApiKey: async ({ provider, apiKey }) => {
@@ -187,10 +194,12 @@ export function createKipRpc(deps: RpcDeps) {
         },
         getSyncConfig: () => getSyncConfig(deps.database),
         updateSyncConfig: (input) => updateSyncConfig(deps.database, input),
+        connectGoogleDrive: (input) => connectGoogleDrive(deps.database, input),
+        disconnectGoogleDrive: () => disconnectGoogleDrive(deps.database),
         triggerSync: async () => {
           sendSync({ state: "running" });
           try {
-            const result = await triggerS3Sync(deps.database);
+            const result = await triggerSync(deps.database);
             sendSync({ state: "idle" });
             return result;
           } catch (error) {
@@ -252,6 +261,7 @@ async function createThread(deps: RpcDeps, input: CreateThreadInput): Promise<Th
     modelProvider: chosenProvider,
     modelId: chosenModel,
     thinkingLevel,
+    approvalPolicy: input.approvalPolicy ?? null,
   });
   return thread;
 }

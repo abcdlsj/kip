@@ -37,6 +37,9 @@ export interface InterceptorOptions {
 
 interface PendingApproval {
   resolve: (decision: { approved: boolean; reason?: string }) => void;
+  risk: "safe" | "standard" | "high-risk";
+  outsideWorkspace: boolean;
+  isMutation: boolean;
 }
 
 interface CallMeta {
@@ -111,6 +114,24 @@ export class ToolInterceptor {
       }
     }
     pending.resolve({ approved, reason: reason?.trim().slice(0, 600) || undefined });
+  }
+
+  /**
+   * Re-checks suspended tool calls against the current policy so relaxing
+   * permissions takes effect immediately without waiting for manual clicks.
+   */
+  reevaluatePending(): string[] {
+    const policy =
+      typeof this.options.policy === "function" ? this.options.policy() : this.options.policy;
+    const approvedIds: string[] = [];
+    for (const [toolCallId, pending] of this.pending) {
+      if (!needsApproval(policy, pending.risk, pending.outsideWorkspace, pending.isMutation)) {
+        this.pending.delete(toolCallId);
+        pending.resolve({ approved: true });
+        approvedIds.push(toolCallId);
+      }
+    }
+    return approvedIds;
   }
 
   cancelAll(reason: string): void {
@@ -190,7 +211,7 @@ export class ToolInterceptor {
     if (!mustAsk) return;
 
     const decision = await new Promise<{ approved: boolean; reason?: string }>((resolve) => {
-      this.pending.set(toolCallId, { resolve });
+      this.pending.set(toolCallId, { resolve, risk, outsideWorkspace, isMutation });
       signal?.addEventListener(
         "abort",
         () => {

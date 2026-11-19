@@ -23,6 +23,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type {
   AgentStreamEvent,
+  ApprovalPolicy,
   ChatTurn,
   ContextUsage,
   RunChanges,
@@ -384,7 +385,18 @@ export class KipOrchestrator {
     reason?: string,
   ): void {
     const active = this.sessions.get(threadId);
-    active?.interceptor.resolveApproval(toolCallId, approved, rememberForSession, reason);
+    if (!active) return;
+    active.interceptor.resolveApproval(toolCallId, approved, rememberForSession, reason);
+    const block = findToolBlock(active.currentTurn, toolCallId);
+    if (block && block.status === "awaiting_approval") {
+      block.status = approved ? "running" : "denied";
+    }
+    this.emit(threadId, {
+      kind: "tool_approved",
+      turnId: active.currentTurn?.id ?? "",
+      toolCallId,
+      approved,
+    });
   }
 
   async updateThreadModel(threadId: string, provider: string, modelId: string): Promise<void> {
@@ -400,6 +412,29 @@ export class KipOrchestrator {
     this.database.updateThread(threadId, { thinkingLevel: level });
     const active = this.sessions.get(threadId);
     if (active) active.session.setThinkingLevel(level);
+  }
+
+  setThreadApprovalPolicy(threadId: string, policy: ApprovalPolicy | null): void {
+    this.database.updateThread(threadId, { approvalPolicy: policy });
+    this.reevaluateApprovals(threadId);
+  }
+
+  reevaluateApprovals(threadId?: string): void {
+    const targets = threadId
+      ? [this.sessions.get(threadId)].filter((s): s is ActiveSession => Boolean(s))
+      : [...this.sessions.values()];
+    for (const active of targets) {
+      const approved = active.interceptor.reevaluatePending();
+      for (const toolCallId of approved) {
+        const block = findToolBlock(active.currentTurn, toolCallId);
+        if (block) block.status = "running";
+        this.emit(active.threadId, {
+          kind: "tool_approved",
+          turnId: active.currentTurn?.id ?? "",
+          toolCallId,
+        });
+      }
+    }
   }
 
   async shutdown(): Promise<void> {
@@ -436,7 +471,9 @@ export class KipOrchestrator {
     const interceptor = new ToolInterceptor({
       workspaceRoot: workspace.rootPath,
       threadId,
-      policy: () => this.database.getSetting("approvalPolicy", "read-only-auto"),
+      policy: () =>
+        this.database.getThread(threadId)?.approvalPolicy ??
+        this.database.getSetting("approvalPolicy", "read-only-auto"),
       requestApproval: (payload) => this.requestApproval(threadId, payload),
       beforeTool: async () => {
         await this.sessions.get(threadId)?.runBefore;
