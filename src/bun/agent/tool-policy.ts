@@ -6,6 +6,7 @@ import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { diffLines } from "diff";
+import type { ApprovalPolicy } from "../../shared/types";
 
 export type CommandRisk = "safe" | "standard" | "high-risk";
 
@@ -206,11 +207,12 @@ export function commandPathsOutsideRoot(command: string, workspaceRoot: string):
 }
 
 export function needsApproval(
-  policy: "read-only-auto" | "full-auto" | "strict",
+  policy: ApprovalPolicy,
   risk: CommandRisk,
   outsideWorkspace: boolean,
   isMutation: boolean,
 ): boolean {
+  if (policy === "yolo") return false;
   if (outsideWorkspace) return true;
   if (policy === "full-auto") return false;
   if (policy === "strict") return true;

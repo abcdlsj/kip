@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
-import type { ToolApprovalPayload } from "../src/shared/types";
+import type { ApprovalPolicy, ToolApprovalPayload } from "../src/shared/types";
 import { ToolInterceptor } from "../src/bun/agent/tool-interceptor";
 
 let roots: string[] = [];
@@ -38,7 +38,7 @@ function fakeTool(
 function interceptor(
   root: string,
   approvals: ToolApprovalPayload[],
-  policy: "read-only-auto" | "full-auto" | "strict" = "read-only-auto",
+  policy: ApprovalPolicy = "read-only-auto",
 ): ToolInterceptor {
   return new ToolInterceptor({
     workspaceRoot: root,
@@ -288,5 +288,47 @@ describe("tool interceptor", () => {
     // Outside-workspace calls still require explicit approval even in full-auto.
     guard.resolveApproval("e2", false);
     await expect(pendingOutside).rejects.toThrow(/denied/i);
+  });
+
+  test("yolo runs mutations, high-risk, and outside-workspace calls without approval", async () => {
+    const root = workspace();
+    const outside = join(tmpdir(), `kip-yolo-${Date.now()}.txt`);
+    const approvals: ToolApprovalPayload[] = [];
+    const guard = interceptor(root, approvals, "yolo");
+    const bash = guard.wrap(fakeTool("bash"));
+    const read = guard.wrap(fakeTool("read"));
+    const write = guard.wrap(fakeTool("write"));
+
+    await bash.execute("y1", { command: "rm -rf dist" } as never, undefined, undefined, {} as never);
+    await write.execute("y2", { path: "a.ts", content: "hi" } as never, undefined, undefined, {} as never);
+    await read.execute("y3", { path: outside } as never, undefined, undefined, {} as never);
+    expect(approvals).toHaveLength(0);
+
+    // Sensitive credential paths remain hard-blocked even in yolo mode.
+    await expect(
+      read.execute("y4", { path: join(homedir(), ".ssh", "id_rsa") } as never, undefined, undefined, {} as never),
+    ).rejects.toThrow(/denied|blocked/i);
+  });
+
+  test("reevaluatePending approves pending outside-workspace calls when switching to yolo", async () => {
+    const root = workspace();
+    const approvals: ToolApprovalPayload[] = [];
+    let policy: ApprovalPolicy = "full-auto";
+    const guard = new ToolInterceptor({
+      workspaceRoot: root,
+      threadId: "th_test",
+      policy: () => policy,
+      requestApproval: (payload) => approvals.push(payload),
+    });
+    const read = guard.wrap(fakeTool("read"));
+    const outside = join(tmpdir(), `kip-yolo-out-${Date.now()}.txt`);
+    const pendingOutside = read.execute("y_out", { path: outside } as never, undefined, undefined, {} as never);
+    await Bun.sleep(5);
+    expect(approvals).toHaveLength(1);
+
+    policy = "yolo";
+    const approved = guard.reevaluatePending();
+    expect(approved).toEqual(["y_out"]);
+    await expect(pendingOutside).resolves.toBeDefined();
   });
 });

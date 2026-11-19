@@ -77,6 +77,13 @@ describe("approval policy", () => {
   test("strict asks for every call", () => {
     expect(needsApproval("strict", "safe", false, false)).toBe(true);
   });
+
+  test("yolo never asks for approval, even outside the workspace", () => {
+    expect(needsApproval("yolo", "safe", false, false)).toBe(false);
+    expect(needsApproval("yolo", "standard", false, true)).toBe(false);
+    expect(needsApproval("yolo", "high-risk", false, true)).toBe(false);
+    expect(needsApproval("yolo", "high-risk", true, true)).toBe(false);
+  });
 });
 
 describe("diff and labels", () => {

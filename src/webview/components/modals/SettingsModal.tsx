@@ -143,7 +143,13 @@ export function SettingsModal() {
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-[12.5px] font-medium">{policy.title}</span>
+                        <span
+                          className={`text-[12.5px] font-medium ${
+                            policy.id === "yolo" ? "text-[var(--status-err)]" : ""
+                          }`}
+                        >
+                          {policy.title}
+                        </span>
                         {settings?.approvalPolicy === policy.id && (
                           <span className="text-[11px] text-[var(--text-muted)]">active</span>
                         )}
@@ -155,8 +161,8 @@ export function SettingsModal() {
                   ))}
                 </div>
                 <p className="mt-4 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
-                  Access outside the workspace always requires approval, and paths under ~/.ssh,
-                  ~/.aws, ~/.gnupg, and the Kip credential store are always blocked.
+                  Outside-workspace access still requires approval unless YOLO is enabled. Paths
+                  under ~/.ssh, ~/.aws, ~/.gnupg, and the Kip credential store are always blocked.
                 </p>
               </div>
             )}
@@ -174,18 +180,26 @@ const POLICIES: Array<{
   description: string;
 }> = [
   {
+    id: "strict",
+    title: "Strict",
+    description: "Every file read, edit, and command waits for your approval.",
+  },
+  {
     id: "read-only-auto",
     title: "Read-only auto",
-    description: "Reads and safe inspection run immediately. Writes and commands ask first.",
+    description:
+      "Workspace reads and safe commands run automatically. Edits, other commands, and outside-workspace access ask.",
   },
   {
     id: "full-auto",
     title: "Full auto",
-    description: "All in-workspace work runs without prompts. Outside access still asks.",
+    description:
+      "All reads, edits, and commands inside the workspace run automatically. Outside-workspace access still asks.",
   },
   {
-    id: "strict",
-    title: "Strict",
-    description: "Every tool call waits for an explicit approval.",
+    id: "yolo",
+    title: "YOLO",
+    description:
+      "Never asks for approval — runs all edits, commands, and outside-workspace access automatically.",
   },
 ];

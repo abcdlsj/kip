@@ -4,7 +4,7 @@
  */
 
 export type ThemeMode = "light" | "dark" | "system";
-export type ApprovalPolicy = "read-only-auto" | "full-auto" | "strict";
+export type ApprovalPolicy = "read-only-auto" | "full-auto" | "strict" | "yolo";
 export type ThinkingLevel = "off" | "low" | "medium" | "high";
 export type ProviderProtocol =
   | "openai-completions"

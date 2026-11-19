@@ -1,5 +1,6 @@
 import {
   FileDown,
+  Flame,
   Minimize2,
   type LucideIcon,
   Settings,
@@ -15,9 +16,10 @@ export type SlashCommandId =
   | "new"
   | "compact"
   | "undo"
+  | "strict"
   | "read-only-auto"
   | "full-auto"
-  | "strict"
+  | "yolo"
   | "export"
   | "settings";
 
@@ -55,25 +57,32 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     needsThread: true,
   },
   {
+    id: "strict",
+    description: "Ask before every file read, edit, and command",
+    icon: ShieldCheck,
+    group: "Approval",
+    policy: "strict",
+  },
+  {
     id: "read-only-auto",
-    description: "Ask before writes and commands",
+    description: "Auto-run workspace reads; ask for edits, commands, and outside access",
     icon: ShieldHalf,
     group: "Approval",
     policy: "read-only-auto",
   },
   {
     id: "full-auto",
-    description: "Work inside the workspace without asking",
+    description: "Auto-run inside workspace; still ask for outside-workspace access",
     icon: ShieldOff,
     group: "Approval",
     policy: "full-auto",
   },
   {
-    id: "strict",
-    description: "Ask before every tool call",
-    icon: ShieldCheck,
+    id: "yolo",
+    description: "Never ask for approval — run everything automatically",
+    icon: Flame,
     group: "Approval",
-    policy: "strict",
+    policy: "yolo",
   },
   { id: "settings", description: "Open settings", icon: Settings, group: "App" },
 ];
@@ -148,9 +157,21 @@ export function SlashMenu({ commands, selected, grouped, policy, onHover, onRun 
               <Icon
                 size={13}
                 strokeWidth={1.5}
-                className={`shrink-0 ${active ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]"}`}
+                className={`shrink-0 ${
+                  command.policy === "yolo"
+                    ? "text-[var(--status-err)]"
+                    : active
+                      ? "text-[var(--text-primary)]"
+                      : "text-[var(--text-muted)]"
+                }`}
               />
-              <span className="shrink-0 font-[var(--font-mono)] text-[12.5px] text-[var(--text-primary)]">
+              <span
+                className={`shrink-0 font-[var(--font-mono)] text-[12.5px] ${
+                  command.policy === "yolo"
+                    ? "text-[var(--status-err)]"
+                    : "text-[var(--text-primary)]"
+                }`}
+              >
                 /{command.id}
               </span>
               <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--text-muted)]">
