@@ -189,6 +189,42 @@ export class KipDatabase {
     if (!columns.includes("approval_policy")) {
       this.db.exec("ALTER TABLE threads ADD COLUMN approval_policy TEXT DEFAULT NULL");
     }
+
+    // Earlier builds hardcoded supportsVision: false everywhere with no UI toggle.
+    // Backfill existing provider models once so vision works out of the box while
+    // respecting any explicit false saved afterwards.
+    const migratedVision = this.db
+      .query<{ value_json: string }, [string]>("SELECT value_json FROM kv_settings WHERE key = ?")
+      .get("migration.defaultVisionV1");
+    if (!migratedVision) {
+      const rows = this.db
+        .query<{ id: string; models_json: string }, []>(
+          "SELECT id, models_json FROM custom_providers",
+        )
+        .all();
+      const update = this.db.prepare(
+        "UPDATE custom_providers SET models_json = ? WHERE id = ?",
+      );
+      for (const row of rows) {
+        const models = this.parseModels(row.models_json);
+        let changed = false;
+        const next = models.map((model) => {
+          if (model.supportsVision === false) {
+            changed = true;
+            return { ...model, supportsVision: true };
+          }
+          return model;
+        });
+        if (changed) {
+          update.run(JSON.stringify(next), row.id);
+        }
+      }
+      this.db
+        .prepare(
+          "INSERT OR REPLACE INTO kv_settings (key, value_json, updated_at) VALUES (?, ?, ?)",
+        )
+        .run("migration.defaultVisionV1", JSON.stringify(true), Date.now());
+    }
   }
 
   private seedSettings(): void {

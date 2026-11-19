@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Check, CloudDownload, Loader2, Plus, Trash2, Zap } from "lucide-react";
+import { Check, CloudDownload, Eye, Loader2, Plus, Sparkles, Trash2, Zap } from "lucide-react";
 import type { ProviderModel, ProviderProtocol, ProviderRecord } from "../../../shared/types";
 import { displayModelName } from "../../lib/model-name";
 import { request } from "../../rpc-client";
@@ -57,27 +57,13 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
   const save = async () => {
     if (!form) return;
     const id = (form.id || form.displayName).trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
-    const modelIds = splitIds(form.modelIds);
-    if (!id || !form.baseUrl.trim() || modelIds.length === 0) {
+    const models = resolveFormModels(form.modelIds, form.models);
+    if (!id || !form.baseUrl.trim() || models.length === 0) {
       setStatus("A name, base URL, and at least one model are required.");
       return;
     }
     setBusy("save");
     try {
-      const existing = new Map(form.models.map((model) => [model.id, model]));
-      const models: ProviderModel[] = modelIds.map((modelId) => {
-        const current = existing.get(modelId);
-        return (
-          current ?? {
-            id: modelId,
-            displayName: displayModelName(modelId),
-            contextWindow: 200_000,
-            maxOutputTokens: 65_536,
-            supportsVision: false,
-            supportsReasoning: false,
-          }
-        );
-      });
       await request("saveProvider", {
         id,
         displayName: form.displayName.trim() || id,
@@ -94,6 +80,18 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
     } finally {
       setBusy(null);
     }
+  };
+
+  const toggleCapability = (
+    modelId: string,
+    field: "supportsVision" | "supportsReasoning",
+  ) => {
+    if (!form) return;
+    const resolved = resolveFormModels(form.modelIds, form.models);
+    const nextModels = resolved.map((model) =>
+      model.id === modelId ? { ...model, [field]: !model[field] } : model,
+    );
+    setForm({ ...form, models: nextModels });
   };
 
   const fetchModels = async () => {
@@ -287,6 +285,55 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                 />
               </Field>
             </div>
+            {(() => {
+              const resolvedModels = resolveFormModels(form.modelIds, form.models);
+              if (resolvedModels.length === 0) return null;
+              return (
+                <div className="col-span-2">
+                  <span className="mb-1 block text-[12px] font-medium text-[var(--text-secondary)]">
+                    Model capabilities
+                  </span>
+                  <div className="max-h-36 space-y-1 overflow-y-auto rounded-[8px] border hairline bg-[var(--bg-canvas)] p-2">
+                    {resolvedModels.map((model) => (
+                      <div
+                        key={model.id}
+                        className="flex items-center justify-between gap-2 rounded-[6px] px-1.5 py-1"
+                      >
+                        <span className="min-w-0 truncate font-[var(--font-mono)] text-[11.5px] text-[var(--text-primary)]">
+                          {model.id}
+                        </span>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => toggleCapability(model.id, "supportsVision")}
+                            className={`flex h-6 items-center gap-1 rounded-[6px] border px-2 text-[11px] transition-colors ${
+                              model.supportsVision
+                                ? "border-[var(--border-focus)] bg-[var(--bg-subtle)] font-medium text-[var(--text-primary)]"
+                                : "hairline text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                            }`}
+                          >
+                            <Eye size={11} strokeWidth={1.5} />
+                            Vision
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleCapability(model.id, "supportsReasoning")}
+                            className={`flex h-6 items-center gap-1 rounded-[6px] border px-2 text-[11px] transition-colors ${
+                              model.supportsReasoning
+                                ? "border-[var(--border-focus)] bg-[var(--bg-subtle)] font-medium text-[var(--text-primary)]"
+                                : "hairline text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                            }`}
+                          >
+                            <Sparkles size={11} strokeWidth={1.5} />
+                            Reasoning
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <div className="mt-3 flex items-center gap-2">
             <button
@@ -323,6 +370,23 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
       )}
     </div>
   );
+}
+
+function resolveFormModels(modelIdsText: string, existingModels: ProviderModel[]): ProviderModel[] {
+  const existing = new Map(existingModels.map((model) => [model.id, model]));
+  return splitIds(modelIdsText).map((modelId) => {
+    const current = existing.get(modelId);
+    return (
+      current ?? {
+        id: modelId,
+        displayName: displayModelName(modelId),
+        contextWindow: 200_000,
+        maxOutputTokens: 65_536,
+        supportsVision: true,
+        supportsReasoning: false,
+      }
+    );
+  });
 }
 
 function splitIds(value: string): string[] {

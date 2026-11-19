@@ -19,6 +19,7 @@ const modelIds = (process.env.KIP_SEED_MODELS ?? "llama3.1")
   .map((value) => value.trim())
   .filter(Boolean);
 const contextWindow = Number(process.env.KIP_SEED_CONTEXT_WINDOW ?? 200_000);
+const vision = process.env.KIP_SEED_VISION !== "0";
 const reasoning = process.env.KIP_SEED_REASONING === "1";
 
 let apiKey = process.env.KIP_SEED_API_KEY ?? "";
@@ -48,7 +49,7 @@ db.saveProvider({
     displayName: modelId.split("/").pop() ?? modelId,
     contextWindow,
     maxOutputTokens: 65_536,
-    supportsVision: false,
+    supportsVision: vision,
     supportsReasoning: reasoning,
   })),
 });

@@ -36,7 +36,7 @@ export function mapProviderModels(
     api: protocol,
     baseUrl: normalizeBaseUrl(modelContextBase(baseUrl), protocol),
     reasoning: model.supportsReasoning,
-    input: model.supportsVision ? ["text", "image"] : ["text"],
+    input: model.supportsVision !== false ? ["text", "image"] : ["text"],
     cost: { ...ZERO_COST },
     contextWindow: model.contextWindow || 200_000,
     maxTokens: model.maxOutputTokens || 65_536,
@@ -47,9 +47,91 @@ function modelContextBase(baseUrl: string): string {
   return baseUrl;
 }
 
+interface RawModelEntry {
+  id?: string;
+  name?: string;
+  context_window?: number;
+  context_length?: number;
+  supportsVision?: boolean;
+  supports_vision?: boolean;
+  vision?: boolean;
+  supportsReasoning?: boolean;
+  supports_reasoning?: boolean;
+  reasoning?: boolean;
+  input_modalities?: unknown;
+  modalities?: unknown;
+  supported_parameters?: unknown;
+  architecture?: {
+    input_modalities?: unknown;
+    modality?: unknown;
+  };
+  capabilities?: {
+    vision?: boolean;
+    image?: boolean;
+    reasoning?: boolean;
+  };
+}
+
 interface RawModelsResponse {
-  data?: Array<{ id?: string; name?: string; context_window?: number; context_length?: number }>;
-  models?: Array<{ id?: string; name?: string; context_window?: number }>;
+  data?: RawModelEntry[];
+  models?: RawModelEntry[];
+}
+
+function asStringList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const items = value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  return items.length > 0 ? items : null;
+}
+
+function inferRemoteVision(entry: RawModelEntry): boolean {
+  const explicit = [
+    entry.supportsVision,
+    entry.supports_vision,
+    entry.vision,
+    entry.capabilities?.vision,
+    entry.capabilities?.image,
+  ].find((value): value is boolean => typeof value === "boolean");
+  if (explicit !== undefined) return explicit;
+
+  const modalities =
+    asStringList(entry.architecture?.input_modalities) ??
+    asStringList(entry.input_modalities) ??
+    asStringList(entry.modalities) ??
+    (entry.modalities && typeof entry.modalities === "object"
+      ? asStringList((entry.modalities as { input?: unknown }).input)
+      : null);
+  if (modalities) {
+    return modalities.some((item) => {
+      const normalized = item.toLowerCase();
+      return normalized.includes("image") || normalized.includes("vision");
+    });
+  }
+
+  if (typeof entry.architecture?.modality === "string" && entry.architecture.modality.trim()) {
+    const inputSide = (entry.architecture.modality.split("->")[0] ?? "").toLowerCase();
+    return inputSide.includes("image") || inputSide.includes("vision");
+  }
+
+  // Most /models endpoints omit capability metadata; default to true so modern
+  // multimodal models are not silently stripped of images before hitting the API.
+  return true;
+}
+
+function inferRemoteReasoning(entry: RawModelEntry): boolean {
+  const explicit = [
+    entry.supportsReasoning,
+    entry.supports_reasoning,
+    entry.reasoning,
+    entry.capabilities?.reasoning,
+  ].find((value): value is boolean => typeof value === "boolean");
+  if (explicit !== undefined) return explicit;
+
+  const params = asStringList(entry.supported_parameters);
+  if (params) {
+    return params.some((item) => item.toLowerCase() === "reasoning");
+  }
+
+  return false;
 }
 
 export class ModelRegistry {
@@ -272,16 +354,16 @@ export async function fetchRemoteModels(
     const body = (await response.json()) as RawModelsResponse;
     const entries = body.data ?? body.models ?? [];
     const models: ProviderModel[] = entries
-      .filter((entry): entry is { id: string; name?: string; context_window?: number } =>
+      .filter((entry): entry is RawModelEntry & { id: string } =>
         typeof entry.id === "string" && entry.id.length > 0,
       )
       .map((entry) => ({
         id: entry.id,
         displayName: entry.name || displayModelName(entry.id),
-        contextWindow: entry.context_window ?? 200_000,
+        contextWindow: entry.context_window ?? entry.context_length ?? 200_000,
         maxOutputTokens: 65_536,
-        supportsVision: false,
-        supportsReasoning: false,
+        supportsVision: inferRemoteVision(entry),
+        supportsReasoning: inferRemoteReasoning(entry),
       }));
     if (models.length === 0) return { models, error: "No models returned" };
     return { models };

@@ -82,4 +82,52 @@ describe("KipDatabase", () => {
     db.deleteProvider("local");
     expect(db.getProvider("local")).toBeNull();
   });
+
+  test("backfills legacy supportsVision=false once and preserves explicit opt-outs afterwards", () => {
+    db.saveProvider({
+      id: "legacy",
+      displayName: "Legacy",
+      protocol: "openai-completions",
+      baseUrl: "https://example.invalid/v1",
+      models: [
+        {
+          id: "deepseek/deepseek-v4.1-flash",
+          displayName: "DeepSeek V4.1 Flash",
+          contextWindow: 1_000_000,
+          maxOutputTokens: 65_536,
+          supportsVision: false,
+          supportsReasoning: true,
+        },
+      ],
+    });
+    // Simulate a pre-migration database that never ran defaultVisionV1.
+    db.db.prepare("DELETE FROM kv_settings WHERE key = ?").run("migration.defaultVisionV1");
+    db.close();
+
+    db = new KipDatabase();
+    expect(db.getProvider("legacy")?.models[0]?.supportsVision).toBe(true);
+    expect(db.getProvider("legacy")?.models[0]?.supportsReasoning).toBe(true);
+
+    // Explicit opt-out after migration must persist across restarts.
+    db.saveProvider({
+      id: "legacy",
+      displayName: "Legacy",
+      protocol: "openai-completions",
+      baseUrl: "https://example.invalid/v1",
+      models: [
+        {
+          id: "text-only",
+          displayName: "Text Only",
+          contextWindow: 128_000,
+          maxOutputTokens: 8_192,
+          supportsVision: false,
+          supportsReasoning: false,
+        },
+      ],
+    });
+    db.close();
+
+    db = new KipDatabase();
+    expect(db.getProvider("legacy")?.models[0]?.supportsVision).toBe(false);
+  });
 });
