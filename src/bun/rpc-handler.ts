@@ -31,11 +31,13 @@ import {
 } from "./sync/exporter";
 import { connectGoogleDrive, disconnectGoogleDrive } from "./sync/gdrive-sync";
 import { getSyncConfig, triggerSync, updateSyncConfig } from "./sync/s3-sync";
+import type { UpdateChecker } from "./system/update-checker";
 
 export interface RpcDeps {
   database: KipDatabase;
   registry: ModelRegistry;
   orchestrator: KipOrchestrator;
+  updateChecker: UpdateChecker;
   windowRef: { current: BrowserWindow | null };
 }
 
@@ -226,6 +228,13 @@ export function createKipRpc(deps: RpcDeps) {
             else window.maximize();
           } else window.close();
         },
+        getUpdateStatus: () => deps.updateChecker.statusSnapshot(),
+        openUpdatePage: () => {
+          const { releaseUrl } = deps.updateChecker.statusSnapshot();
+          if (!releaseUrl) return { opened: false };
+          Utils.openExternal(releaseUrl);
+          return { opened: true };
+        },
       },
       messages: {},
     },
@@ -233,7 +242,6 @@ export function createKipRpc(deps: RpcDeps) {
 
   sendStream = (payload) => rpc.send.agentStreamEvent(payload);
   sendSync = (payload) => rpc.send.syncStatus(payload);
-  void Utils;
   return rpc;
 }
 

@@ -4,7 +4,7 @@
  */
 import { Electroview } from "electrobun/view";
 import type { KipRPCSchema } from "../shared/rpc-schema";
-import type { AgentStreamEnvelope } from "../shared/types";
+import type { AgentStreamEnvelope, UpdateStatus } from "../shared/types";
 
 type StreamListener = (payload: AgentStreamEnvelope) => void;
 type SyncListener = (payload: { state: "idle" | "running" | "error"; message?: string }) => void;
@@ -12,6 +12,8 @@ type SyncListener = (payload: { state: "idle" | "running" | "error"; message?: s
 type FocusListener = (payload: { threadId: string }) => void;
 
 type WindowStateListener = (payload: { maximized: boolean }) => void;
+
+type UpdateListener = (payload: UpdateStatus) => void;
 
 const streamListeners = new Set<StreamListener>();
 const windowStateListeners = new Set<WindowStateListener>();
@@ -23,6 +25,7 @@ export function onFocusThread(listener: FocusListener): () => void {
   return () => focusListeners.delete(listener);
 }
 const syncListeners = new Set<SyncListener>();
+const updateListeners = new Set<UpdateListener>();
 
 /** Window chrome state, so the in-app buttons can swap the maximize icon. */
 export function onWindowState(listener: WindowStateListener): () => void {
@@ -38,6 +41,12 @@ export function onAgentStream(listener: StreamListener): () => void {
 export function onSyncStatus(listener: SyncListener): () => void {
   syncListeners.add(listener);
   return () => syncListeners.delete(listener);
+}
+
+/** The Bun side pushes the result of each background update check. */
+export function onUpdateStatus(listener: UpdateListener): () => void {
+  updateListeners.add(listener);
+  return () => updateListeners.delete(listener);
 }
 
 const rpc = Electroview.defineRPC<KipRPCSchema>({
@@ -56,6 +65,9 @@ const rpc = Electroview.defineRPC<KipRPCSchema>({
       },
       windowState: (payload) => {
         for (const listener of windowStateListeners) listener(payload);
+      },
+      updateStatus: (payload) => {
+        for (const listener of updateListeners) listener(payload);
       },
     },
   },

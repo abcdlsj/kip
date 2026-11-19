@@ -6,6 +6,7 @@ import type {
   SettingsSnapshot,
   ThemeMode,
   ThinkingLevel,
+  UpdateStatus,
 } from "../../shared/types";
 import { request } from "../rpc-client";
 
@@ -23,6 +24,8 @@ interface UiState {
   syncMessage: string | null;
   /** Maximized state of the window, for the in-app buttons off macOS. */
   windowMaximized: boolean;
+  /** Last known update check result; null until the first reply arrives. */
+  update: UpdateStatus | null;
   /** Unsent composer text per thread; NEW_THREAD_DRAFT holds text before a thread exists. */
   drafts: Record<string, string>;
   setDraft: (key: string, draft: string) => void;
@@ -38,6 +41,8 @@ interface UiState {
   setCommandOpen: (open: boolean) => void;
   setSyncState: (state: "idle" | "running" | "error", message?: string) => void;
   setWindowMaximized: (maximized: boolean) => void;
+  setUpdate: (update: UpdateStatus) => void;
+  openUpdatePage: () => Promise<void>;
 }
 
 function resolvedTheme(theme: ThemeMode): "light" | "dark" {
@@ -65,6 +70,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   syncState: "idle",
   syncMessage: null,
   windowMaximized: false,
+  update: null,
   drafts: {},
 
   setDraft: (key, draft) =>
@@ -85,6 +91,9 @@ export const useUiStore = create<UiState>((set, get) => ({
     });
     const providers = await request("listProviders", undefined);
     set({ providers });
+    // The first check may finish before the view exists; ask once on boot.
+    const update = await request("getUpdateStatus", undefined);
+    set({ update });
     if (!systemListenerAttached) {
       systemListenerAttached = true;
       window
@@ -143,4 +152,10 @@ export const useUiStore = create<UiState>((set, get) => ({
   setSyncState: (syncState, syncMessage) => set({ syncState, syncMessage: syncMessage ?? null }),
 
   setWindowMaximized: (windowMaximized) => set({ windowMaximized }),
+
+  setUpdate: (update) => set({ update }),
+
+  openUpdatePage: async () => {
+    await request("openUpdatePage", undefined);
+  },
 }));

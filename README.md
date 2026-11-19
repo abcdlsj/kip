@@ -228,6 +228,14 @@ by design.
 The same panel exports a single thread as Markdown, a full JSON backup, and can import
 that backup on another machine.
 
+## Updates
+
+Kip checks GitHub Releases for newer stable builds eight seconds after launch and every
+six hours after that (ETag-aware, one request per check). When a newer version exists, a
+single small arrow appears at the bottom of the sidebar; clicking it opens the release
+page. Nothing is downloaded and Kip never restarts itself, so the Homebrew cask stays the
+single install path. Checks are skipped on the `dev` channel.
+
 ## Development notes
 
 - The RPC contract is the single source of truth: `src/shared/rpc-schema.ts`.
@@ -252,7 +260,7 @@ bun run build
 
 - macOS builds are unsigned and not notarized. Signing is intentionally left to the
   distributor.
-- There is no built-in updater yet.
+- Updates are detected but not installed by Kip itself; see [Updates](#updates).
 - The macOS 13 fallback bundles CEF, which increases the app size. macOS 14+ can switch
   to the native WebKit renderer by setting `defaultRenderer: "native"` in
   `electrobun.config.ts` and `renderer: "native"` in `src/bun/index.ts`.

@@ -11,6 +11,7 @@ import type { AgentStreamEnvelope } from "../shared/types";
 import { triggerSync } from "./sync/s3-sync";
 import { NotchIndicator, type NotchState } from "./system/notch";
 import { applyWindowsDpiAwareness } from "./system/windows-dpi";
+import { UpdateChecker } from "./system/update-checker";
 
 // Must run before the first window exists, so it cannot move below.
 applyWindowsDpiAwareness();
@@ -34,7 +35,13 @@ const orchestrator = new KipOrchestrator(database, registry, (threadId, event) =
 });
 
 const windowRef: { current: BrowserWindow | null } = { current: null };
-const rpc = createKipRpc({ database, registry, orchestrator, windowRef });
+const updateChecker = new UpdateChecker({
+  // Dev bundles carry a stale version.json, so local builds stay quiet unless
+  // KIP_UPDATE_CURRENT_VERSION pins the version explicitly.
+  currentVersion: process.env.KIP_UPDATE_CURRENT_VERSION ?? (await Updater.localInfo.version()),
+  onStatus: (status) => rpc.send.updateStatus(status),
+});
+const rpc = createKipRpc({ database, registry, orchestrator, updateChecker, windowRef });
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 /**
  * Background attention state for the notch indicator. Approvals outrank
@@ -162,6 +169,12 @@ const window = new BrowserWindow({
   frame: { x: 120, y: 90, width: 1180, height: 780 },
 });
 windowRef.current = window;
+const updateChannel = await Updater.localInfo.channel();
+if (updateChannel === "dev" && !process.env.KIP_UPDATE_CURRENT_VERSION) {
+  console.log("Update checks are off for the dev channel.");
+} else {
+  updateChecker.start();
+}
 // Windows and Linux draw their own window buttons, so the view needs to know
 // whether the window is maximized to pick the right icon.
 const pushWindowState = (): void => {

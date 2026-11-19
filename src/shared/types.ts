@@ -241,3 +241,20 @@ export interface CreateThreadInput {
 }
 
 export type WindowAction = "minimize" | "maximize" | "close";
+
+/**
+ * Result of the background GitHub Releases check. `available` drives the single
+ * quiet arrow at the bottom of the sidebar; nothing is downloaded.
+ */
+export interface UpdateStatus {
+  /** Version of the running app, e.g. "0.2.2". */
+  current: string;
+  /** Newer release version without the leading "v", when one exists. */
+  latest: string | null;
+  available: boolean;
+  state: "idle" | "checking" | "available";
+  /** Release page for `latest`, opened from the sidebar arrow. */
+  releaseUrl: string | null;
+  /** Unix ms of the last successful check, or null before the first one. */
+  checkedAt: number | null;
+}

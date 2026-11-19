@@ -22,6 +22,7 @@ import type {
   ThemeMode,
   ThinkingLevel,
   ThreadSummary,
+  UpdateStatus,
   WindowAction,
   Workspace,
 } from "./types";
@@ -158,6 +159,11 @@ export interface KipRPCSchema {
       importBackupBundle: { params: void; response: { importedThreads: number } };
 
       windowControl: { params: { action: WindowAction }; response: void };
+
+      /** Last known result of the background GitHub Releases check. */
+      getUpdateStatus: { params: void; response: UpdateStatus };
+      /** Opens the release page in the default browser. */
+      openUpdatePage: { params: void; response: { opened: boolean } };
     };
     messages: {};
   };
@@ -170,6 +176,8 @@ export interface KipRPCSchema {
       focusThread: { threadId: string };
       /** Window chrome state for the in-app buttons on Windows and Linux. */
       windowState: { maximized: boolean };
+      /** Pushed whenever the update check changes state. */
+      updateStatus: UpdateStatus;
     };
   };
 }

@@ -4,7 +4,7 @@ import { Logo } from "./components/layout/Logo";
 import { CommandPalette } from "./components/modals/CommandPalette";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { stopThread } from "./lib/send";
-import { onAgentStream, onFocusThread, onSyncStatus, onWindowState } from "./rpc-client";
+import { onAgentStream, onFocusThread, onSyncStatus, onUpdateStatus, onWindowState } from "./rpc-client";
 import { useChatStore } from "./stores/chat-store";
 import { useUiStore } from "./stores/ui-store";
 import { useWorkspaceStore } from "./stores/workspace-store";
@@ -72,6 +72,12 @@ export default function App() {
   useEffect(() => {
     return onSyncStatus(({ state, message }) => {
       useUiStore.getState().setSyncState(state, message);
+    });
+  }, []);
+
+  useEffect(() => {
+    return onUpdateStatus((status) => {
+      useUiStore.getState().setUpdate(status);
     });
   }, []);
 

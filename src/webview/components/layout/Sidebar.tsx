@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { AnimatePresence, motion } from "motion/react";
 import {
+  ArrowUpCircle,
   Check,
   ChevronsUpDown,
   FolderClosed,
@@ -21,6 +22,8 @@ export function Sidebar() {
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
   const openSettings = useUiStore((state) => state.openSettings);
+  const update = useUiStore((state) => state.update);
+  const openUpdatePage = useUiStore((state) => state.openUpdatePage);
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const threads = useWorkspaceStore((state) => state.threads);
@@ -249,13 +252,25 @@ export function Sidebar() {
           </div>
 
           <div className="px-2.5 pb-2.5 pt-1">
-            <button
-              onClick={() => openSettings()}
-              className="flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
-            >
-              <Settings size={14} strokeWidth={1.5} className="shrink-0" />
-              Settings
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => openSettings()}
+                className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-[8px] px-2 text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
+              >
+                <Settings size={14} strokeWidth={1.5} className="shrink-0" />
+                Settings
+              </button>
+              {update?.available && (
+                <button
+                  onClick={() => void openUpdatePage()}
+                  title={`Update available: v${update.latest}`}
+                  aria-label={`Update available: v${update.latest}`}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
+                >
+                  <ArrowUpCircle size={14} strokeWidth={1.5} />
+                </button>
+              )}
+            </div>
           </div>
         </>
       )}
