@@ -43,6 +43,7 @@ interface UiState {
   setWindowMaximized: (maximized: boolean) => void;
   setUpdate: (update: UpdateStatus) => void;
   openUpdatePage: () => Promise<void>;
+  restartForUpdate: () => Promise<void>;
 }
 
 function resolvedTheme(theme: ThemeMode): "light" | "dark" {
@@ -157,5 +158,9 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   openUpdatePage: async () => {
     await request("openUpdatePage", undefined);
+  },
+
+  restartForUpdate: async () => {
+    await request("restartForUpdate", undefined);
   },
 }));

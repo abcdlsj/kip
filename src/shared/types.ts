@@ -243,8 +243,15 @@ export interface CreateThreadInput {
 export type WindowAction = "minimize" | "maximize" | "close";
 
 /**
+ * How this copy of Kip was installed, which decides how an update is applied.
+ * `homebrew` points at `brew upgrade --cask kip`, `direct` can replace itself,
+ * `manual` has no writable bundle and falls back to the release page.
+ */
+export type UpdateInstallSource = "homebrew" | "direct" | "manual";
+
+/**
  * Result of the background GitHub Releases check. `available` drives the single
- * quiet arrow at the bottom of the sidebar; nothing is downloaded.
+ * quiet arrow at the bottom of the sidebar.
  */
 export interface UpdateStatus {
   /** Version of the running app, e.g. "0.2.2". */
@@ -252,7 +259,11 @@ export interface UpdateStatus {
   /** Newer release version without the leading "v", when one exists. */
   latest: string | null;
   available: boolean;
-  state: "idle" | "checking" | "available";
+  /** `ready` means a staged bundle waits for the user to restart. */
+  state: "idle" | "checking" | "available" | "downloading" | "ready";
+  installSource: UpdateInstallSource;
+  /** Download progress, 0-100. Only meaningful while `downloading`. */
+  progress: number;
   /** Release page for `latest`, opened from the sidebar arrow. */
   releaseUrl: string | null;
   /** Unix ms of the last successful check, or null before the first one. */

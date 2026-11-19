@@ -235,6 +235,8 @@ export function createKipRpc(deps: RpcDeps) {
           Utils.openExternal(releaseUrl);
           return { opened: true };
         },
+        getRunningThreadCount: () => deps.orchestrator.runningThreadIds().length,
+        restartForUpdate: async () => ({ started: await deps.updateChecker.applyUpdate() }),
       },
       messages: {},
     },

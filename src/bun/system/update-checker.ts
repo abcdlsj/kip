@@ -1,9 +1,13 @@
 /**
- * Quiet GitHub Releases check. It only reports whether a newer stable release
- * exists; installing stays with the release page and the Homebrew cask, so Kip
- * never replaces itself behind the user's back.
+ * Quiet GitHub Releases check plus optional self-update.
+ *
+ * The check itself never installs anything. On a direct (dmg) install a newer
+ * release is downloaded and staged in the background; the app only replaces
+ * itself when the user confirms the restart in the sidebar. Homebrew installs
+ * are told to run `brew upgrade --cask kip` instead, so the versioned Caskroom
+ * directory never drifts from what brew believes is installed.
  */
-import type { UpdateStatus } from "../../shared/types";
+import type { UpdateInstallSource, UpdateStatus } from "../../shared/types";
 
 const DEFAULT_REPO = "abcdlsj/kip";
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -15,6 +19,26 @@ interface GitHubRelease {
   html_url?: unknown;
   draft?: unknown;
   prerelease?: unknown;
+  assets?: Array<{ name?: unknown; browser_download_url?: unknown; size?: unknown }>;
+}
+
+export interface ReleaseAsset {
+  name: string;
+  url: string;
+  size: number;
+}
+
+/** Platform piece that stages and applies the new bundle. */
+export interface UpdateInstaller {
+  readonly source: UpdateInstallSource;
+  /** Downloads and verifies the release; resolves once it can be applied. */
+  prepare(
+    assets: ReleaseAsset[],
+    version: string,
+    onProgress: (percent: number) => void,
+  ): Promise<void>;
+  /** Replaces the bundle and relaunches. Returns false when it could not start. */
+  apply(): Promise<boolean>;
 }
 
 export interface UpdateCheckerOptions {
@@ -24,6 +48,7 @@ export interface UpdateCheckerOptions {
   intervalMs?: number;
   initialDelayMs?: number;
   fetchImpl?: typeof fetch;
+  installer?: UpdateInstaller;
   /** Called after every state change; the Bun side pushes it to the view. */
   onStatus?: (status: UpdateStatus) => void;
 }
@@ -52,6 +77,20 @@ export function isNewerVersion(latest: Version, current: Version): boolean {
   return false;
 }
 
+function readAssets(raw: GitHubRelease["assets"]): ReleaseAsset[] {
+  if (!Array.isArray(raw)) return [];
+  const assets: ReleaseAsset[] = [];
+  for (const asset of raw) {
+    if (typeof asset?.name !== "string" || typeof asset.browser_download_url !== "string") continue;
+    assets.push({
+      name: asset.name,
+      url: asset.browser_download_url,
+      size: typeof asset.size === "number" ? asset.size : 0,
+    });
+  }
+  return assets;
+}
+
 export class UpdateChecker {
   private readonly currentRaw: string;
   private readonly current: Version | null;
@@ -59,6 +98,7 @@ export class UpdateChecker {
   private readonly intervalMs: number;
   private readonly initialDelayMs: number;
   private readonly fetchImpl: typeof fetch;
+  private readonly installer: UpdateInstaller | undefined;
   private readonly onStatus: ((status: UpdateStatus) => void) | undefined;
 
   private status: UpdateStatus;
@@ -66,6 +106,8 @@ export class UpdateChecker {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private started = false;
   private inFlight: Promise<UpdateStatus> | null = null;
+  /** Version whose bundle was already handed to the installer. */
+  private preparedFor: string | null = null;
 
   constructor(options: UpdateCheckerOptions) {
     this.currentRaw = options.currentVersion.trim();
@@ -74,12 +116,15 @@ export class UpdateChecker {
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
     this.initialDelayMs = options.initialDelayMs ?? DEFAULT_INITIAL_DELAY_MS;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.installer = options.installer;
     this.onStatus = options.onStatus;
     this.status = {
       current: this.currentRaw,
       latest: null,
       available: false,
       state: "idle",
+      installSource: this.installer?.source ?? "manual",
+      progress: 0,
       releaseUrl: null,
       checkedAt: null,
     };
@@ -118,11 +163,16 @@ export class UpdateChecker {
     return this.inFlight;
   }
 
+  /** Installs the staged bundle and quits; the user starts this from the prompt. */
+  async applyUpdate(): Promise<boolean> {
+    if (this.status.state !== "ready" || !this.installer) return false;
+    return this.installer.apply();
+  }
+
   private async runCheck(): Promise<UpdateStatus> {
     if (!this.current) return this.statusSnapshot();
-    const wasAvailable = this.status.available;
-    const settledState = wasAvailable ? "available" : "idle";
-    this.publish({ state: "checking" });
+    const busy = this.status.state === "downloading" || this.status.state === "ready";
+    if (!busy) this.publish({ state: "checking" });
 
     try {
       const response = await this.fetchImpl(
@@ -138,7 +188,7 @@ export class UpdateChecker {
       );
 
       if (response.status === 304) {
-        this.publish({ state: settledState });
+        this.settleCheck();
         return this.statusSnapshot();
       }
       if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
@@ -151,24 +201,72 @@ export class UpdateChecker {
       const latest = parseVersion(tag);
       const releaseUrl = typeof release.html_url === "string" ? release.html_url : null;
       if (!latest || release.draft === true || release.prerelease === true) {
-        this.publish({ state: "idle", available: false, latest: null, releaseUrl, checkedAt: Date.now() });
+        this.publish({
+          state: "idle",
+          available: false,
+          latest: null,
+          releaseUrl,
+          progress: 0,
+          checkedAt: Date.now(),
+        });
+        this.preparedFor = null;
         return this.statusSnapshot();
       }
 
+      const version = latest.join(".");
       const available = isNewerVersion(latest, this.current);
       this.publish({
-        state: available ? "available" : "idle",
         available,
-        latest: latest.join("."),
+        latest: version,
         releaseUrl,
         checkedAt: Date.now(),
+        state: available ? "available" : "idle",
+        ...(available ? {} : { progress: 0 }),
       });
+      if (!available) {
+        this.preparedFor = null;
+        return this.statusSnapshot();
+      }
+
+      const installer = this.installer;
+      if (installer?.source === "direct" && this.preparedFor !== version) {
+        this.preparedFor = version;
+        void this.prepareUpdate(installer, readAssets(release.assets), version);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`Update check failed: ${message}`);
-      this.publish({ state: settledState });
+      this.settleCheck();
     }
     return this.statusSnapshot();
+  }
+
+  /** A finished check must not overwrite a download already in progress. */
+  private settleCheck(): void {
+    if (this.status.state !== "checking") return;
+    this.publish({ state: this.status.available ? "available" : "idle" });
+  }
+
+  private async prepareUpdate(
+    installer: UpdateInstaller,
+    assets: ReleaseAsset[],
+    version: string,
+  ): Promise<void> {
+    this.publish({ state: "downloading", progress: 0 });
+    try {
+      await installer.prepare(assets, version, (percent) => {
+        if (this.status.latest !== version || this.status.state !== "downloading") return;
+        this.publish({ progress: percent });
+      });
+      if (this.status.latest !== version) return;
+      this.publish({ state: "ready", progress: 100 });
+      console.log(`Kip ${version} is staged; waiting for the restart prompt.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`Update download failed: ${message}`);
+      this.preparedFor = null;
+      this.publish({ state: "available", progress: 0 });
+    }
   }
 
   private publish(patch: Partial<UpdateStatus>): void {

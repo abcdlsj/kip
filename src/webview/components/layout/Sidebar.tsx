@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  ArrowUpCircle,
   Check,
   ChevronsUpDown,
   FolderClosed,
@@ -17,13 +16,12 @@ import { groupThreads } from "../../lib/format";
 import { useChatStore } from "../../stores/chat-store";
 import { useUiStore } from "../../stores/ui-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
+import { UpdateIndicator } from "./UpdateIndicator";
 
 export function Sidebar() {
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
   const openSettings = useUiStore((state) => state.openSettings);
-  const update = useUiStore((state) => state.update);
-  const openUpdatePage = useUiStore((state) => state.openUpdatePage);
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const threads = useWorkspaceStore((state) => state.threads);
@@ -260,16 +258,7 @@ export function Sidebar() {
                 <Settings size={14} strokeWidth={1.5} className="shrink-0" />
                 Settings
               </button>
-              {update?.available && (
-                <button
-                  onClick={() => void openUpdatePage()}
-                  title={`Update available: v${update.latest}`}
-                  aria-label={`Update available: v${update.latest}`}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
-                >
-                  <ArrowUpCircle size={14} strokeWidth={1.5} />
-                </button>
-              )}
+              <UpdateIndicator />
             </div>
           </div>
         </>

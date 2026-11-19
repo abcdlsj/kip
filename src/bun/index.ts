@@ -2,7 +2,7 @@
  * Kip main process. Initializes local storage, the model registry, the Pi
  * session pool, and the single frameless application window.
  */
-import { ApplicationMenu, BrowserWindow, Updater } from "electrobun/bun";
+import { ApplicationMenu, BrowserWindow, Updater, Utils } from "electrobun/bun";
 import { KipDatabase } from "./storage/db";
 import { ModelRegistry } from "./agent/model-registry";
 import { KipOrchestrator } from "./agent/pi-orchestrator";
@@ -12,6 +12,7 @@ import { triggerSync } from "./sync/s3-sync";
 import { NotchIndicator, type NotchState } from "./system/notch";
 import { applyWindowsDpiAwareness } from "./system/windows-dpi";
 import { UpdateChecker } from "./system/update-checker";
+import { createUpdateInstaller } from "./system/update-installer";
 
 // Must run before the first window exists, so it cannot move below.
 applyWindowsDpiAwareness();
@@ -39,6 +40,12 @@ const updateChecker = new UpdateChecker({
   // Dev bundles carry a stale version.json, so local builds stay quiet unless
   // KIP_UPDATE_CURRENT_VERSION pins the version explicitly.
   currentVersion: process.env.KIP_UPDATE_CURRENT_VERSION ?? (await Updater.localInfo.version()),
+  installer: createUpdateInstaller({
+    // Restarting for an update stops any running agent; the view warns first.
+    onQuit: () => {
+      void shutdown().finally(() => Utils.quit());
+    },
+  }),
   onStatus: (status) => rpc.send.updateStatus(status),
 });
 const rpc = createKipRpc({ database, registry, orchestrator, updateChecker, windowRef });

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { isNewerVersion, parseVersion, UpdateChecker } from "../src/bun/system/update-checker";
+import {
+  isNewerVersion,
+  parseVersion,
+  UpdateChecker,
+  type UpdateInstaller,
+} from "../src/bun/system/update-checker";
 
 function releaseResponse(body: unknown, init: { status?: number; etag?: string } = {}): Response {
   const headers = new Headers({ "content-type": "application/json" });
@@ -164,5 +169,142 @@ describe("update checker", () => {
     const status = await checker.check();
     expect(called).toBe(false);
     expect(status.state).toBe("idle");
+  });
+});
+
+describe("self-update", () => {
+  const dmg = {
+    name: "stable-macos-arm64-Kip.dmg",
+    url: "https://example.invalid/Kip.dmg",
+    size: 1024,
+  };
+
+  function fakeInstaller(source: "direct" | "homebrew", fail = false) {
+    const calls = { prepare: 0, apply: 0 };
+    const installer: UpdateInstaller = {
+      source,
+      prepare: async (_assets, _version, onProgress) => {
+        calls.prepare += 1;
+        onProgress(50);
+        if (fail) throw new Error("dmg download failed");
+        onProgress(99);
+      },
+      apply: async () => {
+        calls.apply += 1;
+        return true;
+      },
+    };
+    return { installer, calls };
+  }
+
+  async function waitFor(check: () => boolean, timeoutMs = 500): Promise<void> {
+    const started = Date.now();
+    while (!check()) {
+      if (Date.now() - started > timeoutMs) throw new Error("condition not reached");
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  }
+
+  function fetchWithAssets(): typeof fetch {
+    return asFetch(async () =>
+      releaseResponse({ ...release("v0.3.0"), assets: [dmg] }),
+    );
+  }
+
+  test("a dmg install downloads in the background and waits for a restart", async () => {
+    const { installer, calls } = fakeInstaller("direct");
+    const states: string[] = [];
+    const checker = new UpdateChecker({
+      currentVersion: "0.2.2",
+      fetchImpl: fetchWithAssets(),
+      installer,
+      onStatus: (status) => states.push(status.state),
+    });
+
+    await checker.check();
+    await waitFor(() => checker.statusSnapshot().state === "ready");
+
+    const status = checker.statusSnapshot();
+    expect(status.available).toBe(true);
+    expect(status.installSource).toBe("direct");
+    expect(status.latest).toBe("0.3.0");
+    expect(status.progress).toBe(100);
+    expect(calls.prepare).toBe(1);
+    expect(states).toContain("downloading");
+    expect(states).toContain("ready");
+
+    expect(await checker.applyUpdate()).toBe(true);
+    expect(calls.apply).toBe(1);
+  });
+
+  test("a Homebrew install never stages a bundle", async () => {
+    const { installer, calls } = fakeInstaller("homebrew");
+    const checker = new UpdateChecker({
+      currentVersion: "0.2.2",
+      fetchImpl: fetchWithAssets(),
+      installer,
+    });
+
+    await checker.check();
+    const status = checker.statusSnapshot();
+    expect(status.state).toBe("available");
+    expect(status.installSource).toBe("homebrew");
+    expect(calls.prepare).toBe(0);
+    expect(await checker.applyUpdate()).toBe(false);
+    expect(calls.apply).toBe(0);
+  });
+
+  test("a failed download falls back to the available state", async () => {
+    const warnings: string[] = [];
+    const warn = console.warn;
+    console.warn = (message: string) => {
+      warnings.push(message);
+    };
+    try {
+      const { installer } = fakeInstaller("direct", true);
+      const checker = new UpdateChecker({
+        currentVersion: "0.2.2",
+        fetchImpl: fetchWithAssets(),
+        installer,
+      });
+
+      await checker.check();
+      await waitFor(() => checker.statusSnapshot().state === "available");
+      expect(checker.statusSnapshot().progress).toBe(0);
+      expect(warnings).toEqual(["Update download failed: dmg download failed"]);
+    } finally {
+      console.warn = warn;
+    }
+  });
+
+  test("without an installer the release page is the only action", async () => {
+    const checker = new UpdateChecker({
+      currentVersion: "0.2.2",
+      fetchImpl: fetchWithAssets(),
+    });
+    await checker.check();
+    const status = checker.statusSnapshot();
+    expect(status.state).toBe("available");
+    expect(status.installSource).toBe("manual");
+    expect(await checker.applyUpdate()).toBe(false);
+  });
+
+  test("going back to the current version clears the staged update", async () => {
+    const { installer } = fakeInstaller("direct");
+    let newer = true;
+    const checker = new UpdateChecker({
+      currentVersion: "0.2.2",
+      fetchImpl: asFetch(async () => releaseResponse({ ...release(newer ? "v0.3.0" : "v0.2.2"), assets: [dmg] })),
+      installer,
+    });
+
+    await checker.check();
+    await waitFor(() => checker.statusSnapshot().state === "ready");
+
+    newer = false;
+    const status = await checker.check();
+    expect(status.state).toBe("idle");
+    expect(status.available).toBe(false);
+    expect(status.progress).toBe(0);
   });
 });

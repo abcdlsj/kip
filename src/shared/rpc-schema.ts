@@ -164,6 +164,10 @@ export interface KipRPCSchema {
       getUpdateStatus: { params: void; response: UpdateStatus };
       /** Opens the release page in the default browser. */
       openUpdatePage: { params: void; response: { opened: boolean } };
+      /** Agents still working, so the restart prompt can warn before stopping them. */
+      getRunningThreadCount: { params: void; response: number };
+      /** Replaces the staged bundle and quits; the new copy relaunches itself. */
+      restartForUpdate: { params: void; response: { started: boolean } };
     };
     messages: {};
   };

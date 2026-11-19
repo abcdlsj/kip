@@ -231,10 +231,19 @@ that backup on another machine.
 ## Updates
 
 Kip checks GitHub Releases for newer stable builds eight seconds after launch and every
-six hours after that (ETag-aware, one request per check). When a newer version exists, a
-single small arrow appears at the bottom of the sidebar; clicking it opens the release
-page. Nothing is downloaded and Kip never restarts itself, so the Homebrew cask stays the
-single install path. Checks are skipped on the `dev` channel.
+six hours after that (ETag-aware, one request per check). A newer version adds one small
+arrow at the bottom of the sidebar, and how it updates depends on how Kip was installed:
+
+- **Homebrew cask** — the arrow opens `brew upgrade --cask kip` (click to copy). Brew owns
+  the versioned Caskroom bundle, so Kip does not replace it behind brew's back.
+- **dmg install** — the release is downloaded and staged in the background; the arrow
+  becomes a restart prompt. Kip never restarts silently, because quitting stops every
+  running agent: the prompt says how many are still working before you confirm.
+- **Anything unwritable** (Windows, Linux, read-only bundle) — the arrow opens the release
+  page.
+
+Checks are skipped on the `dev` channel; set `KIP_UPDATE_CURRENT_VERSION` to exercise the
+flow locally.
 
 ## Development notes
 
@@ -260,7 +269,7 @@ bun run build
 
 - macOS builds are unsigned and not notarized. Signing is intentionally left to the
   distributor.
-- Updates are detected but not installed by Kip itself; see [Updates](#updates).
+- Homebrew installs are updated through `brew upgrade --cask kip`, not by Kip itself.
 - The macOS 13 fallback bundles CEF, which increases the app size. macOS 14+ can switch
   to the native WebKit renderer by setting `defaultRenderer: "native"` in
   `electrobun.config.ts` and `renderer: "native"` in `src/bun/index.ts`.
