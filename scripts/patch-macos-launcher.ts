@@ -1,11 +1,20 @@
 /**
- * Electrobun's stable launcher is currently built with a macOS 14.8 deployment
- * target, which makes the packaged app refuse to launch on macOS 13. The app
- * itself runs on macOS 12+ (CEF renderer), so lower the launcher's recorded
- * minimum OS version before packaging. Runs from the postWrap hook.
+ * Patches the self-extracting app bundle that Electrobun wraps around the real
+ * app. Runs from the postWrap hook, i.e. after the bundle is assembled and
+ * before Electrobun codesigns it.
+ *
+ * 1. Electrobun's stable launcher is built with a macOS 14.8 deployment target,
+ *    which makes the packaged app refuse to launch on macOS 13. The app itself
+ *    runs on macOS 12+ (CEF renderer), so lower the launcher's recorded minimum
+ *    OS version.
+ * 2. Electrobun names the bundled executable "launcher", so `ps`, Activity
+ *    Monitor and crash reports show "launcher" instead of the app name. Rename
+ *    it to CFBundleName (and keep CFBundleExecutable in sync).
  */
 import { existsSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
+
+const LAUNCHER_NAME = "launcher";
 
 if (process.platform !== "darwin") {
   console.log("Launcher patch skipped on this platform.");
@@ -14,25 +23,27 @@ if (process.platform !== "darwin") {
 
 const explicit = process.env.ELECTROBUN_WRAPPER_BUNDLE_PATH;
 const candidates: string[] = [];
-if (explicit) candidates.push(explicit);
-
-const buildRoot = join(import.meta.dir, "..", "build");
-if (existsSync(buildRoot)) {
-  for (const folder of readdirSync(buildRoot)) {
-    const appRoot = join(buildRoot, folder);
-    try {
-      for (const entry of readdirSync(appRoot)) {
-        if (entry.endsWith(".app")) candidates.push(join(appRoot, entry));
+if (explicit) {
+  candidates.push(explicit);
+} else {
+  const buildRoot = join(import.meta.dir, "..", "build");
+  if (existsSync(buildRoot)) {
+    for (const folder of readdirSync(buildRoot)) {
+      const appRoot = join(buildRoot, folder);
+      try {
+        for (const entry of readdirSync(appRoot)) {
+          if (entry.endsWith(".app")) candidates.push(join(appRoot, entry));
+        }
+      } catch {
+        // Ignore non-directory build entries.
       }
-    } catch {
-      // Ignore non-directory build entries.
     }
   }
 }
 
 let patched = 0;
 for (const bundle of new Set(candidates)) {
-  const launcher = join(bundle, "Contents", "MacOS", "launcher");
+  const launcher = join(bundle, "Contents", "MacOS", LAUNCHER_NAME);
   if (!existsSync(launcher)) continue;
   const temp = `${launcher}.patched`;
   const result = Bun.spawnSync(
@@ -44,6 +55,7 @@ for (const bundle of new Set(candidates)) {
     continue;
   }
   renameSync(temp, launcher);
+  renameExecutableToAppName(bundle);
   patchPlist(bundle);
   reSign(bundle);
   patched += 1;
@@ -53,6 +65,53 @@ if (patched === 0) {
   console.warn("No launcher was patched.");
 } else {
   console.log(`Patched ${patched} macOS launcher(s) for macOS 12+.`);
+}
+
+/**
+ * Electrobun hardcodes the wrapper's executable as Contents/MacOS/launcher and
+ * sets CFBundleExecutable to match. Rename both to CFBundleName so the process
+ * is reported as "Kip". The self-extractor derives its own paths from
+ * __NSGetExecutablePath, so the file name carries no meaning to it; changing
+ * only the Info.plist would make LaunchServices fail to find the executable.
+ */
+function renameExecutableToAppName(bundle: string): void {
+  const plist = join(bundle, "Contents", "Info.plist");
+  const macos = join(bundle, "Contents", "MacOS");
+  const launcher = join(macos, LAUNCHER_NAME);
+  if (!existsSync(launcher) || !existsSync(plist)) return;
+
+  const appName = plistValue(plist, ":CFBundleName");
+  if (!appName) {
+    console.warn(`No CFBundleName in ${plist}; keeping executable "${LAUNCHER_NAME}".`);
+    return;
+  }
+  if (appName === LAUNCHER_NAME) return;
+
+  const renamed = join(macos, appName);
+  renameSync(launcher, renamed);
+
+  const set = Bun.spawnSync(
+    ["/usr/libexec/PlistBuddy", "-c", `Set :CFBundleExecutable "${appName}"`, plist],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (set.exitCode !== 0) {
+    renameSync(renamed, launcher);
+    console.warn(
+      `Could not set CFBundleExecutable=${appName} in ${plist}: ${set.stderr.toString().trim()}`,
+    );
+    return;
+  }
+  console.log(`Renamed macOS executable ${LAUNCHER_NAME} -> ${appName}.`);
+}
+
+function plistValue(plist: string, key: string): string | undefined {
+  const read = Bun.spawnSync(
+    ["/usr/libexec/PlistBuddy", "-c", `Print ${key}`, plist],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (read.exitCode !== 0) return undefined;
+  const value = read.stdout.toString().trim();
+  return value.length > 0 ? value : undefined;
 }
 
 function patchPlist(bundle: string): void {
