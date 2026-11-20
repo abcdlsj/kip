@@ -21,6 +21,11 @@ import { getSessionDir, newId, type KipDatabase } from "./storage/db";
 import { deleteApiKey, getApiKey, hasApiKey, setApiKey } from "./storage/keychain";
 import type { ModelRegistry } from "./agent/model-registry";
 import { displayModelName, fetchRemoteModels } from "./agent/model-registry";
+import {
+  findPlugin,
+  pluginSummaries,
+  savePluginValues,
+} from "./plugins/registry";
 import type { KipOrchestrator } from "./agent/pi-orchestrator";
 import { pickWorkspaceFolder, suggestFiles, workspaceName } from "./system/fs-dialog";
 import { inspectGit } from "./system/git-inspector";
@@ -190,6 +195,35 @@ export function createKipRpc(deps: RpcDeps) {
         testProvider: ({ provider }) => deps.registry.testProvider(provider),
         fetchProviderModels: ({ baseUrl, apiKey }) =>
           fetchRemoteModels(baseUrl, apiKey ?? undefined),
+        listGatewayPlugins: async () => pluginSummaries(deps.database),
+        probeGatewayPlugin: async ({ plugin: pluginId, values }) => {
+          const plugin = findPlugin(pluginId);
+          if (!plugin) throw new Error(`Unknown plugin: ${pluginId}`);
+          const storedApiKey = (await getApiKey(plugin.providerId)) ?? undefined;
+          const outcome = await plugin.probe(values, { storedApiKey });
+          if (!outcome.ok || !outcome.proposal) {
+            const { proposal: _proposal, ...result } = outcome;
+            return result;
+          }
+
+          const proposal = outcome.proposal;
+          const record = deps.database.saveProvider({
+            id: proposal.providerId,
+            displayName: proposal.displayName,
+            protocol: proposal.protocol,
+            baseUrl: proposal.baseUrl,
+            models: proposal.models,
+          });
+          const apiKey = proposal.apiKey ?? storedApiKey;
+          if (apiKey) await setApiKey(record.id, apiKey);
+          const withKey: ProviderRecord = { ...record, hasApiKey: apiKey !== undefined };
+          await deps.registry.addOrUpdateProvider(withKey, apiKey);
+          await ensureDefaultProvider(deps, record);
+          savePluginValues(deps.database, plugin, values);
+
+          const { proposal: _proposal, ...result } = outcome;
+          return { ...result, provider: withKey };
+        },
         getAvailableModels: async () => {
           await deps.registry.syncWithDatabase();
           return deps.registry.listAvailable();

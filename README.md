@@ -122,6 +122,27 @@ bun run seed
 `KIP_SEED_KEY_FROM_PI=1` reads the credential from `~/.pi/agent/auth.json` at runtime and
 stores it in Kip's keychain. The key is never printed and never written to SQLite.
 
+### Local gateways
+
+Settings → Providers → **Local gateways** finds a server that is already running on this
+machine instead of asking you to type its URL, models, and key by hand. The panel shows one
+card per bundled plugin; today that is [gemini2api](https://github.com/abcdlsj/gemini2api).
+
+1. Enter the host and port (default `127.0.0.1:8790`). The port is remembered.
+2. Press **Detect**. Kip calls `${base}/health` and refuses anything that does not name itself
+   `gemini2api`, so a port that belongs to another service cannot be mistaken for it.
+3. If the server was started with an `api_key`, paste it once. Kip trades it for a key of its
+   own through `POST /v1/keys` and keeps only that key, in the system keychain — the operator's
+   key is not stored. Re-detecting reuses the key Kip already holds and never mints a second
+   one.
+4. The models come from `/v1/models` with their own `context_window` and capability flags, so
+   nothing is guessed. The provider appears above as `gemini2api` at `http://host:port/v1`.
+
+A plugin is a module under `src/bun/plugins/` that implements `KipPlugin`: an id, a provider id
+it owns, the fields its form needs, and a `probe()` that returns a provider record. The view
+renders whatever fields are declared and knows nothing about the protocol, so a new gateway is
+one file plus one line in `registry.ts`.
+
 ## Scripts
 
 | Command | What it does |
@@ -264,7 +285,8 @@ flow locally.
   external state library beyond Zustand.
 - UI text is English-only, icons are Lucide at 1.5 px stroke, and no emoji are used.
 - File responsibilities are kept small; orchestration, policy, projection, storage, and
-  transport live in separate modules.
+  transport live in separate modules. Local gateway plugins live under `src/bun/plugins/` and
+  own one provider record each.
 
 ```bash
 bun run typecheck

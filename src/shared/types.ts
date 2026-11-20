@@ -125,6 +125,46 @@ export interface ProviderModel {
   supportsReasoning: boolean;
 }
 
+export type PluginKind = "gateway";
+export type PluginFieldKind = "text" | "port" | "secret";
+
+/** One input a plugin needs before it can reach its gateway. */
+export interface PluginField {
+  name: string;
+  label: string;
+  kind: PluginFieldKind;
+  placeholder?: string;
+  help?: string;
+  optional?: boolean;
+}
+
+/** A plugin as the view sees it: what to render, not how it works. */
+export interface PluginSummary {
+  id: string;
+  kind: PluginKind;
+  label: string;
+  description: string;
+  fields: PluginField[];
+  /** Saved non-secret values, so the form survives a restart. */
+  values: Record<string, string>;
+}
+
+export interface PluginProbeDetail {
+  label: string;
+  value: string;
+}
+
+export interface PluginProbeResult {
+  ok: boolean;
+  summary?: string;
+  details?: PluginProbeDetail[];
+  /** Fields the probe still needs, with the reason to show next to them. */
+  missing?: Array<{ field: string; message: string }>;
+  error?: string;
+  /** The provider record written when the probe succeeded. */
+  provider?: ProviderRecord;
+}
+
 export interface SettingsSnapshot {
   theme: ThemeMode;
   approvalPolicy: ApprovalPolicy;

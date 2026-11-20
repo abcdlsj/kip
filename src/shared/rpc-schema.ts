@@ -11,6 +11,8 @@ import type {
   CreateThreadInput,
   FileSuggestion,
   ModelOption,
+  PluginProbeResult,
+  PluginSummary,
   ProviderModel,
   ProviderProtocol,
   ProviderRecord,
@@ -117,6 +119,11 @@ export interface KipRPCSchema {
       fetchProviderModels: {
         params: { baseUrl: string; apiKey?: string };
         response: { models: ProviderModel[]; error?: string };
+      };
+      listGatewayPlugins: { params: void; response: PluginSummary[] };
+      probeGatewayPlugin: {
+        params: { plugin: string; values: Record<string, string> };
+        response: PluginProbeResult;
       };
       getAvailableModels: { params: void; response: ModelOption[] };
 

@@ -2,6 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Boxes, Cloud, Palette, ShieldCheck, X } from "lucide-react";
 import type { ApprovalPolicy, ThemeMode, ThinkingLevel } from "../../../shared/types";
 import { useUiStore } from "../../stores/ui-store";
+import { GatewayPlugins } from "./GatewayPlugins";
 import { ProvidersPanel } from "./ProvidersPanel";
 import { SyncPanel } from "./SyncPanel";
 
@@ -62,7 +63,12 @@ export function SettingsModal() {
                 <X size={14} strokeWidth={1.5} />
               </button>
             </Dialog.Close>
-            {tab === "providers" && <ProvidersPanel providers={providers} />}
+            {tab === "providers" && (
+              <>
+                <ProvidersPanel providers={providers} />
+                <GatewayPlugins />
+              </>
+            )}
             {tab === "appearance" && (
               <div>
                 <h2 className="text-[15px] font-semibold">Appearance</h2>
