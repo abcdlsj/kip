@@ -161,12 +161,12 @@ export class ModelRegistry {
     this.registered.clear();
     for (const provider of this.database.listProviders()) {
       const apiKey = await getApiKey(provider.id);
-      if (!apiKey) continue;
-      await this.register(provider, apiKey);
+      await this.register(provider, apiKey ?? undefined);
     }
   }
 
-  private async register(provider: ProviderRecord, apiKey: string): Promise<void> {
+  /** A key is optional: local gateways such as Ollama and gemini2api may run without one. */
+  private async register(provider: ProviderRecord, apiKey?: string): Promise<void> {
     try {
       this.runtime.registerProvider(provider.id, {
         name: provider.displayName,
@@ -179,7 +179,7 @@ export class ModelRegistry {
           provider.baseUrl,
         ) as never,
       });
-      await this.runtime.setRuntimeApiKey(provider.id, apiKey);
+      if (apiKey) await this.runtime.setRuntimeApiKey(provider.id, apiKey);
       this.registered.add(provider.id);
     } catch (error) {
       console.error(`Unable to register provider ${provider.id}:`, error);
@@ -200,13 +200,12 @@ export class ModelRegistry {
     for (const provider of stored) {
       if (this.registered.has(provider.id)) continue;
       const apiKey = await getApiKey(provider.id);
-      if (apiKey) await this.register(provider, apiKey);
+      await this.register(provider, apiKey ?? undefined);
     }
   }
 
   async addOrUpdateProvider(provider: ProviderRecord, apiKey?: string): Promise<void> {
-    const key = apiKey ?? (await getApiKey(provider.id));
-    if (!key) return;
+    const key = apiKey ?? (await getApiKey(provider.id)) ?? undefined;
     if (this.registered.has(provider.id)) {
       this.runtime.unregisterProvider(provider.id);
       this.registered.delete(provider.id);
@@ -261,9 +260,8 @@ export class ModelRegistry {
     providerId: string,
   ): Promise<{ connected: boolean; latencyMs?: number; error?: string }> {
     const provider = this.database.getProvider(providerId);
-    const apiKey = await getApiKey(providerId);
+    const apiKey = (await getApiKey(providerId)) ?? undefined;
     if (!provider) return { connected: false, error: "Provider not found" };
-    if (!apiKey) return { connected: false, error: "No API key configured" };
     const modelId = provider.models[0]?.id;
     if (!modelId) return { connected: false, error: "No model configured" };
     const started = performance.now();
@@ -293,20 +291,18 @@ function protocolHeaders(protocol: ProviderProtocol, baseUrl: string): Record<st
 export async function probeProvider(
   provider: ProviderRecord,
   modelId: string,
-  apiKey: string,
+  apiKey?: string,
   fetcher: typeof fetch = fetch,
 ): Promise<Response> {
   const base = normalizeBaseUrl(provider.baseUrl, provider.protocol);
-  const jsonHeaders = {
-    "content-type": "application/json",
-    authorization: `Bearer ${apiKey}`,
-  };
+  const jsonHeaders: Record<string, string> = { "content-type": "application/json" };
+  if (apiKey) jsonHeaders.authorization = `Bearer ${apiKey}`;
   if (provider.protocol === "anthropic-messages") {
     return fetcher(`${base}/v1/messages`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": apiKey,
+        ...(apiKey ? { "x-api-key": apiKey } : {}),
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({

@@ -61,16 +61,20 @@ describe("model registry", () => {
     expect(registry.getModel("seeded", "model-a")).toBeDefined();
   });
 
-  test("skips providers without a key and drops deleted ones", async () => {
+  test("registers keyless providers and drops deleted ones", async () => {
     saveProvider(db, "keyless");
     saveProvider(db, "keyed");
     await setApiKey("keyed", "sk-test");
     const registry = await ModelRegistry.create(db);
-    expect(registry.listAvailable().map((option) => option.provider)).toEqual(["keyed"]);
+    // A local gateway (Ollama, gemini2api) may legitimately run without a key.
+    expect(registry.listAvailable().map((option) => option.provider).sort()).toEqual([
+      "keyed",
+      "keyless",
+    ]);
 
     db.deleteProvider("keyed");
     await registry.syncWithDatabase();
-    expect(registry.listAvailable()).toHaveLength(0);
+    expect(registry.listAvailable().map((option) => option.provider)).toEqual(["keyless"]);
     expect(registry.getModel("keyed", "model-a")).toBeUndefined();
   });
 
