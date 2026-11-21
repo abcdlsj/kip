@@ -40,6 +40,7 @@ export function createBuiltinToolProvider(): ToolProvider {
       createWriteToolDefinition(workspaceRoot) as unknown as AnyToolDefinition,
       createEditToolDefinition(workspaceRoot) as unknown as AnyToolDefinition,
       createBashToolDefinition(workspaceRoot, {
+        exposeSessionEnvironment: false,
         spawnHook: (context) => ({
           ...context,
           env: nonInteractiveEnv(context.env),

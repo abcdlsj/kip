@@ -217,6 +217,8 @@ describe("System prompt assembly", () => {
 
     const rendered = await renderSessionSystemPrompt(workspaceRoot, agentDir);
 
+    expect(KIP_SYSTEM_PROMPT).toContain("assistant");
+    expect(KIP_SYSTEM_PROMPT.toLowerCase()).not.toContain("coding agent");
     expect(rendered.startsWith(KIP_SYSTEM_PROMPT)).toBe(true);
     expect(rendered).not.toContain("running inside pi");
     expect(rendered).not.toContain("<docs>");
