@@ -3,7 +3,7 @@
   "version": "0.2.5",
   "private": true,
   "type": "module",
-  "description": "A quiet, cross-platform desktop coding agent built with Electrobun and Pi",
+  "description": "A quiet, cross-platform desktop assistant built with Electrobun and Pi",
   "scripts": {
     "icons": "bun run scripts/generate-icon-svg.ts && bun run scripts/generate-icons.ts",
     "dev": "bun run icons && bun run build:view && electrobun dev",

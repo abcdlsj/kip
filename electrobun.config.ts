@@ -7,7 +7,7 @@ const config: ElectrobunConfig = {
     name: "Kip",
     identifier: "ai.kip.desktop",
     version: "0.2.5",
-    description: "A quiet desktop coding agent built with Electrobun and Pi",
+    description: "A quiet desktop assistant built with Electrobun and Pi",
   },
   scripts: {
     // Our own rcedit pass: Electrobun's icon embedding cannot resolve its

@@ -13,7 +13,7 @@
 
 # Kip — Product and Engineering Specification
 
-> Kip is a quiet, cross-platform desktop coding agent. The document below is the
+> Kip is a quiet, cross-platform desktop assistant. The document below is the
 > locked implementation contract. Every architecture, protocol, visual, and
 > delivery decision in it is final. The application ships under the name **Kip**
 > and stores its data in `~/.kip/`.

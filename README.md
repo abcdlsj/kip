@@ -1,6 +1,6 @@
 # Kip
 
-A quiet, cross-platform desktop coding agent built with **Electrobun**, **Bun**, and **Pi**.
+A quiet, cross-platform desktop assistant for coding and everyday work, built with **Electrobun**, **Bun**, and **Pi**.
 
 Kip keeps the agent in-process, persists every thread as portable JSONL, and puts an
 explicit approval boundary between the model and your files. The interface borrows
@@ -24,7 +24,7 @@ hairlines, and no chat bubbles.
 
 ## Interaction model
 
-Tool work is the noisy part of a coding agent, so Kip treats it as a **work log**, not a
+Tool work is the noisy part of an assistant, so Kip treats it as a **work log**, not a
 transcript. Thinking and tool steps collapse into a single line:
 
 ```text
