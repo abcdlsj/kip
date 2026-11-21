@@ -47,6 +47,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --draft --title "Kip $TAG" --generate-notes
 
+  # macos-15 (arm64) is the scarce runner: when GitHub cannot acquire it, the job
+  # fails with "not acquired by Runner of type hosted" and the release is left in
+  # draft, because cask and publish depend on this job. Retry the failed job with
+  # `gh run rerun <run-id> --failed`; cask and publish then run on their own.
   macos:
     name: macos ${{ matrix.arch }} dmg
     needs: prepare
