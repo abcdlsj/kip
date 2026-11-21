@@ -23,6 +23,8 @@ export function SettingsModal() {
   const setTheme = useUiStore((state) => state.setTheme);
   const setApprovalPolicy = useUiStore((state) => state.setApprovalPolicy);
   const setDefaultThinking = useUiStore((state) => state.setDefaultThinking);
+  // Same source as the update arrow: the version the running bundle reports.
+  const version = useUiStore((state) => state.update?.current);
   const refresh = useUiStore((state) => state.refresh);
 
   return (
@@ -52,7 +54,9 @@ export function SettingsModal() {
                 </button>
               );
             })}
-            <div className="mt-auto px-2 pb-1 text-[11px] text-[var(--text-muted)]">Kip 0.1.0</div>
+            <div className="mt-auto px-2 pb-1 text-[11px] text-[var(--text-muted)]">
+              {version ? `Kip ${version}` : "Kip"}
+            </div>
           </nav>
           <div className="relative min-w-0 flex-1 overflow-y-auto p-5 pr-10 thin-scroll">
             <Dialog.Close asChild>
