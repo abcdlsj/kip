@@ -11,6 +11,7 @@ import type {
   ToolApprovalPayload,
   ToolCallBlock,
 } from "../../shared/types";
+import { toPosixPath } from "../system/platform";
 import {
   MUTATING_TOOLS,
   classifyCommand,
@@ -25,6 +26,28 @@ import {
   summarizeToolCall,
 } from "./tool-policy";
 
+/** Lifecycle hooks for extending tool execution (snapshots, telemetry, custom guards). */
+export interface ToolHook {
+  beforeToolCall?: (info: {
+    threadId: string;
+    toolCallId: string;
+    toolName: string;
+    args: Record<string, unknown>;
+  }) => void | Promise<void>;
+  afterToolCall?: (info: {
+    threadId: string;
+    toolCallId: string;
+    toolName: string;
+    durationMs: number;
+  }) => void | Promise<void>;
+  onToolError?: (info: {
+    threadId: string;
+    toolCallId: string;
+    toolName: string;
+    error: unknown;
+  }) => void | Promise<void>;
+}
+
 export interface InterceptorOptions {
   workspaceRoot: string;
   threadId: string;
@@ -33,6 +56,8 @@ export interface InterceptorOptions {
   requestApproval: (payload: ToolApprovalPayload) => void;
   /** Awaited before every tool runs; used to finish the pre-run Git snapshot. */
   beforeTool?: () => Promise<void>;
+  /** Optional composable lifecycle hooks. */
+  hooks?: ToolHook[];
 }
 
 interface PendingApproval {
@@ -53,6 +78,8 @@ interface CallMeta {
 }
 
 const MAX_DIFF_BYTES = 512 * 1024;
+/** Cap stored call metadata (which can hold file diffs) to bound session RAM. */
+const MAX_CALL_META_ENTRIES = 400;
 
 export class ToolInterceptor {
   private readonly pending = new Map<string, PendingApproval>();
@@ -60,6 +87,10 @@ export class ToolInterceptor {
   private readonly callMeta = new Map<string, CallMeta>();
 
   constructor(private readonly options: InterceptorOptions) {}
+
+  get pendingCount(): number {
+    return this.pending.size;
+  }
 
   wrap(tool: ToolDefinition<never, unknown>): ToolDefinition<never, unknown> {
     const original = tool.execute.bind(tool) as (
@@ -82,9 +113,46 @@ export class ToolInterceptor {
         ctx: never,
       ) => {
         const args = params as unknown as Record<string, unknown>;
+        const startedAt = Date.now();
         await this.options.beforeTool?.();
-        await this.authorize(toolCallId, tool.name, args, signal);
-        return (await original(toolCallId, params, signal, onUpdate, ctx)) as never;
+        if (this.options.hooks?.length) {
+          for (const hook of this.options.hooks) {
+            await hook.beforeToolCall?.({
+              threadId: this.options.threadId,
+              toolCallId,
+              toolName: tool.name,
+              args,
+            });
+          }
+        }
+        try {
+          await this.authorize(toolCallId, tool.name, args, signal);
+          const result = (await original(toolCallId, params, signal, onUpdate, ctx)) as never;
+          if (this.options.hooks?.length) {
+            const durationMs = Date.now() - startedAt;
+            for (const hook of this.options.hooks) {
+              await hook.afterToolCall?.({
+                threadId: this.options.threadId,
+                toolCallId,
+                toolName: tool.name,
+                durationMs,
+              });
+            }
+          }
+          return result;
+        } catch (error) {
+          if (this.options.hooks?.length) {
+            for (const hook of this.options.hooks) {
+              await hook.onToolError?.({
+                threadId: this.options.threadId,
+                toolCallId,
+                toolName: tool.name,
+                error,
+              });
+            }
+          }
+          throw error;
+        }
       },
     };
     return wrapped;
@@ -192,7 +260,7 @@ export class ToolInterceptor {
       command,
       filePath,
     };
-    this.callMeta.set(toolCallId, meta);
+    this.recordMeta(toolCallId, meta);
 
     // Remembered commands never cover high-risk or out-of-workspace calls, and
     // every segment of a compound command must have been approved before.
@@ -231,9 +299,9 @@ export class ToolInterceptor {
           toolName === "bash"
             ? String(args.command ?? "")
             : previewDiff?.filePath
-              ? relative(this.options.workspaceRoot, previewDiff.filePath)
+              ? toPosixPath(relative(this.options.workspaceRoot, previewDiff.filePath))
               : targetPath
-                ? relative(this.options.workspaceRoot, targetPath)
+                ? toPosixPath(relative(this.options.workspaceRoot, targetPath))
                 : "",
         risk,
         outsideWorkspace,
@@ -282,6 +350,13 @@ export class ToolInterceptor {
       }
     }
     return { before, after, filePath: targetPath };
+  }
+
+  private recordMeta(toolCallId: string, meta: CallMeta): void {
+    this.callMeta.set(toolCallId, meta);
+    if (this.callMeta.size <= MAX_CALL_META_ENTRIES) return;
+    const oldest = this.callMeta.keys().next().value;
+    if (oldest !== undefined) this.callMeta.delete(oldest);
   }
 }
 

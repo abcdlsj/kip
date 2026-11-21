@@ -1,6 +1,10 @@
 /**
  * In-process Pi session pool. One ActiveSession per thread; concurrent threads
  * stream independently and never share an AbortController or tool queue.
+ *
+ * Tool providers, system prompt context providers, and tool lifecycle hooks are
+ * injected via `OrchestratorOptions` so capabilities (MCP tools, workspace
+ * instructions, telemetry, custom guardrails) can grow without editing this core.
  */
 import type { ImageContent } from "@earendil-works/pi-ai";
 import {
@@ -8,21 +12,12 @@ import {
   SessionManager,
   SettingsManager,
   createAgentSession,
-  createBashToolDefinition,
-  createEditToolDefinition,
-  createFindToolDefinition,
-  createGrepToolDefinition,
-  createLsToolDefinition,
-  createReadToolDefinition,
-  createWriteToolDefinition,
   type AgentSession,
   type AgentSessionEvent,
-  type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type {
-  AgentStreamEvent,
   ApprovalPolicy,
   ChatTurn,
   ContextUsage,
@@ -35,12 +30,14 @@ import type {
   ToolCallBlock,
   ToolApprovalPayload,
 } from "../../shared/types";
-import { DEFAULT_SYSTEM_PROMPT, STREAM_FRAME_MS } from "../../shared/constants";
 import type { KipDatabase, StoredRunChanges } from "../storage/db";
 import { getDataDir, getSessionDir, newId } from "../storage/db";
 import { diffTrees, restoreRun, snapshotTree } from "../system/git-snapshot";
+import { ContextBuilder } from "./context-builder";
 import type { ModelRegistry } from "./model-registry";
-import { ToolInterceptor } from "./tool-interceptor";
+import { FrameBuffer, type StreamEmit } from "./stream-buffer";
+import { ToolInterceptor, type ToolHook } from "./tool-interceptor";
+import { ToolRegistry } from "./tool-registry";
 import {
   projectSessionTurns,
   textOf,
@@ -49,7 +46,15 @@ import {
 } from "./session-bridge";
 import { summarizeToolCall } from "./tool-policy";
 
-type Emit = (threadId: string, event: AgentStreamEvent) => void;
+export interface OrchestratorOptions {
+  toolRegistry?: ToolRegistry;
+  contextBuilder?: ContextBuilder;
+  hooks?: ToolHook[];
+  /** Maximum number of idle sessions retained in memory before LRU eviction. */
+  maxIdleSessions?: number;
+}
+
+const DEFAULT_MAX_IDLE_SESSIONS = 12;
 
 interface ActiveSession {
   threadId: string;
@@ -57,6 +62,7 @@ interface ActiveSession {
   interceptor: ToolInterceptor;
   unsubscribe: () => void;
   running: boolean;
+  lastActiveAt: number;
   currentTurn: ChatTurn | null;
   textBlockId: string | null;
   thinkingBlockId: string | null;
@@ -78,56 +84,28 @@ interface QueuedEntry extends QueuedPrompt {
   attachments?: ChatTurn["attachments"];
 }
 
-class FrameBuffer {
-  private readonly pending = new Map<string, { kind: "text_delta" | "thinking_delta"; turnId: string; text: string }>();
-  private timer: ReturnType<typeof setTimeout> | null = null;
-
-  constructor(private readonly emit: Emit, private readonly threadId: string) {}
-
-  push(kind: "text_delta" | "thinking_delta", turnId: string, blockId: string, delta: string): void {
-    const key = `${kind}:${blockId}`;
-    const existing = this.pending.get(key);
-    if (existing) existing.text += delta;
-    else this.pending.set(key, { kind, turnId, text: delta });
-    if (!this.timer) {
-      this.timer = setTimeout(() => this.flush(), STREAM_FRAME_MS);
-    }
-  }
-
-  flush(): void {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
-    for (const [key, value] of this.pending) {
-      const blockId = key.slice(key.indexOf(":") + 1);
-      this.emit(this.threadId, {
-        kind: value.kind,
-        turnId: value.turnId,
-        blockId,
-        delta: value.text,
-      });
-    }
-    this.pending.clear();
-  }
-
-  clear(): void {
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = null;
-    this.pending.clear();
-  }
-}
-
 export class KipOrchestrator {
   private readonly sessions = new Map<string, ActiveSession>();
+  /** Prevents concurrent `ensureSession` calls from creating duplicate sessions. */
+  private readonly initializing = new Map<string, Promise<ActiveSession>>();
   /** Notes for the model, delivered with the next prompt (for example after an undo). */
   private readonly pendingNotes = new Map<string, string[]>();
+  readonly toolRegistry: ToolRegistry;
+  readonly contextBuilder: ContextBuilder;
+  private readonly hooks: ToolHook[];
+  private readonly maxIdleSessions: number;
 
   constructor(
     private readonly database: KipDatabase,
     private readonly registry: ModelRegistry,
-    private readonly emit: Emit,
-  ) {}
+    private readonly emit: StreamEmit,
+    options: OrchestratorOptions = {},
+  ) {
+    this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
+    this.contextBuilder = options.contextBuilder ?? new ContextBuilder();
+    this.hooks = options.hooks ?? [];
+    this.maxIdleSessions = options.maxIdleSessions ?? DEFAULT_MAX_IDLE_SESSIONS;
+  }
 
   runningThreadIds(): string[] {
     return [...this.sessions.values()].filter((item) => item.running).map((item) => item.threadId);
@@ -437,24 +415,70 @@ export class KipOrchestrator {
     }
   }
 
-  async shutdown(): Promise<void> {
-    for (const active of this.sessions.values()) {
-      active.buffer.clear();
-      active.interceptor.cancelAll("shutdown");
-      try {
-        active.unsubscribe();
-        active.session.dispose();
-      } catch {
-        // Shutdown is best-effort; the process is exiting.
-      }
+  /** Aborts and releases a thread's in-memory Pi session (e.g. when deleted). */
+  async disposeSession(threadId: string): Promise<void> {
+    this.pendingNotes.delete(threadId);
+    const active = this.sessions.get(threadId);
+    if (!active) return;
+    this.sessions.delete(threadId);
+    active.buffer.clear();
+    active.interceptor.cancelAll("disposed");
+    active.queued = [];
+    try {
+      active.session.clearQueue();
+      if (active.running) await active.session.abort();
+    } catch {
+      // Best-effort abort during disposal.
     }
+    active.running = false;
+    try {
+      active.unsubscribe();
+      active.session.dispose();
+    } catch {
+      // Disposal must never throw.
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    const ids = [...this.sessions.keys()];
+    await Promise.all(ids.map((id) => this.disposeSession(id)));
     this.sessions.clear();
+    this.pendingNotes.clear();
+  }
+
+  private evictIdleSessions(keepThreadId: string): void {
+    const idle = [...this.sessions.values()]
+      .filter(
+        (item) =>
+          item.threadId !== keepThreadId &&
+          !item.running &&
+          item.interceptor.pendingCount === 0,
+      )
+      .sort((a, b) => a.lastActiveAt - b.lastActiveAt);
+    while (idle.length > this.maxIdleSessions) {
+      const victim = idle.shift();
+      if (!victim) break;
+      void this.disposeSession(victim.threadId);
+    }
   }
 
   private async ensureSession(threadId: string): Promise<ActiveSession> {
     const existing = this.sessions.get(threadId);
-    if (existing) return existing;
+    if (existing) {
+      existing.lastActiveAt = Date.now();
+      return existing;
+    }
+    const inflight = this.initializing.get(threadId);
+    if (inflight) return inflight;
 
+    const creating = this.createSession(threadId).finally(() => {
+      this.initializing.delete(threadId);
+    });
+    this.initializing.set(threadId, creating);
+    return creating;
+  }
+
+  private async createSession(threadId: string): Promise<ActiveSession> {
     const thread = this.requireThread(threadId);
     const workspace = this.database.getWorkspace(thread.workspaceId);
     if (!workspace) throw new Error("Workspace not found");
@@ -478,28 +502,23 @@ export class KipOrchestrator {
       beforeTool: async () => {
         await this.sessions.get(threadId)?.runBefore;
       },
+      hooks: this.hooks,
     });
 
-    const tools = [
-      createReadToolDefinition(workspace.rootPath),
-      createWriteToolDefinition(workspace.rootPath),
-      createEditToolDefinition(workspace.rootPath),
-      createBashToolDefinition(workspace.rootPath, {
-        spawnHook: (context) => ({
-          ...context,
-          env: {
-            ...context.env,
-            GIT_PAGER: "cat",
-            PAGER: "cat",
-            GIT_TERMINAL_PROMPT: "0",
-            NO_COLOR: "1",
-          },
-        }),
+    const [rawTools, systemPromptSections] = await Promise.all([
+      this.toolRegistry.resolveTools({
+        threadId,
+        workspaceId: workspace.id,
+        workspaceRoot: workspace.rootPath,
       }),
-      createGrepToolDefinition(workspace.rootPath),
-      createFindToolDefinition(workspace.rootPath),
-      createLsToolDefinition(workspace.rootPath),
-    ].map((tool) => interceptor.wrap(tool as unknown as ToolDefinition<never, unknown>));
+      this.contextBuilder.buildSystemPromptSections({
+        threadId,
+        workspaceId: workspace.id,
+        workspaceRoot: workspace.rootPath,
+        workspaceName: workspace.name,
+      }),
+    ]);
+    const tools = rawTools.map((tool) => interceptor.wrap(tool));
 
     const agentDir = join(getDataDir(), "agent");
     mkdirSync(agentDir, { recursive: true, mode: 0o700 });
@@ -512,7 +531,7 @@ export class KipOrchestrator {
       noSkills: true,
       noPromptTemplates: true,
       noThemes: true,
-      appendSystemPrompt: [DEFAULT_SYSTEM_PROMPT],
+      appendSystemPrompt: systemPromptSections,
     });
     await resourceLoader.reload();
 
@@ -540,6 +559,7 @@ export class KipOrchestrator {
       interceptor,
       unsubscribe: () => {},
       running: false,
+      lastActiveAt: Date.now(),
       currentTurn: null,
       textBlockId: null,
       thinkingBlockId: null,
@@ -552,6 +572,7 @@ export class KipOrchestrator {
 
     active.unsubscribe = session.subscribe((event) => this.onSessionEvent(active, event));
     this.sessions.set(threadId, active);
+    this.evictIdleSessions(threadId);
     return active;
   }
 
@@ -681,7 +702,7 @@ export class KipOrchestrator {
           output: textOf(event.result?.content),
           diff: meta?.diff,
           durationMs: event.durationMs ?? 0,
-          summaryLabel: meta?.summaryLabel ?? "Tool call",
+          summaryLabel: meta?.summaryLabel ?? block?.summaryLabel ?? "Tool call",
         });
         return;
       }

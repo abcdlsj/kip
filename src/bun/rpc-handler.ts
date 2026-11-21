@@ -77,10 +77,9 @@ export function createKipRpc(deps: RpcDeps) {
           const git = await inspectGit(folder);
           return { ...created, gitBranch: git.branch, dirtyFiles: git.dirtyFiles };
         },
-        removeWorkspace: ({ workspaceId }) => {
-          for (const thread of deps.database.listThreads(workspaceId)) {
-            void deps.orchestrator.abort(thread.id);
-          }
+        removeWorkspace: async ({ workspaceId }) => {
+          const threads = deps.database.listThreads(workspaceId);
+          await Promise.all(threads.map((thread) => deps.orchestrator.disposeSession(thread.id)));
           deps.database.removeWorkspace(workspaceId);
           const dir = getSessionDir(workspaceId);
           if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
@@ -99,9 +98,9 @@ export function createKipRpc(deps: RpcDeps) {
           return { ...thread, isRunning: false };
         },
         loadThreadTurns: ({ threadId }) => deps.orchestrator.loadTurns(threadId),
-        deleteThread: ({ threadId }) => {
+        deleteThread: async ({ threadId }) => {
           const thread = deps.database.getThread(threadId);
-          void deps.orchestrator.abort(threadId);
+          await deps.orchestrator.disposeSession(threadId);
           deps.database.deleteThread(threadId);
           if (thread?.sessionFilePath && existsSync(thread.sessionFilePath)) {
             rmSync(thread.sessionFilePath, { force: true });
@@ -265,7 +264,7 @@ export function createKipRpc(deps: RpcDeps) {
         getUpdateStatus: () => deps.updateChecker.statusSnapshot(),
         openUpdatePage: () => {
           const { releaseUrl } = deps.updateChecker.statusSnapshot();
-          if (!releaseUrl) return { opened: false };
+          if (!releaseUrl || !/^https?:\/\//i.test(releaseUrl)) return { opened: false };
           Utils.openExternal(releaseUrl);
           return { opened: true };
         },

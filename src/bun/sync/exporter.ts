@@ -8,6 +8,7 @@ import { Utils } from "electrobun/bun";
 import type { ChatTurn } from "../../shared/types";
 import type { KipDatabase } from "../storage/db";
 import { getDataDir, getSessionDir } from "../storage/db";
+import { userHome } from "../system/platform";
 import { projectSessionTurns } from "../agent/session-bridge";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 
@@ -26,7 +27,7 @@ interface BackupBundle {
 
 async function pickDirectory(): Promise<string | null> {
   const paths = await Utils.openFileDialog({
-    startingFolder: Bun.env.HOME ?? "/",
+    startingFolder: userHome(),
     canChooseFiles: false,
     canChooseDirectory: true,
     allowsMultipleSelection: false,
@@ -120,7 +121,7 @@ export async function importBackupBundle(
   database: KipDatabase,
 ): Promise<{ importedThreads: number }> {
   const paths = await Utils.openFileDialog({
-    startingFolder: Bun.env.HOME ?? "/",
+    startingFolder: userHome(),
     canChooseFiles: true,
     canChooseDirectory: false,
     allowsMultipleSelection: false,

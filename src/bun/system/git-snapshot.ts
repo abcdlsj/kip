@@ -8,6 +8,7 @@ import { copyFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import type { FileChange } from "../../shared/types";
+import { splitLines } from "./platform";
 
 interface GitResult {
   code: number;
@@ -123,7 +124,7 @@ export async function restoreRun(
     ...paths,
   ]);
   if (drift.code !== 0) return { ok: false, error: "Could not compare the working tree." };
-  const changedSince = drift.stdout.split("\n").filter(Boolean);
+  const changedSince = splitLines(drift.stdout).filter(Boolean);
   if (changedSince.length > 0) {
     const sample = changedSince.slice(0, 3).join(", ");
     return {

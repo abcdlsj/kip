@@ -52,6 +52,8 @@ interface RawModelEntry {
   name?: string;
   context_window?: number;
   context_length?: number;
+  max_output_tokens?: number;
+  max_tokens?: number;
   supportsVision?: boolean;
   supports_vision?: boolean;
   vision?: boolean;
@@ -321,6 +323,20 @@ export async function probeProvider(
       signal: AbortSignal.timeout(15_000),
     });
   }
+  if (provider.protocol === "google-generative-ai") {
+    const cleanModel = modelId.replace(/^models\//, "");
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (apiKey) headers["x-goog-api-key"] = apiKey;
+    return fetcher(`${base}/models/${encodeURIComponent(cleanModel)}:generateContent`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: "ping" }] }],
+        generationConfig: { maxOutputTokens: 1 },
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+  }
   return fetcher(`${base}/chat/completions`, {
     method: "POST",
     headers: jsonHeaders,
@@ -340,8 +356,20 @@ export async function fetchRemoteModels(
   fetcher: typeof fetch = fetch,
 ): Promise<{ models: ProviderModel[]; error?: string }> {
   try {
-    const response = await fetcher(`${baseUrl.replace(/\/+$/g, "")}/models`, {
-      headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
+    const trimmed = baseUrl.replace(/\/+$/g, "");
+    const isAnthropic = trimmed.includes("anthropic.com");
+    const url = isAnthropic && !trimmed.endsWith("/v1") ? `${trimmed}/v1/models` : `${trimmed}/models`;
+    const headers: Record<string, string> = {};
+    if (apiKey) {
+      if (isAnthropic) {
+        headers["x-api-key"] = apiKey;
+        headers["anthropic-version"] = "2023-06-01";
+      } else {
+        headers.authorization = `Bearer ${apiKey}`;
+      }
+    }
+    const response = await fetcher(url, {
+      headers,
       signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) {
@@ -357,7 +385,7 @@ export async function fetchRemoteModels(
         id: entry.id,
         displayName: entry.name || displayModelName(entry.id),
         contextWindow: entry.context_window ?? entry.context_length ?? 200_000,
-        maxOutputTokens: 65_536,
+        maxOutputTokens: entry.max_output_tokens ?? entry.max_tokens ?? 65_536,
         supportsVision: inferRemoteVision(entry),
         supportsReasoning: inferRemoteReasoning(entry),
       }));

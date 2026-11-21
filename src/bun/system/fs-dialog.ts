@@ -1,14 +1,28 @@
-/** Native folder selection and workspace file suggestions. */
+/** Native folder selection and cross-platform workspace file suggestions. */
 import { readdir } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
 import { Utils } from "electrobun/bun";
 import type { FileSuggestion } from "../../shared/types";
+import { toPosixPath, userHome } from "./platform";
 
-const IGNORED = new Set([".git", "node_modules", "dist", "build", ".hutch", ".DS_Store"]);
+const IGNORED = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  ".kip",
+  ".next",
+  ".turbo",
+  "target",
+  "__pycache__",
+  ".venv",
+  ".DS_Store",
+  "Thumbs.db",
+]);
 
 export async function pickWorkspaceFolder(): Promise<string | null> {
   const paths = await Utils.openFileDialog({
-    startingFolder: Bun.env.HOME ?? "/",
+    startingFolder: userHome(),
     canChooseFiles: false,
     canChooseDirectory: true,
     allowsMultipleSelection: false,
@@ -40,7 +54,7 @@ async function walk(
     if (entry.isDirectory()) {
       await walk(root, full, out, depth + 1);
     } else if (entry.isFile()) {
-      out.push(relative(root, full));
+      out.push(toPosixPath(relative(root, full)));
     }
   }
 }
@@ -51,14 +65,14 @@ export async function suggestFiles(
 ): Promise<FileSuggestion[]> {
   const files: string[] = [];
   await walk(rootPath, rootPath, files, 0);
-  const needle = query.toLowerCase();
+  const needle = toPosixPath(query).toLowerCase();
   const ranked = files
     .filter((file) => !needle || file.toLowerCase().includes(needle))
     .sort((a, b) => {
       const aName = basename(a).toLowerCase();
       const bName = basename(b).toLowerCase();
-      const aStarts = aName.startsWith(needle) ? 0 : 1;
-      const bStarts = bName.startsWith(needle) ? 0 : 1;
+      const aStarts = needle && aName.startsWith(needle) ? 0 : 1;
+      const bStarts = needle && bName.startsWith(needle) ? 0 : 1;
       if (aStarts !== bStarts) return aStarts - bStarts;
       return a.length - b.length;
     })

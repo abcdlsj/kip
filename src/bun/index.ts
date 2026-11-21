@@ -170,7 +170,7 @@ const window = new BrowserWindow({
   title: "Kip",
   url: await resolveViewUrl(),
   rpc,
-  titleBarStyle: "hiddenInset",
+  titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
   renderer: process.platform === "darwin" ? "cef" : "native",
   trafficLightOffset: { x: 16, y: 18 },
   frame: { x: 120, y: 90, width: 1180, height: 780 },
@@ -208,17 +208,28 @@ window.on("close", () => {
   void shutdown();
 });
 
-async function shutdown(): Promise<void> {
-  try {
-    await orchestrator.shutdown();
-  } catch {
-    // The process is exiting; shutdown is best-effort.
-  }
-  try {
-    database.close();
-  } catch {
-    // Ignore a second close.
-  }
+let shutdownPromise: Promise<void> | null = null;
+
+function shutdown(): Promise<void> {
+  if (shutdownPromise) return shutdownPromise;
+  shutdownPromise = (async () => {
+    if (syncTimer) {
+      clearTimeout(syncTimer);
+      syncTimer = null;
+    }
+    updateChecker.stop();
+    try {
+      await orchestrator.shutdown();
+    } catch {
+      // The process is exiting; shutdown is best-effort.
+    }
+    try {
+      database.close();
+    } catch {
+      // Ignore a second close.
+    }
+  })();
+  return shutdownPromise;
 }
 
 process.on("SIGINT", () => {

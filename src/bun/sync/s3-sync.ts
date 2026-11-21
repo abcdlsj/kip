@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { SyncConfig, SyncProvider } from "../../shared/types";
 import type { KipDatabase } from "../storage/db";
-import { getSessionDir } from "../storage/db";
+import { getDataDir, getSessionDir } from "../storage/db";
 import { getApiKey, setApiKey } from "../storage/keychain";
 import {
   getGoogleDriveSettings,
@@ -214,7 +214,7 @@ export async function triggerS3Sync(database: KipDatabase): Promise<SyncResult> 
 }
 
 export function countLocalSessions(): number {
-  const root = join(process.env.KIP_DATA_DIR ?? `${Bun.env.HOME}/.kip`, "sessions");
+  const root = join(getDataDir(), "sessions");
   if (!existsSync(root)) return 0;
   let count = 0;
   for (const workspace of readdirSync(root)) {

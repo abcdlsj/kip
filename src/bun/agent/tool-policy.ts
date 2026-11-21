@@ -3,10 +3,10 @@
  * I/O lets the policy be unit-tested and reused by both the interceptor and UI.
  */
 import { realpathSync } from "node:fs";
-import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { diffLines } from "diff";
 import type { ApprovalPolicy } from "../../shared/types";
+import { pathStartsWith, toPosixPath, userHome } from "../system/platform";
 
 export type CommandRisk = "safe" | "standard" | "high-risk";
 
@@ -19,11 +19,14 @@ const SAFE_COMMANDS = new Set([
   "wc",
   "stat",
   "which",
+  "where",
   "echo",
   "rg",
   "grep",
   "find",
   "git",
+  "dir",
+  "type",
 ]);
 
 const SAFE_GIT_SUBCOMMANDS = new Set(["status", "diff", "log", "branch", "show", "rev-parse"]);
@@ -39,9 +42,22 @@ const HIGH_RISK_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /\bcurl\b[^|]*\|\s*(sh|bash|zsh)\b/, label: "pipes network input to a shell" },
   { pattern: /\bwget\b[^|]*\|\s*(sh|bash|zsh)\b/, label: "pipes network input to a shell" },
   { pattern: />\s*\/dev\/sd[a-z]/, label: "writes a raw device" },
+  // Windows / PowerShell destructive equivalents
+  { pattern: /\b(?:remove-item|ri|del|erase)\b[^\n]*(?:-recurse|-r\b|\/s\b)/i, label: "recursive delete" },
+  { pattern: /\b(?:rmdir|rd)\b[^\n]*\/s\b/i, label: "recursive directory delete" },
+  { pattern: /\bformat(?:\.com)?\s+[a-z]:/i, label: "disk format" },
+  { pattern: /\b(?:irm|invoke-restmethod|iwr|invoke-webrequest)\b[^|]*\|\s*(?:iex|invoke-expression)\b/i, label: "pipes network input to PowerShell" },
 ];
 
 const RESTRICTED_ROOTS = [".ssh", ".aws", ".gnupg"];
+
+function expandHome(targetPath: string): string {
+  if (targetPath === "~") return userHome();
+  if (targetPath.startsWith("~/") || targetPath.startsWith("~\\")) {
+    return resolve(userHome(), targetPath.slice(2));
+  }
+  return resolve(targetPath);
+}
 
 export function realPathForGuard(target: string): string {
   const absolute = resolve(target);
@@ -66,22 +82,26 @@ export function isWithinRoot(root: string, target: string): boolean {
     isAbsolute(target) ? target : resolve(resolvedRoot, target),
   );
   const rel = relative(resolvedRoot, resolvedTarget);
-  return rel === "" || (!rel.startsWith("..") && !rel.startsWith(`..${sep}`));
+  // On Windows, paths on different drives produce an absolute `rel` (e.g. "D:\\...").
+  return rel === "" || (!isAbsolute(rel) && !rel.startsWith("..") && !rel.startsWith(`..${sep}`));
 }
 
 export function resolveToolPath(workspaceRoot: string, targetPath: string): string {
+  if (targetPath === "~" || targetPath.startsWith("~/") || targetPath.startsWith("~\\")) {
+    return expandHome(targetPath);
+  }
   return isAbsolute(targetPath) ? resolve(targetPath) : resolve(workspaceRoot, targetPath);
 }
 
 export function isSensitivePath(targetPath: string): boolean {
-  const expanded = targetPath.startsWith("~")
-    ? resolve(homedir(), targetPath.slice(1))
-    : resolve(targetPath);
-  const home = homedir();
-  if (expanded === resolve(home, ".kip", "credentials.enc")) return true;
+  const expanded = expandHome(targetPath);
+  const home = userHome();
+  const credentials = resolve(home, ".kip", "credentials.enc");
+  const machineKey = resolve(home, ".kip", ".machine");
+  if (pathStartsWith(expanded, credentials) || pathStartsWith(expanded, machineKey)) return true;
   for (const root of RESTRICTED_ROOTS) {
     const restricted = resolve(home, root);
-    if (expanded === restricted || expanded.startsWith(`${restricted}${sep}`)) return true;
+    if (pathStartsWith(expanded, restricted)) return true;
   }
   return false;
 }
@@ -144,14 +164,24 @@ export function classifyCommand(command: string): { risk: CommandRisk; reason: s
 
 export function commandTouchesSensitivePath(command: string): boolean {
   const trimmed = command.replace(/["']/g, "");
+  const home = userHome();
   const markers = [
-    join(homedir(), ".ssh"),
-    join(homedir(), ".aws"),
-    join(homedir(), ".gnupg"),
-    join(homedir(), ".kip", "credentials.enc"),
+    join(home, ".ssh"),
+    join(home, ".aws"),
+    join(home, ".gnupg"),
+    join(home, ".kip", "credentials.enc"),
+    join(home, ".kip", ".machine"),
+    toPosixPath(join(home, ".ssh")),
+    toPosixPath(join(home, ".aws")),
+    toPosixPath(join(home, ".gnupg")),
+    toPosixPath(join(home, ".kip", "credentials.enc")),
+    toPosixPath(join(home, ".kip", ".machine")),
   ];
-  if (markers.some((marker) => trimmed.includes(marker))) return true;
-  return /(^|[\s/])~?\/\.ssh\b|(^|[\s/])~?\/\.aws\b|(^|[\s/])~?\/\.gnupg\b/.test(trimmed);
+  const lower = trimmed.toLowerCase();
+  if (markers.some((marker) => lower.includes(marker.toLowerCase()))) return true;
+  return /(^|[\s/\\])(?:~|\$HOME|\$\{HOME\}|%USERPROFILE%|\$env:USERPROFILE)?[\\/]\.(?:ssh|aws|gnupg)\b|(^|[\s/\\])\.kip[\\/](?:credentials\.enc|\.machine)\b/i.test(
+    trimmed,
+  );
 }
 
 /** Programs whose second word picks the action (`git push`, `npm install`). */
@@ -180,7 +210,7 @@ export function commandApprovalKeys(command: string): string[] {
   return [...new Set(splitShellSegments(command).map(commandApprovalKey).filter(Boolean))];
 }
 
-const DEVICE_PATHS = new Set(["/dev/null", "/dev/stdout", "/dev/stderr", "/dev/stdin", "/dev/tty"]);
+const DEVICE_PATHS = new Set(["/dev/null", "/dev/stdout", "/dev/stderr", "/dev/stdin", "/dev/tty", "NUL", "nul"]);
 
 /**
  * Path-like arguments in a shell command that resolve outside the workspace.
@@ -196,10 +226,18 @@ export function commandPathsOutsideRoot(command: string, workspaceRoot: string):
       const eq = word.indexOf("=");
       if (word.startsWith("-") && eq > 0) word = word.slice(eq + 1);
       if (!word || word.startsWith("-") || word.includes("://")) continue;
+      const isWinDrive = /^[a-zA-Z]:[\\/]/.test(word);
       const looksLikePath =
-        word.startsWith("/") || word.startsWith("~") || word === ".." || word.startsWith("../") || word.includes("/../");
+        isWinDrive ||
+        word.startsWith("/") ||
+        word.startsWith("~") ||
+        word === ".." ||
+        word.startsWith("../") ||
+        word.startsWith("..\\") ||
+        word.includes("/../") ||
+        word.includes("\\..\\");
       if (!looksLikePath || DEVICE_PATHS.has(word)) continue;
-      const expanded = word.startsWith("~") ? join(homedir(), word.slice(1)) : word;
+      const expanded = word.startsWith("~") ? expandHome(word) : word;
       if (!isWithinRoot(workspaceRoot, expanded)) outside.push(word);
     }
   }
@@ -232,7 +270,8 @@ export function countLineChanges(before: string, after: string): { added: number
 
 export function shortenPath(path: string, workspaceRoot: string): string {
   const rel = relative(workspaceRoot, path);
-  return rel && !rel.startsWith("..") ? rel : path;
+  const chosen = rel && !isAbsolute(rel) && !rel.startsWith("..") ? rel : path;
+  return toPosixPath(chosen);
 }
 
 export function summarizeToolCall(
