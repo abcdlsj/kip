@@ -6,11 +6,12 @@
 import type { ToolCallBlock } from "../../shared/types";
 
 export function shortPath(value: string): string {
-  const parts = value.split("/");
+  const normalized = value.replaceAll("\\", "/");
+  const parts = normalized.split("/");
   const source = parts.indexOf("src");
   if (source >= 0) return parts.slice(source).join("/");
   if (parts.length > 4) return `…/${parts.slice(-3).join("/")}`;
-  return value;
+  return normalized;
 }
 
 function clip(value: string, max: number): string {

@@ -1,10 +1,6 @@
 /**
- * Which desktop platform the view is running on.
- *
- * The view cannot read `process.platform`, and the UA is stable for the process
- * lifetime, so it is read once here. CSS keys off `<html data-platform>` (see
- * styles/tokens.css) and the window buttons render only where the window manager
- * does not draw them.
+ * Which desktop platform the view is running on, plus platform-native keyboard
+ * shortcut labels so macOS shows `⌘` while Windows and Linux show `Ctrl+`.
  */
 export type Platform = "mac" | "win" | "linux";
 
@@ -19,6 +15,19 @@ export const platform = detect();
 
 /** macOS keeps its native traffic lights; elsewhere the view draws the buttons. */
 export const needsWindowControls = platform !== "mac";
+
+export const isMac = platform === "mac";
+
+/** Primary modifier prefix (`⌘` on macOS, `Ctrl+` elsewhere). */
+export const modKey = isMac ? "⌘" : "Ctrl+";
+
+/** Format a shortcut like `⌘K` (macOS) or `Ctrl+K` (Windows/Linux). */
+export function modShortcut(key: string): string {
+  return `${modKey}${key}`;
+}
+
+/** Primary submit / approve chord (`⌘↵` on macOS, `Ctrl+↵` elsewhere). */
+export const modEnter = isMac ? "⌘↵" : "Ctrl+↵";
 
 export function applyPlatform(): void {
   document.documentElement.dataset.platform = platform;

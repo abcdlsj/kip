@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { copyText } from "../../lib/clipboard";
 import { currentShikiTheme, getHighlighter, normalizeLanguage } from "../../lib/shiki";
 
 interface CodeBlockProps {
@@ -55,37 +56,47 @@ export function CodeBlock({ code, language, streaming = false }: CodeBlockProps)
         );
       });
     });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
     return () => observer.disconnect();
   }, [code, lang, streaming]);
 
   const copy = async () => {
-    await navigator.clipboard.writeText(code);
+    const ok = await copyText(code);
+    if (!ok) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
 
   return (
     <div className="group/code my-4 overflow-hidden rounded-[12px] border border-[var(--code-border)] bg-[var(--bg-code-block)]">
-      <div className="flex h-8 items-center justify-between px-3 pt-0.5">
-        <span className="font-[var(--font-mono)] text-[11.5px] text-[var(--code-muted)]">
+      <div className="flex h-8 items-center justify-between border-b border-[var(--code-border)] px-3">
+        <span className="font-mono text-[11.5px] text-[var(--code-muted)]">
           {lang === "text" ? "code" : lang}
         </span>
         <button
-          onClick={copy}
-          className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--code-muted)] opacity-0 transition hover:bg-[var(--bg-subtle)] hover:text-[var(--code-text)] focus-visible:opacity-100 group-hover/code:opacity-100"
+          type="button"
+          onClick={() => void copy()}
+          className={`btn-ghost h-6 gap-1 rounded-[6px] px-1.5 text-[11.5px] transition-opacity ${
+            copied
+              ? "text-[var(--status-ok)] opacity-100"
+              : "text-[var(--code-muted)] opacity-0 focus-visible:opacity-100 group-hover/code:opacity-100"
+          }`}
           aria-label="Copy code"
         >
-          {copied ? <Check size={13} strokeWidth={1.5} /> : <Copy size={13} strokeWidth={1.5} />}
+          {copied ? <Check size={12} strokeWidth={1.7} /> : <Copy size={12} strokeWidth={1.5} />}
+          <span>{copied ? "Copied" : "Copy"}</span>
         </button>
       </div>
       {html ? (
         <div
-          className="selectable thin-scroll overflow-x-auto px-4 pb-3.5 pt-0.5 text-[13px] leading-relaxed text-[var(--code-text)] [&_pre]:!bg-transparent [&_code]:font-[var(--font-mono)]"
+          className="selectable thin-scroll overflow-x-auto px-4 py-3 text-[13px] leading-[1.6] text-[var(--code-text)] [&_pre]:!bg-transparent [&_code]:font-mono"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
-        <pre className="selectable thin-scroll overflow-x-auto px-4 pb-3.5 pt-0.5 font-[var(--font-mono)] text-[13px] leading-relaxed text-[var(--code-text)]">
+        <pre className="selectable thin-scroll overflow-x-auto px-4 py-3 font-mono text-[13px] leading-[1.6] text-[var(--code-text)]">
           <code>{code}</code>
         </pre>
       )}

@@ -50,5 +50,14 @@ export function formatTokens(value: number): string {
 }
 
 export function basename(path: string): string {
-  return path.split("/").pop() ?? path;
+  const normalized = path.replaceAll("\\", "/");
+  return normalized.split("/").pop() ?? path;
+}
+
+/** Shortens `/Users/name/...`, `/home/name/...`, or `C:\Users\name\...` to `~/...`. */
+export function compactHomePath(path: string): string {
+  return path
+    .replace(/^\/Users\/[^/]+(?=\/|$)/, "~")
+    .replace(/^\/home\/[^/]+(?=\/|$)/, "~")
+    .replace(/^[A-Za-z]:\\Users\\[^\\]+(?=\\|$)/, "~");
 }

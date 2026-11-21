@@ -118,7 +118,7 @@ interface SlashMenuProps {
 export function SlashMenu({ commands, selected, grouped, policy, onHover, onRun }: SlashMenuProps) {
   if (commands.length === 0) {
     return (
-      <div className="absolute bottom-full left-0 mb-2 w-[340px] rounded-[12px] border hairline bg-[var(--bg-elevated)] px-3 py-2.5 text-[12.5px] text-[var(--text-muted)] shadow-[var(--shadow-modal)]">
+      <div className="popover-surface absolute bottom-full left-0 mb-2 w-[360px] max-w-full rounded-[12px] border hairline bg-[var(--bg-elevated)] px-3 py-2.5 text-[12.5px] text-[var(--text-muted)] shadow-[var(--shadow-modal)]">
         No matching command
       </div>
     );
@@ -127,7 +127,7 @@ export function SlashMenu({ commands, selected, grouped, policy, onHover, onRun 
   return (
     <div
       role="listbox"
-      className="absolute bottom-full left-0 mb-2 w-[340px] overflow-hidden rounded-[12px] border hairline bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow-modal)]"
+      className="popover-surface thin-scroll absolute bottom-full left-0 mb-2 max-h-[300px] w-[360px] max-w-full overflow-y-auto rounded-[12px] border hairline bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow-modal)]"
     >
       {commands.map((command, index) => {
         const header = grouped && command.group !== lastGroup ? command.group : null;
@@ -138,11 +138,12 @@ export function SlashMenu({ commands, selected, grouped, policy, onHover, onRun 
         return (
           <div key={command.id}>
             {header && (
-              <p className={`px-2 pb-1 text-[11px] font-medium text-[var(--text-muted)] ${index === 0 ? "pt-1" : "pt-2"}`}>
+              <p className={`px-2 pb-1 text-[10.5px] font-medium uppercase tracking-[0.03em] text-[var(--text-muted)] ${index === 0 ? "pt-1" : "pt-2"}`}>
                 {header}
               </p>
             )}
             <button
+              type="button"
               role="option"
               aria-selected={active}
               onMouseEnter={() => onHover(index)}
@@ -166,7 +167,7 @@ export function SlashMenu({ commands, selected, grouped, policy, onHover, onRun 
                 }`}
               />
               <span
-                className={`shrink-0 font-[var(--font-mono)] text-[12.5px] ${
+                className={`shrink-0 font-mono text-[12.5px] ${
                   command.policy === "yolo"
                     ? "text-[var(--status-err)]"
                     : "text-[var(--text-primary)]"
@@ -178,7 +179,9 @@ export function SlashMenu({ commands, selected, grouped, policy, onHover, onRun 
                 {command.description}
               </span>
               {current ? (
-                <span className="shrink-0 text-[11px] font-medium text-[var(--text-secondary)]">Current</span>
+                <span className="shrink-0 rounded-full bg-[var(--bg-active)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--text-secondary)]">
+                  Active
+                </span>
               ) : (
                 active && <span className="kbd shrink-0">↵</span>
               )}

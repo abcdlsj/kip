@@ -7,6 +7,7 @@ import type {
   ToolApprovalPayload,
   ToolCallBlock,
 } from "../../../shared/types";
+import { copyText } from "../../lib/clipboard";
 import { ApprovalBanner } from "./ApprovalBanner";
 import { Markdown } from "./Markdown";
 import { ThinkingTrace } from "./ThinkingTrace";
@@ -134,15 +135,18 @@ function MessageTurnInner({
         );
       })}
       {turn.error && (
-        <div className="my-3 flex items-center gap-2 text-[12px] text-[var(--status-err)]">
-          <AlertCircle size={13} strokeWidth={1.5} />
-          <span className="selectable">{turn.error}</span>
+        <div className="my-3 flex items-start justify-between gap-3 rounded-[10px] border border-[color-mix(in_srgb,var(--status-err)_28%,transparent)] bg-[color-mix(in_srgb,var(--status-err)_6%,transparent)] px-3.5 py-2.5 text-[12.5px] text-[var(--status-err)]">
+          <div className="flex min-w-0 items-start gap-2">
+            <AlertCircle size={14} strokeWidth={1.5} className="mt-0.5 shrink-0" />
+            <span className="selectable break-words leading-[1.5]">{turn.error}</span>
+          </div>
           {onRetry && (
             <button
+              type="button"
               onClick={() => onRetry(turn.id)}
-              className="ml-1 inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--status-err)_30%,transparent)] px-2 py-0.5 text-[11.5px] transition-colors hover:bg-[color-mix(in_srgb,var(--status-err)_8%,transparent)]"
+              className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[6px] border border-[color-mix(in_srgb,var(--status-err)_35%,transparent)] px-2 text-[11.5px] font-medium transition-colors hover:bg-[color-mix(in_srgb,var(--status-err)_10%,transparent)] active:scale-[0.98]"
             >
-              <RotateCcw size={10} strokeWidth={1.5} />
+              <RotateCcw size={11} strokeWidth={1.5} />
               Retry
             </button>
           )}
@@ -200,7 +204,8 @@ function UserMessage({
   };
 
   const copy = async () => {
-    await navigator.clipboard.writeText(text);
+    const ok = await copyText(text);
+    if (!ok) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -246,18 +251,20 @@ function UserMessage({
             </span>
             <div className="flex items-center gap-1.5">
               <button
+                type="button"
                 onClick={() => {
                   setDraft(text);
                   setEditing(false);
                 }}
-                className="h-7 rounded-[8px] px-2.5 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)]"
+                className="btn-ghost h-7 rounded-[8px] px-2.5 text-[12px] font-medium"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={submit}
                 disabled={!draft.trim()}
-                className="h-7 rounded-[8px] bg-[var(--accent-ink)] px-3 text-[12px] font-medium text-[var(--accent-ink-fg)] transition-opacity hover:opacity-90 disabled:opacity-40"
+                className="btn-primary h-7 rounded-[8px] px-3 text-[12px]"
               >
                 Send
               </button>
@@ -266,7 +273,7 @@ function UserMessage({
         </div>
       ) : (
         <>
-          <div className="max-w-[85%] rounded-[14px] bg-[var(--bg-subtle)] px-3.5 py-2.5">
+          <div className="max-w-[85%] rounded-[16px] bg-[var(--bg-user)] px-4 py-2.5">
             <p className="selectable font-prose whitespace-pre-wrap break-words text-[15px] leading-[1.65] text-[var(--text-primary)]">
               {text}
             </p>
@@ -274,6 +281,7 @@ function UserMessage({
           <div className="mt-1 flex h-6 items-center justify-end gap-0.5 opacity-0 transition-opacity duration-150 group-hover/user:opacity-100 group-focus-within/user:opacity-100">
             {onEdit && (
               <button
+                type="button"
                 onClick={() => {
                   setDraft(text);
                   setEditing(true);
@@ -285,8 +293,12 @@ function UserMessage({
                 Edit
               </button>
             )}
-            <button onClick={() => void copy()} className={actionClass} aria-label="Copy message">
-              {copied ? <Check size={11} strokeWidth={1.7} /> : <Copy size={11} strokeWidth={1.5} />}
+            <button type="button" onClick={() => void copy()} className={actionClass} aria-label="Copy message">
+              {copied ? (
+                <Check size={11} strokeWidth={1.7} className="text-[var(--status-ok)]" />
+              ) : (
+                <Copy size={11} strokeWidth={1.5} />
+              )}
               {copied ? "Copied" : "Copy"}
             </button>
           </div>

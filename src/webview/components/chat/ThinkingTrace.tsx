@@ -20,8 +20,10 @@ export function ThinkingTrace({ block, streaming }: ThinkingTraceProps) {
   return (
     <div className="my-1.5">
       <button
+        type="button"
         onClick={() => setOpen((value) => !value)}
-        className="group flex h-[26px] items-center gap-1.5 text-[12.5px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
+        aria-expanded={open}
+        className="btn-ghost group -ml-1.5 h-[26px] gap-1.5 rounded-[7px] px-1.5 text-[12.5px] text-[var(--text-muted)]"
       >
         <Sparkles size={12} strokeWidth={1.5} className={streaming ? "pulse-dot" : ""} />
         <span className={streaming ? "thinking-shimmer" : ""}>{label}</span>

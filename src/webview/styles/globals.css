@@ -78,13 +78,156 @@ body {
   height: 8px;
 }
 .thin-scroll::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--text-muted) 28%, transparent);
+  background: color-mix(in srgb, var(--text-muted) 26%, transparent);
   border-radius: 999px;
   border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background-color 150ms ease;
+}
+.thin-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-muted) 46%, transparent);
   background-clip: content-box;
 }
 .thin-scroll::-webkit-scrollbar-track {
   background: transparent;
+}
+
+@layer components {
+  /* Reusable tactile button & surface primitives aligned with Kip's quiet minimalism. */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--accent-ink);
+    color: var(--accent-ink-fg);
+    font-weight: 500;
+    transition: opacity 140ms var(--spring), transform 120ms var(--spring);
+  }
+  .btn-primary:hover:not(:disabled) {
+    opacity: 0.88;
+  }
+  .btn-primary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+  .btn-primary:disabled {
+    opacity: 0.42;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid var(--border-hairline);
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 500;
+    transition: background-color 140ms var(--spring), border-color 140ms var(--spring),
+      color 140ms var(--spring), transform 120ms var(--spring);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--bg-subtle);
+    border-color: var(--border-focus);
+    color: var(--text-primary);
+  }
+  .btn-secondary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+  .btn-secondary:disabled {
+    opacity: 0.42;
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    transition: background-color 140ms var(--spring), color 140ms var(--spring),
+      transform 120ms var(--spring);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--bg-subtle);
+    color: var(--text-primary);
+  }
+  .btn-ghost:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+  .btn-ghost:disabled {
+    opacity: 0.42;
+  }
+
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: background-color 140ms var(--spring), color 140ms var(--spring),
+      transform 120ms var(--spring);
+  }
+  .btn-icon:hover:not(:disabled) {
+    background: var(--bg-subtle);
+    color: var(--text-secondary);
+  }
+  .btn-icon:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+  .btn-icon:disabled {
+    opacity: 0.42;
+  }
+
+  .btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--status-err);
+    color: #ffffff;
+    font-weight: 500;
+    transition: opacity 140ms var(--spring), transform 120ms var(--spring);
+  }
+  .btn-danger:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+  .btn-danger:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+  .btn-danger:disabled {
+    opacity: 0.42;
+  }
+
+  .popover-surface {
+    animation: kip-popover-in 150ms var(--spring);
+  }
+
+  .dialog-overlay {
+    animation: kip-overlay-in 150ms ease-out;
+  }
+
+  .modal-surface {
+    animation: kip-popover-in 170ms var(--spring);
+  }
+}
+
+@keyframes kip-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes kip-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .title-large {
@@ -277,7 +420,13 @@ body {
 .markdown-body a {
   color: var(--accent-brand);
   text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent-brand) 45%, transparent);
   text-underline-offset: 3px;
+  transition: text-decoration-color 140ms ease, opacity 140ms ease;
+}
+
+.markdown-body a:hover {
+  text-decoration-color: var(--accent-brand);
 }
 
 .markdown-body blockquote {
@@ -289,28 +438,34 @@ body {
 .markdown-body table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13.5px;
   font-variant-numeric: tabular-nums;
 }
 
 .markdown-body th {
   font-weight: 600;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .markdown-body th,
 .markdown-body td {
   border-bottom: 1px solid var(--border-hairline);
-  padding: 6px 10px;
+  padding: 7px 10px;
   text-align: left;
+}
+
+.markdown-body tr:last-child td {
+  border-bottom: 0;
 }
 
 .markdown-body code:not(pre code) {
   font-family: var(--font-mono);
-  font-size: 13.5px;
-  background: var(--bg-subtle);
+  font-size: 0.87em;
+  background: var(--bg-code);
+  border: 1px solid var(--code-border);
   border-radius: 5px;
-  padding: 1px 6px;
+  padding: 1px 5px;
 }
 
 .markdown-body pre {

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { FileSuggestion, PromptDelivery } from "../../../shared/types";
 import { MAX_ATTACHMENT_BYTES } from "../../../shared/constants";
+import { modEnter } from "../../lib/platform";
 import { stopThread, submitPrompt } from "../../lib/send";
 import { request } from "../../rpc-client";
 import { useChatStore } from "../../stores/chat-store";
@@ -42,6 +43,7 @@ export function Composer() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [focused, setFocused] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [images, setImages] = useState<PendingImage[]>([]);
   const [suggestions, setSuggestions] = useState<FileSuggestion[]>([]);
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
@@ -302,33 +304,61 @@ export function Composer() {
           />
         )}
         {!slashOpen && suggestions.length > 0 && (
-          <div className="absolute bottom-full left-0 mb-2 w-[360px] overflow-hidden rounded-[12px] border hairline bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow-modal)]">
-            <p className="px-2 py-1 text-[11.5px] font-medium text-[var(--text-muted)]">
+          <div className="popover-surface absolute bottom-full left-0 mb-2 w-[380px] max-w-full overflow-hidden rounded-[12px] border hairline bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow-modal)]">
+            <p className="px-2 py-1 text-[11px] font-medium uppercase tracking-[0.03em] text-[var(--text-muted)]">
               Files
             </p>
-            {suggestions.map((suggestion, index) => (
-              <button
-                key={suggestion.path}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  insertSuggestion(suggestion);
-                }}
-                className={`flex h-8 w-full items-center gap-2 rounded-[6px] px-2 text-left transition-colors ${
-                  index === selectedSuggestion ? "bg-[var(--bg-subtle)]" : ""
-                }`}
-              >
-                <FileText size={12} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
-                <span className="truncate font-[var(--font-mono)] text-[12px] text-[var(--text-secondary)]">
-                  {suggestion.path}
-                </span>
-              </button>
-            ))}
+            {suggestions.map((suggestion, index) => {
+              const slash = suggestion.path.lastIndexOf("/");
+              const dir = slash >= 0 ? suggestion.path.slice(0, slash + 1) : "";
+              const file = slash >= 0 ? suggestion.path.slice(slash + 1) : suggestion.path;
+              return (
+                <button
+                  type="button"
+                  key={suggestion.path}
+                  onMouseEnter={() => setSelectedSuggestion(index)}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    insertSuggestion(suggestion);
+                  }}
+                  className={`flex h-8 w-full items-center gap-2 rounded-[7px] px-2 text-left transition-colors ${
+                    index === selectedSuggestion ? "bg-[var(--bg-subtle)]" : ""
+                  }`}
+                >
+                  <FileText size={12} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+                  <span className="flex min-w-0 flex-1 font-mono text-[12px]">
+                    {dir && <span className="min-w-0 truncate text-[var(--text-muted)]">{dir}</span>}
+                    <span className="shrink-0 text-[var(--text-primary)]">{file}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
         <div
-          className="rounded-[20px] border bg-[var(--bg-elevated)] px-3.5 pb-2 pt-3 shadow-[var(--shadow-composer)] transition-[border-color,box-shadow] duration-150"
+          onDragOver={(event) => {
+            if (event.dataTransfer.types.includes("Files")) {
+              event.preventDefault();
+              setDragging(true);
+            }
+          }}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setDragging(false);
+            }
+          }}
+          onDrop={(event) => {
+            setDragging(false);
+            if (event.dataTransfer.files.length) {
+              event.preventDefault();
+              void addFiles(event.dataTransfer.files);
+            }
+          }}
+          className={`rounded-[20px] border bg-[var(--bg-elevated)] px-3.5 pb-2 pt-3 shadow-[var(--shadow-composer)] transition-[border-color,box-shadow] duration-150 ${
+            dragging ? "border-dashed" : ""
+          }`}
           style={{
-            borderColor: focused ? "var(--border-focus)" : "var(--border-hairline)",
+            borderColor: dragging || focused ? "var(--border-focus)" : "var(--border-hairline)",
           }}
         >
           {queued.length > 0 && (
@@ -417,8 +447,9 @@ export function Composer() {
               }}
             />
             <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex h-7 w-7 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
+              className="btn-icon h-7 w-7 rounded-[8px]"
               aria-label="Attach image"
               title="Attach image"
             >
@@ -437,13 +468,14 @@ export function Composer() {
               )}
               {running && !notice && (
                 <span className="text-meta hidden text-[var(--text-muted)] sm:block">
-                  {hasContent ? "Enter to queue · ⌘↵ next step" : "Esc to stop"}
+                  {hasContent ? `Enter to queue · ${modEnter} next step` : "Esc to stop"}
                 </span>
               )}
               {running && (
                 <button
+                  type="button"
                   onClick={() => void stop()}
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-active)] text-[var(--text-primary)] transition-colors hover:bg-[var(--border-focus)]"
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-active)] text-[var(--text-primary)] transition-all hover:bg-[var(--border-focus)] active:scale-95"
                   aria-label="Stop"
                   title="Stop (Esc)"
                 >
@@ -452,9 +484,10 @@ export function Composer() {
               )}
               {(!running || hasContent) && (
                 <button
+                  type="button"
                   onClick={() => void send()}
                   disabled={!activeWorkspaceId || !hasContent}
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-ink)] text-[var(--accent-ink-fg)] transition-colors disabled:bg-[var(--bg-active)] disabled:text-[var(--text-muted)]"
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-ink)] text-[var(--accent-ink-fg)] transition-all hover:opacity-88 active:scale-95 disabled:bg-[var(--bg-active)] disabled:text-[var(--text-muted)] disabled:opacity-100"
                   aria-label={running ? "Queue message" : "Send"}
                   title={running ? "Queue after the current work (Enter)" : "Send (Enter)"}
                 >

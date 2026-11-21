@@ -27,12 +27,13 @@ export function Markdown({ children, streaming = false }: MarkdownProps) {
             if (className?.includes("language-")) {
               return <code className={className}>{codeChildren}</code>;
             }
-            return (
-              <code className="rounded-[5px] bg-[var(--bg-code)] px-1.5 py-0.5 font-[var(--font-mono)] text-[0.87em]">
-                {codeChildren}
-              </code>
-            );
+            return <code>{codeChildren}</code>;
           },
+          table: ({ children: tableChildren }) => (
+            <div className="thin-scroll my-3 overflow-x-auto rounded-[10px] border hairline">
+              <table>{tableChildren}</table>
+            </div>
+          ),
           a: ({ href, children: linkChildren }) => (
             <a href={href} target="_blank" rel="noreferrer">
               {linkChildren}

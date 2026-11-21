@@ -22,16 +22,20 @@ interface WorkspaceState {
   initialize: () => Promise<void>;
   selectWorkspace: (workspaceId: string) => Promise<void>;
   pickWorkspace: () => Promise<void>;
+  removeWorkspace: (workspaceId: string) => Promise<void>;
   refreshWorkspaces: () => Promise<void>;
   refreshThreads: () => Promise<void>;
   newThread: () => Promise<ThreadSummary | null>;
   selectThread: (threadId: string | null) => void;
   deleteThread: (threadId: string) => Promise<void>;
   renameThread: (threadId: string, title: string) => Promise<void>;
-  applyStreamMeta: (event: {
-    kind: string;
-    title?: string;
-  }) => void;
+  applyStreamMeta: (
+    threadId: string,
+    event: {
+      kind: string;
+      title?: string;
+    },
+  ) => void;
   setThreadRunning: (threadId: string, running: boolean) => void;
   updateThreadModel: (threadId: string, provider: string, modelId: string) => Promise<void>;
   setThreadThinking: (threadId: string, level: ThinkingLevel) => Promise<void>;
@@ -94,6 +98,22 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     await get().selectWorkspace(workspace.id);
   },
 
+  removeWorkspace: async (workspaceId) => {
+    await request("removeWorkspace", { workspaceId });
+    const workspaces = await request("listWorkspaces", undefined);
+    const wasActive = get().activeWorkspaceId === workspaceId;
+    const nextId = wasActive ? (workspaces[0]?.id ?? null) : get().activeWorkspaceId;
+    set({ workspaces, activeWorkspaceId: nextId });
+    if (wasActive) {
+      if (nextId) {
+        const threads = await request("listThreads", { workspaceId: nextId });
+        set({ threads, activeThreadId: threads[0]?.id ?? null });
+      } else {
+        set({ threads: [], activeThreadId: null });
+      }
+    }
+  },
+
   refreshThreads: async () => {
     const workspaceId = get().activeWorkspaceId;
     if (!workspaceId) return;
@@ -141,12 +161,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }));
   },
 
-  applyStreamMeta: (event) => {
-    const activeId = get().activeThreadId;
-    if (event.kind === "thread_title_updated" && event.title && activeId) {
+  applyStreamMeta: (threadId, event) => {
+    if (event.kind === "thread_title_updated" && event.title) {
       set((state) => ({
         threads: state.threads.map((thread) =>
-          thread.id === activeId ? { ...thread, title: event.title ?? thread.title } : thread,
+          thread.id === threadId ? { ...thread, title: event.title ?? thread.title } : thread,
         ),
       }));
     }

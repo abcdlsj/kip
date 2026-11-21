@@ -1,9 +1,9 @@
 import * as Popover from "@radix-ui/react-popover";
-import { Check, FileDown, GitBranch, MoreHorizontal, PanelLeftOpen } from "lucide-react";
+import { Check, FileDown, GitBranch, Minimize2, MoreHorizontal, PanelLeftOpen } from "lucide-react";
 import { useState } from "react";
 import type { ContextUsage, ThreadSummary, Workspace } from "../../../shared/types";
-import { formatTokens } from "../../lib/format";
-import { needsWindowControls, platform } from "../../lib/platform";
+import { compactHomePath, formatTokens } from "../../lib/format";
+import { isMac, modShortcut, needsWindowControls, platform } from "../../lib/platform";
 import { request } from "../../rpc-client";
 import { useChatStore } from "../../stores/chat-store";
 import { useUiStore } from "../../stores/ui-store";
@@ -28,6 +28,12 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
   const percent = Math.round(usage.ratio * 100);
+  const ringStroke =
+    percent > 85
+      ? "var(--status-err)"
+      : percent > 70
+        ? "var(--status-warn)"
+        : "var(--text-secondary)";
 
   const exportThread = async () => {
     if (!thread || exporting) return;
@@ -47,6 +53,7 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
   const compact = async () => {
     if (!thread || compacting) return;
     setCompacting(true);
+    setMenuOpen(false);
     try {
       const next = await request("compactThread", { threadId: thread.id });
       setUsage(thread.id, next);
@@ -54,6 +61,9 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
       setCompacting(false);
     }
   };
+
+  // Only macOS reserves space for traffic lights on the left when sidebar is collapsed.
+  const leftPadding = collapsed ? (isMac ? "pl-[84px]" : "pl-3") : "pl-4";
 
   return (
     <header
@@ -66,59 +76,80 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
       }}
       className={`drag-region absolute inset-x-0 top-0 z-10 flex h-11 items-center gap-2 pr-3 transition-colors ${
         scrolled ? "border-b hairline" : "border-b border-transparent"
-      } ${collapsed ? "pl-[84px]" : "pl-4"}`}
+      } ${leftPadding}`}
       style={{
-        background: "color-mix(in srgb, var(--bg-canvas) 82%, transparent)",
+        background: "color-mix(in srgb, var(--bg-canvas) 84%, transparent)",
         backdropFilter: "blur(14px)",
         WebkitBackdropFilter: "blur(14px)",
       }}
     >
       {collapsed && (
         <button
+          type="button"
           onClick={() => void toggleSidebar()}
-          className="no-drag -ml-1 flex h-7 w-7 items-center justify-center rounded-[7px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
+          className="btn-icon no-drag -ml-1 h-7 w-7 rounded-[7px]"
           aria-label="Open sidebar"
-          title="Open sidebar (⌘B)"
+          title={`Open sidebar (${modShortcut("B")})`}
         >
           <PanelLeftOpen size={15} strokeWidth={1.5} />
         </button>
       )}
       <div className="no-drag flex min-w-0 items-center gap-1.5 text-[13px] text-[var(--text-muted)]">
-        <span className="max-w-[160px] truncate">{workspace?.name ?? "Kip"}</span>
+        <span
+          className="max-w-[160px] truncate"
+          title={workspace ? compactHomePath(workspace.rootPath) : undefined}
+        >
+          {workspace?.name ?? "Kip"}
+        </span>
         {thread && (
           <>
-            <span className="opacity-40">/</span>
-            <span className="max-w-[320px] truncate font-medium text-[var(--text-primary)]">
+            <span className="opacity-40" aria-hidden="true">
+              /
+            </span>
+            <span
+              className="max-w-[340px] truncate font-medium text-[var(--text-primary)]"
+              title={thread.title}
+            >
               {thread.title}
             </span>
           </>
         )}
       </div>
-      <div className="no-drag ml-auto flex items-center gap-1.5">
+      <div className="no-drag ml-auto flex items-center gap-1">
         {thread && changes && (
           <ChangesChip threadId={thread.id} changes={changes} running={running ?? false} />
         )}
         {workspace?.gitBranch && (
-          <span className="flex h-6 items-center gap-1.5 rounded-[7px] bg-[var(--bg-subtle)] px-2 text-[11.5px] text-[var(--text-secondary)]">
-            <GitBranch size={11} strokeWidth={1.5} />
-            <span className="max-w-[140px] truncate font-[var(--font-mono)] text-[11px]">
+          <span
+            className="flex h-6 items-center gap-1.5 rounded-[7px] bg-[var(--bg-subtle)] px-2 text-[11.5px] text-[var(--text-secondary)]"
+            title={
+              workspace.dirtyFiles > 0
+                ? `${workspace.gitBranch} · ${workspace.dirtyFiles} uncommitted ${workspace.dirtyFiles === 1 ? "change" : "changes"}`
+                : `Git branch: ${workspace.gitBranch}`
+            }
+          >
+            <GitBranch size={11} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+            <span className="max-w-[140px] truncate font-mono text-[11px]">
               {workspace.gitBranch}
             </span>
             {workspace.dirtyFiles > 0 && (
-              <span className="text-[11px] text-[var(--status-warn)]">+{workspace.dirtyFiles}</span>
+              <span className="text-meta text-[11px] text-[var(--status-warn)]">
+                +{workspace.dirtyFiles}
+              </span>
             )}
           </span>
         )}
         {thread && (
           <button
+            type="button"
             onClick={() => void compact()}
-            disabled={compacting}
+            disabled={compacting || running}
             title={
               usage.maxTokens
-                ? `Context ${formatTokens(usage.usedTokens)} / ${formatTokens(usage.maxTokens)} · Click to compact`
+                ? `Context ${formatTokens(usage.usedTokens)} / ${formatTokens(usage.maxTokens)} (${percent}%) · Click to compact`
                 : "Compact context"
             }
-            className="group flex h-6 items-center gap-1.5 rounded-[7px] px-1.5 transition-colors hover:bg-[var(--bg-subtle)]"
+            className="btn-ghost group h-6 gap-1.5 rounded-[7px] px-1.5"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" className="rotate-[-90deg]">
               <circle
@@ -126,18 +157,19 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
                 cy="7"
                 r="5.5"
                 fill="none"
-                stroke="var(--border-focus)"
-                strokeWidth="1.5"
+                stroke="var(--border-hairline)"
+                strokeWidth="1.6"
               />
               <circle
                 cx="7"
                 cy="7"
                 r="5.5"
                 fill="none"
-                stroke={percent > 85 ? "var(--status-err)" : "var(--text-secondary)"}
-                strokeWidth="1.5"
+                stroke={ringStroke}
+                strokeWidth="1.6"
                 strokeLinecap="round"
-                strokeDasharray={`${Math.max(0.5, usage.ratio * 34.56)} 34.56`}
+                strokeDasharray={`${Math.max(0.6, usage.ratio * 34.56)} 34.56`}
+                style={{ transition: "stroke-dasharray 260ms var(--spring), stroke 200ms ease" }}
                 className={compacting ? "pulse-dot" : ""}
               />
             </svg>
@@ -150,14 +182,15 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
           <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
             <Popover.Trigger asChild>
               <button
-                className="flex h-6 w-6 items-center justify-center rounded-[7px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)] data-[state=open]:bg-[var(--bg-subtle)]"
+                type="button"
+                className="btn-icon h-6 w-6 rounded-[7px] data-[state=open]:bg-[var(--bg-subtle)] data-[state=open]:text-[var(--text-primary)]"
                 aria-label="Thread options"
                 title="Thread options"
               >
                 {exported ? (
                   <Check size={13} strokeWidth={1.7} className="text-[var(--status-ok)]" />
                 ) : (
-                  <MoreHorizontal size={14} strokeWidth={1.6} />
+                  <MoreHorizontal size={14} strokeWidth={1.5} />
                 )}
               </button>
             </Popover.Trigger>
@@ -166,12 +199,22 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
                 side="bottom"
                 align="end"
                 sideOffset={6}
-                className="z-50 w-[168px] rounded-[10px] border hairline bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow-modal)]"
+                className="popover-surface z-50 w-[180px] rounded-[11px] border hairline bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow-modal)] outline-none"
               >
                 <button
+                  type="button"
+                  onClick={() => void compact()}
+                  disabled={compacting || running}
+                  className="btn-ghost h-7 w-full justify-start gap-2 rounded-[6px] px-2 text-left text-[12px]"
+                >
+                  <Minimize2 size={13} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+                  <span>{compacting ? "Compacting…" : "Compact context"}</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => void exportThread()}
                   disabled={exporting}
-                  className="flex h-7 w-full items-center gap-2 rounded-[6px] px-2 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)] disabled:opacity-50"
+                  className="btn-ghost h-7 w-full justify-start gap-2 rounded-[6px] px-2 text-left text-[12px]"
                 >
                   <FileDown size={13} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
                   <span>{exporting ? "Exporting…" : "Export Markdown"}</span>
@@ -181,7 +224,12 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
           </Popover.Root>
         )}
       </div>
-      {needsWindowControls && <WindowControls />}
+      {needsWindowControls && (
+        <>
+          <span className="ml-1 h-3.5 w-px shrink-0 bg-[var(--border-hairline)]" aria-hidden="true" />
+          <WindowControls />
+        </>
+      )}
     </header>
   );
 }

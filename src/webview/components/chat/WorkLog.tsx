@@ -74,6 +74,11 @@ export function WorkLog({ blocks, running, approvals, durationMs }: WorkLogProps
   const action = currentAction(last);
   const waiting = pending.length > 0;
 
+  // Auto-open the work log whenever an approval arrives so pending steps never hide inside the fold.
+  useEffect(() => {
+    if (waiting) setOpen(true);
+  }, [waiting]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 2 }}
@@ -82,23 +87,33 @@ export function WorkLog({ blocks, running, approvals, durationMs }: WorkLogProps
       className="my-1.5"
     >
       <button
+        type="button"
         onClick={() => setOpen((value) => !value)}
-        className="group -ml-1.5 flex h-7 max-w-full items-center gap-1.5 rounded-[8px] px-1.5 text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
+        aria-expanded={open}
+        className="btn-ghost group -ml-1.5 h-7 max-w-full justify-start gap-1.5 rounded-[8px] px-1.5 text-[13px]"
       >
-        <span className="flex h-4 w-4 items-center justify-center">
-          {running ? (
+        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+          {waiting ? (
+            <ShieldAlert size={12} strokeWidth={1.6} className="text-[var(--status-warn)]" />
+          ) : running ? (
             <Loader2 size={11} strokeWidth={1.6} className="animate-spin text-[var(--text-muted)]" />
           ) : hasError ? (
             <AlertCircle size={11} strokeWidth={1.6} className="text-[var(--status-err)]" />
           ) : hasDenied ? (
             <X size={11} strokeWidth={1.7} className="text-[var(--status-warn)]" />
-          ) : waiting ? (
-            <ShieldAlert size={11} strokeWidth={1.6} className="text-[var(--status-warn)]" />
           ) : (
             <Sparkles size={12} strokeWidth={1.5} />
           )}
         </span>
-        <span className={`truncate ${running ? "thinking-shimmer" : ""}`}>
+        <span
+          className={`truncate ${
+            waiting
+              ? "font-medium text-[var(--status-warn)]"
+              : running
+                ? "thinking-shimmer"
+                : ""
+          }`}
+        >
           {waiting
             ? "Waiting for approval"
             : running
@@ -112,15 +127,15 @@ export function WorkLog({ blocks, running, approvals, durationMs }: WorkLogProps
             · {toolCount} {toolCount === 1 ? "step" : "steps"}
           </span>
         )}
-        {hasError && <span className="text-[11.5px] text-[var(--status-err)]">· error</span>}
-        {hasDenied && <span className="text-[11.5px] text-[var(--status-warn)]">· denied</span>}
-        {running && elapsed > 3000 && (
-          <span className="text-meta text-[var(--text-muted)]">{durationLabel(elapsed)}</span>
+        {hasError && <span className="shrink-0 text-[11.5px] text-[var(--status-err)]">· error</span>}
+        {hasDenied && <span className="shrink-0 text-[11.5px] text-[var(--status-warn)]">· denied</span>}
+        {running && !waiting && elapsed > 3000 && (
+          <span className="text-meta shrink-0 text-[var(--text-muted)]">{durationLabel(elapsed)}</span>
         )}
         <ChevronRight
           size={12}
           strokeWidth={1.5}
-          className={`text-[var(--text-muted)] transition-transform duration-200 ${
+          className={`shrink-0 text-[var(--text-muted)] transition-transform duration-200 ${
             open ? "rotate-90" : ""
           }`}
         />
@@ -134,7 +149,7 @@ export function WorkLog({ blocks, running, approvals, durationMs }: WorkLogProps
             transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}
             className="overflow-hidden"
           >
-            <div className="ml-[1px] border-l border-[var(--border-focus)] py-1 pl-4 [border-left-color:var(--border-hairline)]">
+            <div className="ml-[5px] border-l border-[var(--border-hairline)] py-1 pl-3.5">
               {blocks.map((block, index) => (
                 <motion.div
                   key={block.id}

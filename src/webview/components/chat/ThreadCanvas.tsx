@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowDown, Plus } from "lucide-react";
+import { ArrowDown, ArrowUpRight, Plus } from "lucide-react";
 import type { Workspace } from "../../../shared/types";
 import { SUGGESTIONS } from "../../../shared/constants";
-import { greeting } from "../../lib/format";
+import { compactHomePath, greeting } from "../../lib/format";
+import { modShortcut } from "../../lib/platform";
 import { submitPrompt } from "../../lib/send";
 import { useChatStore } from "../../stores/chat-store";
-import { NEW_THREAD_DRAFT, useUiStore } from "../../stores/ui-store";
+import { useUiStore } from "../../stores/ui-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
 import { MessageTurn } from "./MessageTurn";
 
@@ -19,7 +20,6 @@ interface ThreadCanvasProps {
 export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasProps) {
   const view = useChatStore((state) => (threadId ? state.threads[threadId] : undefined));
   const load = useChatStore((state) => state.load);
-  const setDraft = useUiStore((state) => state.setDraft);
   const openSettings = useUiStore((state) => state.openSettings);
   const providers = useUiStore((state) => state.providers);
   const refreshThreads = useWorkspaceStore((state) => state.refreshThreads);
@@ -109,13 +109,14 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
 
   const needsProvider = providers.length === 0;
   const isEmpty = !view || view.turns.length === 0;
+  const displayPath = workspace ? compactHomePath(workspace.rootPath) : "~/.kip/scratchpad";
 
   return (
     <div className="relative flex-1 overflow-hidden">
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className="thin-scroll h-full overflow-y-auto px-7 pt-[64px] pb-[180px]"
+        className="thin-scroll h-full overflow-y-auto px-7 pt-[64px] pb-[184px]"
       >
         <div className="mx-auto w-full max-w-[740px]">
           {isEmpty ? (
@@ -125,12 +126,13 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
                   <p className="text-meta text-[var(--text-muted)]">FIRST RUN</p>
                   <h1 className="title-large mt-3">Welcome to Kip.</h1>
                   <p className="mt-3 text-[15px] leading-[1.65] text-[var(--text-secondary)]">
-                    Connect an OpenAI-compatible endpoint to begin. Kip keeps credentials in
-                    your system keychain and never writes them to a database.
+                    Connect an OpenAI-compatible, Anthropic, or Google endpoint to begin. Kip
+                    keeps credentials in your system keychain and never writes them to a database.
                   </p>
                   <button
+                    type="button"
                     onClick={() => openSettings("providers")}
-                    className="mt-6 inline-flex h-9 items-center gap-2 rounded-[10px] bg-[var(--accent-ink)] px-4 text-[13px] font-medium text-[var(--accent-ink-fg)] transition-opacity hover:opacity-90"
+                    className="btn-primary mt-6 h-9 rounded-[10px] px-4 text-[13px]"
                   >
                     <Plus size={14} strokeWidth={1.5} />
                     Add a model provider
@@ -139,32 +141,43 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
               ) : (
                 <div>
                   <h1 className="title-large">{greeting()}</h1>
-                  <p className="mt-2 text-[14px] text-[var(--text-muted)]">
-                    Ready in{" "}
-                    <span className="font-[var(--font-mono)] text-[12.5px] text-[var(--text-secondary)]">
-                      {workspace?.rootPath ?? "~/.kip/scratchpad"}
+                  <p className="mt-2 flex flex-wrap items-center gap-1.5 text-[14px] text-[var(--text-muted)]">
+                    <span>Ready in</span>
+                    <span
+                      title={workspace?.rootPath}
+                      className="rounded-[6px] bg-[var(--bg-subtle)] px-1.5 py-0.5 font-mono text-[12px] text-[var(--text-secondary)]"
+                    >
+                      {displayPath}
                     </span>
                   </p>
                   <div className="mt-7 flex flex-wrap gap-2">
                     {SUGGESTIONS.map((suggestion) => (
                       <button
+                        type="button"
                         key={suggestion}
                         onClick={() => void startSuggestion(suggestion)}
-                        className="h-9 rounded-[10px] border hairline bg-[var(--bg-elevated)] px-3.5 text-[13px] text-[var(--text-secondary)] shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-colors hover:border-[var(--border-focus)] hover:text-[var(--text-primary)]"
+                        className="group/sug inline-flex h-9 items-center gap-1.5 rounded-[10px] border hairline bg-[var(--bg-elevated)] px-3.5 text-[13px] text-[var(--text-secondary)] shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-all hover:border-[var(--border-focus)] hover:text-[var(--text-primary)] active:scale-[0.98]"
                       >
-                        {suggestion}
+                        <span>{suggestion}</span>
+                        <ArrowUpRight
+                          size={13}
+                          strokeWidth={1.5}
+                          className="text-[var(--text-muted)] opacity-60 transition-transform group-hover/sug:-translate-y-px group-hover/sug:translate-x-px group-hover/sug:opacity-100"
+                        />
                       </button>
                     ))}
                   </div>
-                  <button
-                    onClick={() => {
-                      setDraft(NEW_THREAD_DRAFT, "");
-                      void newThread();
-                    }}
-                    className="mt-6 text-[12px] text-[var(--text-muted)] underline decoration-[var(--border-focus)] underline-offset-4 hover:text-[var(--text-secondary)]"
-                  >
-                    or begin with a blank thread
-                  </button>
+                  <p className="mt-7 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--text-muted)]">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="kbd">@</span> reference files
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="kbd">/</span> commands
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="kbd">{modShortcut("K")}</span> palette
+                    </span>
+                  </p>
                 </div>
               )}
             </div>
@@ -188,16 +201,28 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
                 ) && (
                   <div className="mt-3 flex items-center gap-2 text-[12.5px] text-[var(--text-muted)]">
                     <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-secondary)] pulse-dot" />
-                    <span>Kip is thinking</span>
+                    <span className="thinking-shimmer">Kip is thinking</span>
                   </div>
                 )}
             </>
           )}
         </div>
       </div>
+
+      {/* Soft paper fade so scrolled prose dissolves quietly behind the floating composer. */}
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-24"
+        style={{
+          background:
+            "linear-gradient(to top, var(--bg-canvas) 35%, color-mix(in srgb, var(--bg-canvas) 0%, transparent))",
+        }}
+        aria-hidden="true"
+      />
+
       <AnimatePresence>
         {showJump && (
           <motion.button
+            type="button"
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
@@ -206,7 +231,7 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
               setPinned(true);
               scrollToBottom(true);
             }}
-            className="absolute bottom-[140px] left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border hairline bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] px-3 text-[12px] font-medium text-[var(--text-secondary)] shadow-[var(--shadow-composer)] backdrop-blur-md"
+            className="btn-secondary absolute bottom-[136px] left-1/2 z-10 h-8 -translate-x-1/2 rounded-full bg-[color-mix(in_srgb,var(--bg-elevated)_90%,transparent)] px-3 text-[12px] shadow-[var(--shadow-composer)] backdrop-blur-md"
           >
             <ArrowDown size={12} strokeWidth={1.5} />
             Jump to latest

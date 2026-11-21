@@ -36,7 +36,7 @@ export default function App() {
   useEffect(() => {
     return onAgentStream(({ threadId, event }) => {
       useChatStore.getState().applyEvent(threadId, event);
-      useWorkspaceStore.getState().applyStreamMeta({
+      useWorkspaceStore.getState().applyStreamMeta(threadId, {
         kind: event.kind,
         title: event.kind === "thread_title_updated" ? event.title : undefined,
       });

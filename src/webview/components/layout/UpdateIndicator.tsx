@@ -6,31 +6,13 @@
 import { useEffect, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { ArrowUpCircle, Check, Copy } from "lucide-react";
+import { copyText } from "../../lib/clipboard";
 import { request } from "../../rpc-client";
 import { useUiStore } from "../../stores/ui-store";
 
 const BREW_COMMAND = "brew upgrade --cask kip";
 
-const ICON_BUTTON =
-  "flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]";
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    // views:// is not a secure context on every renderer, so fall back.
-    const area = document.createElement("textarea");
-    area.value = text;
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.appendChild(area);
-    area.select();
-    const ok = document.execCommand("copy");
-    area.remove();
-    return ok;
-  }
-}
+const ICON_BUTTON = "btn-icon h-7 w-7 shrink-0 rounded-[7px]";
 
 export function UpdateIndicator() {
   const update = useUiStore((state) => state.update);
@@ -114,7 +96,7 @@ export function UpdateIndicator() {
           side="top"
           align="end"
           sideOffset={6}
-          className="z-50 w-[216px] rounded-[10px] border hairline bg-[var(--bg-elevated)] p-2.5 shadow-[var(--shadow-panel)] outline-none"
+          className="popover-surface z-50 w-[224px] rounded-[11px] border hairline bg-[var(--bg-elevated)] p-2.5 shadow-[var(--shadow-modal)] outline-none"
         >
           {update.installSource === "homebrew" ? (
             <>

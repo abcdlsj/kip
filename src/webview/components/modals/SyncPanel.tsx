@@ -14,6 +14,11 @@ import { request } from "../../rpc-client";
 import { useUiStore } from "../../stores/ui-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
 
+interface SyncNotice {
+  text: string;
+  tone: "ok" | "error" | "info";
+}
+
 export function SyncPanel() {
   const syncState = useUiStore((state) => state.syncState);
   const activeThreadId = useWorkspaceStore((state) => state.activeThreadId);
@@ -31,7 +36,7 @@ export function SyncPanel() {
     googleClientSecret: "",
     googleFolderName: "Kip Sync",
   });
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<SyncNotice | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const reloadConfig = async () => {
@@ -72,10 +77,14 @@ export function SyncPanel() {
       });
       setStatus(
         result.connected
-          ? form.provider === "google-drive"
-            ? "Connected to Google Drive."
-            : "Connected to the bucket."
-          : result.error ?? "Not connected.",
+          ? {
+              text:
+                form.provider === "google-drive"
+                  ? "Connected to Google Drive."
+                  : "Connected to the bucket.",
+              tone: "ok",
+            }
+          : { text: result.error ?? "Not connected.", tone: "error" },
       );
       setForm((current) => ({ ...current, googleClientSecret: "" }));
       await reloadConfig();
@@ -86,7 +95,7 @@ export function SyncPanel() {
 
   const connectGoogle = async () => {
     setBusy("google-connect");
-    setStatus("Waiting for Google sign-in in your browser…");
+    setStatus({ text: "Waiting for Google sign-in in your browser…", tone: "info" });
     try {
       const result = await request("connectGoogleDrive", {
         clientId: form.googleClientId,
@@ -100,18 +109,22 @@ export function SyncPanel() {
           googleClientId: form.googleClientId,
           googleFolderName: form.googleFolderName,
         });
-        setStatus(
-          result.email
+        setStatus({
+          text: result.email
             ? `Connected to Google Drive as ${result.email}.`
             : "Connected to Google Drive.",
-        );
+          tone: "ok",
+        });
         setForm((current) => ({ ...current, googleClientSecret: "" }));
         await reloadConfig();
       } else {
-        setStatus(result.error ?? "Google sign-in failed.");
+        setStatus({ text: result.error ?? "Google sign-in failed.", tone: "error" });
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Google sign-in failed.");
+      setStatus({
+        text: error instanceof Error ? error.message : "Google sign-in failed.",
+        tone: "error",
+      });
     } finally {
       setBusy(null);
     }
@@ -121,7 +134,7 @@ export function SyncPanel() {
     setBusy("google-disconnect");
     try {
       await request("disconnectGoogleDrive", undefined);
-      setStatus("Disconnected from Google Drive.");
+      setStatus({ text: "Disconnected from Google Drive.", tone: "info" });
       await reloadConfig();
     } finally {
       setBusy(null);
@@ -132,10 +145,13 @@ export function SyncPanel() {
     setBusy("sync");
     try {
       const result = await request("triggerSync", undefined);
-      setStatus(`Pushed ${result.pushed} · pulled ${result.pulled}.`);
+      setStatus({ text: `Pushed ${result.pushed} · pulled ${result.pulled}.`, tone: "ok" });
       await reloadConfig();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Sync failed.");
+      setStatus({
+        text: error instanceof Error ? error.message : "Sync failed.",
+        tone: "error",
+      });
     } finally {
       setBusy(null);
     }
@@ -145,7 +161,11 @@ export function SyncPanel() {
     setBusy("export");
     try {
       const result = await request("exportFullBackupBundle", undefined);
-      setStatus(result.savedPath ? `Backup saved to ${result.savedPath}` : "Export cancelled.");
+      setStatus(
+        result.savedPath
+          ? { text: `Backup saved to ${result.savedPath}`, tone: "ok" }
+          : { text: "Export cancelled.", tone: "info" },
+      );
     } finally {
       setBusy(null);
     }
@@ -155,7 +175,10 @@ export function SyncPanel() {
     setBusy("import");
     try {
       const result = await request("importBackupBundle", undefined);
-      setStatus(`Imported ${result.importedThreads} threads.`);
+      setStatus({
+        text: `Imported ${result.importedThreads} ${result.importedThreads === 1 ? "thread" : "threads"}.`,
+        tone: "ok",
+      });
     } finally {
       setBusy(null);
     }
@@ -166,7 +189,11 @@ export function SyncPanel() {
     setBusy("markdown");
     try {
       const result = await request("exportThreadMarkdown", { threadId: activeThreadId });
-      setStatus(result.savedPath ? `Saved to ${result.savedPath}` : "Export cancelled.");
+      setStatus(
+        result.savedPath
+          ? { text: `Saved to ${result.savedPath}`, tone: "ok" }
+          : { text: "Export cancelled.", tone: "info" },
+      );
     } finally {
       setBusy(null);
     }
@@ -175,7 +202,7 @@ export function SyncPanel() {
   return (
     <div>
       <h2 className="text-[15px] font-semibold">Sync &amp; backup</h2>
-      <p className="mt-1 max-w-[440px] text-[12px] leading-relaxed text-[var(--text-secondary)]">
+      <p className="mt-1 max-w-[460px] text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
         Incremental backups to S3-compatible storage or Google Drive. Metadata and transcripts
         sync; API keys never leave this machine.
       </p>
@@ -188,6 +215,7 @@ export function SyncPanel() {
           ] as Array<{ id: SyncProvider; label: string }>
         ).map((item) => (
           <button
+            type="button"
             key={item.id}
             onClick={() => {
               setForm((current) => ({ ...current, provider: item.id }));
@@ -206,7 +234,7 @@ export function SyncPanel() {
 
       <div className="mt-3.5 grid grid-cols-2 gap-2.5">
         <div className="col-span-2">
-          <label className="flex items-center gap-2 text-[12px]">
+          <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-[var(--text-secondary)]">
             <input
               type="checkbox"
               checked={form.enabled}
@@ -224,7 +252,7 @@ export function SyncPanel() {
                 value={form.endpoint}
                 onChange={(event) => setForm({ ...form, endpoint: event.target.value })}
                 placeholder="https://s3.us-east-1.amazonaws.com"
-                className="settings-input font-[var(--font-mono)]"
+                className="settings-input font-mono"
               />
             </Field>
             <Field label="Region">
@@ -232,21 +260,21 @@ export function SyncPanel() {
                 value={form.region}
                 onChange={(event) => setForm({ ...form, region: event.target.value })}
                 placeholder="auto"
-                className="settings-input font-[var(--font-mono)]"
+                className="settings-input font-mono"
               />
             </Field>
             <Field label="Bucket">
               <input
                 value={form.bucket}
                 onChange={(event) => setForm({ ...form, bucket: event.target.value })}
-                className="settings-input font-[var(--font-mono)]"
+                className="settings-input font-mono"
               />
             </Field>
             <Field label="Prefix">
               <input
                 value={form.prefix}
                 onChange={(event) => setForm({ ...form, prefix: event.target.value })}
-                className="settings-input font-[var(--font-mono)]"
+                className="settings-input font-mono"
               />
             </Field>
             <Field label="Access key ID">
@@ -254,7 +282,7 @@ export function SyncPanel() {
                 value={form.accessKeyId}
                 onChange={(event) => setForm({ ...form, accessKeyId: event.target.value })}
                 placeholder={config?.hasCredentials ? "Stored — leave blank to keep" : ""}
-                className="settings-input font-[var(--font-mono)]"
+                className="settings-input font-mono"
               />
             </Field>
             <Field label="Secret access key">
@@ -263,7 +291,7 @@ export function SyncPanel() {
                 value={form.secretAccessKey}
                 onChange={(event) => setForm({ ...form, secretAccessKey: event.target.value })}
                 placeholder={config?.hasCredentials ? "Stored — leave blank to keep" : ""}
-                className="settings-input font-[var(--font-mono)]"
+                className="settings-input font-mono"
               />
             </Field>
           </>
@@ -275,7 +303,7 @@ export function SyncPanel() {
                   value={form.googleClientId}
                   onChange={(event) => setForm({ ...form, googleClientId: event.target.value })}
                   placeholder="1234567890-xxxx.apps.googleusercontent.com"
-                  className="settings-input font-[var(--font-mono)]"
+                  className="settings-input font-mono"
                 />
               </Field>
             </div>
@@ -285,7 +313,7 @@ export function SyncPanel() {
                 value={form.googleClientSecret}
                 onChange={(event) => setForm({ ...form, googleClientSecret: event.target.value })}
                 placeholder={config?.googleConnected ? "Stored — leave blank to keep" : ""}
-                className="settings-input font-[var(--font-mono)]"
+                className="settings-input font-mono"
               />
             </Field>
             <Field label="Drive folder name">
@@ -307,31 +335,33 @@ export function SyncPanel() {
                   </span>
                 ) : (
                   <span className="text-[var(--text-secondary)]">
-                    Not signed in. Uses <span className="font-[var(--font-mono)]">drive.file</span> scope only.
+                    Not signed in. Uses <span className="font-mono">drive.file</span> scope only.
                   </span>
                 )}
               </div>
               {config?.googleConnected ? (
                 <button
+                  type="button"
                   onClick={() => void disconnectGoogle()}
                   disabled={busy === "google-disconnect"}
-                  className="ml-3 flex h-7 shrink-0 items-center gap-1.5 rounded-[7px] border hairline bg-[var(--bg-elevated)] px-2.5 text-[11.5px] text-[var(--text-secondary)] hover:bg-[var(--bg-active)]"
+                  className="btn-secondary ml-3 h-7 shrink-0 rounded-[7px] bg-[var(--bg-elevated)] px-2.5 text-[11.5px]"
                 >
                   <LogOut size={11} strokeWidth={1.5} />
                   Disconnect
                 </button>
               ) : (
                 <button
+                  type="button"
                   onClick={() => void connectGoogle()}
                   disabled={busy === "google-connect" || !form.googleClientId.trim()}
-                  className="ml-3 flex h-7 shrink-0 items-center gap-1.5 rounded-[7px] bg-[var(--accent-ink)] px-2.5 text-[11.5px] font-medium text-[var(--accent-ink-fg)] disabled:opacity-40"
+                  className="btn-primary ml-3 h-7 shrink-0 rounded-[7px] px-2.5 text-[11.5px]"
                 >
                   {busy === "google-connect" ? (
                     <Loader2 size={11} strokeWidth={1.5} className="animate-spin" />
                   ) : (
                     <LogIn size={11} strokeWidth={1.5} />
                   )}
-                  {busy === "google-connect" ? "Signing in..." : "Sign in with Google"}
+                  {busy === "google-connect" ? "Signing in…" : "Sign in with Google"}
                 </button>
               )}
             </div>
@@ -339,18 +369,20 @@ export function SyncPanel() {
         )}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3.5 flex flex-wrap items-center gap-2">
         <button
+          type="button"
           onClick={() => void save()}
           disabled={busy === "save"}
-          className="h-8 rounded-[8px] bg-[var(--accent-ink)] px-3.5 text-[12px] font-medium text-[var(--accent-ink-fg)]"
+          className="btn-primary h-8 rounded-[8px] px-3.5 text-[12px]"
         >
-          {busy === "save" ? "Saving..." : "Save & test"}
+          {busy === "save" ? "Saving…" : "Save & test"}
         </button>
         <button
+          type="button"
           onClick={() => void syncNow()}
           disabled={busy === "sync" || syncState === "running"}
-          className="flex h-8 items-center gap-1.5 rounded-[8px] border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+          className="btn-secondary h-8 rounded-[8px] px-3 text-[12px]"
         >
           {busy === "sync" ? (
             <Loader2 size={12} strokeWidth={1.5} className="animate-spin" />
@@ -359,37 +391,62 @@ export function SyncPanel() {
           )}
           Sync now
         </button>
-        <button
-          onClick={() => void exportBackup()}
-          disabled={busy === "export"}
-          className="flex h-8 items-center gap-1.5 rounded-[8px] border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
-        >
-          <ArrowUpFromLine size={12} strokeWidth={1.5} />
-          Export backup
-        </button>
-        <button
-          onClick={() => void importBackup()}
-          disabled={busy === "import"}
-          className="flex h-8 items-center gap-1.5 rounded-[8px] border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
-        >
-          <ArrowDownToLine size={12} strokeWidth={1.5} />
-          Import backup
-        </button>
-        <button
-          onClick={() => void exportThread()}
-          disabled={busy === "markdown" || !activeThreadId}
-          className="flex h-8 items-center gap-1.5 rounded-[8px] border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] disabled:opacity-40"
-        >
-          <FileDown size={12} strokeWidth={1.5} />
-          Export thread
-        </button>
+        {config?.lastSyncedAt && (
+          <span className="ml-auto text-[11.5px] text-[var(--text-muted)]">
+            Last synced {new Date(config.lastSyncedAt).toLocaleString()}
+          </span>
+        )}
       </div>
-      {config?.lastSyncedAt && (
-        <p className="mt-2 text-[11.5px] text-[var(--text-muted)]">
-          Last synced {new Date(config.lastSyncedAt).toLocaleString()}
+
+      <div className="mt-5 border-t hairline pt-4">
+        <h3 className="text-[13px] font-medium">Local backup &amp; export</h3>
+        <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">
+          Portable JSON archive for moving machines, or Markdown for the current thread.
+        </p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void exportBackup()}
+            disabled={busy === "export"}
+            className="btn-secondary h-8 rounded-[8px] px-3 text-[12px]"
+          >
+            <ArrowUpFromLine size={12} strokeWidth={1.5} />
+            Export backup
+          </button>
+          <button
+            type="button"
+            onClick={() => void importBackup()}
+            disabled={busy === "import"}
+            className="btn-secondary h-8 rounded-[8px] px-3 text-[12px]"
+          >
+            <ArrowDownToLine size={12} strokeWidth={1.5} />
+            Import backup
+          </button>
+          <button
+            type="button"
+            onClick={() => void exportThread()}
+            disabled={busy === "markdown" || !activeThreadId}
+            className="btn-secondary h-8 rounded-[8px] px-3 text-[12px]"
+          >
+            <FileDown size={12} strokeWidth={1.5} />
+            Export thread
+          </button>
+        </div>
+      </div>
+
+      {status && (
+        <p
+          className={`mt-3 text-[12px] ${
+            status.tone === "error"
+              ? "text-[var(--status-err)]"
+              : status.tone === "ok"
+                ? "text-[var(--status-ok)]"
+                : "text-[var(--text-secondary)]"
+          }`}
+        >
+          {status.text}
         </p>
       )}
-      {status && <p className="mt-2 text-[12px] text-[var(--text-secondary)]">{status}</p>}
     </div>
   );
 }

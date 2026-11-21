@@ -37,7 +37,7 @@ const POLICY_OPTIONS: Array<{
   },
   {
     value: "yolo",
-    shortLabel: "yolo",
+    shortLabel: "YOLO",
     label: "YOLO",
     description:
       "Never asks for approval — runs all edits, commands, and outside-workspace access automatically.",
@@ -132,10 +132,10 @@ export function PermissionSelector() {
           side="top"
           align="start"
           sideOffset={8}
-          className="z-50 w-[300px] rounded-[14px] border hairline bg-[var(--bg-elevated)] p-1.5 shadow-[var(--shadow-modal)]"
+          className="popover-surface z-50 w-[308px] rounded-[14px] border hairline bg-[var(--bg-elevated)] p-1.5 shadow-[var(--shadow-modal)] outline-none"
         >
           <div className="flex items-center justify-between px-2 pb-1 pt-1">
-            <p className="text-[11.5px] font-medium text-[var(--text-muted)]">
+            <p className="text-[11px] font-medium uppercase tracking-[0.03em] text-[var(--text-muted)]">
               {thread ? "Session permission" : "Permission"}
             </p>
             {thread && (
@@ -151,9 +151,12 @@ export function PermissionSelector() {
               const isYolo = option.value === "yolo";
               return (
                 <button
+                  type="button"
                   key={option.value}
                   onClick={() => void choose(option.value)}
-                  className="flex w-full items-start gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors hover:bg-[var(--bg-subtle)]"
+                  className={`flex w-full items-start gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors ${
+                    selected ? "bg-[var(--bg-subtle)]" : "hover:bg-[var(--bg-subtle)]"
+                  }`}
                 >
                   <Icon
                     size={13}

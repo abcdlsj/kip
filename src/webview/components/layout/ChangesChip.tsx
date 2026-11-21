@@ -67,7 +67,8 @@ export function ChangesChip({
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <button
-          className="flex h-6 items-center gap-1.5 rounded-[7px] px-1.5 text-[11.5px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)] data-[state=open]:bg-[var(--bg-subtle)]"
+          type="button"
+          className="btn-ghost h-6 gap-1.5 rounded-[7px] px-2 text-[11.5px] text-[var(--text-muted)] data-[state=open]:bg-[var(--bg-subtle)]"
           title="Changes from the last turn"
         >
           <span className="text-meta">
@@ -82,34 +83,35 @@ export function ChangesChip({
           side="bottom"
           align="end"
           sideOffset={6}
-          className="z-50 w-[300px] overflow-hidden rounded-[12px] border hairline bg-[var(--bg-elevated)] shadow-[var(--shadow-modal)]"
+          className="popover-surface z-50 w-[308px] overflow-hidden rounded-[12px] border hairline bg-[var(--bg-elevated)] shadow-[var(--shadow-modal)] outline-none"
         >
-          <p className="px-3 pb-1 pt-2.5 text-[11.5px] font-medium text-[var(--text-muted)]">
+          <p className="px-3 pb-1 pt-2.5 text-[11px] font-medium uppercase tracking-[0.03em] text-[var(--text-muted)]">
             Last turn
           </p>
           <div className="thin-scroll max-h-[260px] overflow-y-auto px-1 pb-1">
             {changes.files.map((file) => {
               const status = STATUS_MARK[file.status] ?? STATUS_MARK.modified!;
+              const normalized = file.path.replaceAll("\\", "/");
               return (
                 <div
                   key={file.path}
-                  className="flex h-7 items-center gap-2 rounded-[6px] px-2 text-[12px]"
-                  title={file.path}
+                  className="flex h-7 items-center gap-2 rounded-[6px] px-2 text-[12px] hover:bg-[var(--bg-subtle)]"
+                  title={normalized}
                 >
                   <span
-                    className="w-2.5 shrink-0 font-[var(--font-mono)] text-[10.5px] font-semibold"
+                    className="w-2.5 shrink-0 font-mono text-[10.5px] font-semibold"
                     style={{ color: status.color }}
                   >
                     {status.mark}
                   </span>
-                  <span className="flex min-w-0 flex-1 font-[var(--font-mono)] text-[11.5px]">
-                    {file.path.includes("/") && (
+                  <span className="flex min-w-0 flex-1 font-mono text-[11.5px]">
+                    {normalized.includes("/") && (
                       <span className="min-w-0 truncate text-[var(--text-muted)]">
-                        {file.path.slice(0, file.path.lastIndexOf("/") + 1)}
+                        {normalized.slice(0, normalized.lastIndexOf("/") + 1)}
                       </span>
                     )}
                     <span className="shrink-0 text-[var(--text-secondary)]">
-                      {file.path.slice(file.path.lastIndexOf("/") + 1)}
+                      {normalized.slice(normalized.lastIndexOf("/") + 1)}
                     </span>
                   </span>
                   <span className="text-meta shrink-0 text-[11px] text-[var(--status-ok)]">
@@ -127,20 +129,21 @@ export function ChangesChip({
               {error}
             </p>
           )}
-          <div className="flex items-center justify-between border-t hairline px-2 py-1.5">
-            <span className="pl-1 text-[11px] text-[var(--text-muted)]">
+          <div className="flex items-center justify-between border-t hairline px-2.5 py-1.5">
+            <span className="text-[11px] text-[var(--text-muted)]">
               {running ? "Available when the run ends" : "Restores these files"}
             </span>
             <button
+              type="button"
               onClick={() => void runUndo()}
               disabled={busy || running}
               className={`flex h-6 items-center gap-1 rounded-[6px] px-2 text-[12px] font-medium transition-colors disabled:opacity-40 ${
                 armed
-                  ? "bg-[color-mix(in_srgb,var(--status-err)_10%,transparent)] text-[var(--status-err)]"
-                  : "text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+                  ? "bg-[color-mix(in_srgb,var(--status-err)_12%,transparent)] text-[var(--status-err)]"
+                  : "btn-ghost"
               }`}
             >
-              <Undo2 size={12} strokeWidth={1.6} />
+              <Undo2 size={12} strokeWidth={1.5} />
               {armed ? "Confirm undo" : "Undo"}
             </button>
           </div>

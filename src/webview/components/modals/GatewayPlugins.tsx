@@ -103,9 +103,10 @@ export function GatewayPlugins() {
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => void detect(plugin)}
                   disabled={busy === plugin.id}
-                  className="flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+                  className="btn-secondary h-8 shrink-0 rounded-[8px] px-3 text-[12px]"
                 >
                   {busy === plugin.id ? (
                     <Loader2
@@ -139,7 +140,7 @@ export function GatewayPlugins() {
                         setValue(plugin.id, field.name, event.target.value)
                       }
                       placeholder={field.placeholder}
-                      className="settings-input font-[var(--font-mono)]"
+                      className="settings-input font-mono"
                     />
                     {(missing.get(field.name) ?? field.help) && (
                       <span
@@ -172,7 +173,7 @@ export function GatewayPlugins() {
                       className="text-[var(--text-muted)]"
                     >
                       {detail.label}:{" "}
-                      <span className="font-[var(--font-mono)] text-[var(--text-secondary)]">
+                      <span className="font-mono text-[var(--text-secondary)]">
                         {detail.value}
                       </span>
                     </span>

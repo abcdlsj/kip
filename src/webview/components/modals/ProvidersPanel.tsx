@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Check, CloudDownload, Eye, Loader2, Plus, Sparkles, Trash2, Zap } from "lucide-react";
 import type { ProviderModel, ProviderProtocol, ProviderRecord } from "../../../shared/types";
 import { displayModelName } from "../../lib/model-name";
@@ -21,6 +21,18 @@ interface FormState {
   models: ProviderModel[];
 }
 
+interface StatusMessage {
+  text: string;
+  tone: "ok" | "error" | "info";
+}
+
+const PROTOCOL_LABELS: Record<ProviderProtocol, string> = {
+  "openai-completions": "OpenAI Chat",
+  "openai-responses": "OpenAI Responses",
+  "anthropic-messages": "Anthropic",
+  "google-generative-ai": "Google Gemini",
+};
+
 const EMPTY: FormState = {
   key: "",
   id: "",
@@ -32,13 +44,24 @@ const EMPTY: FormState = {
   models: [],
 };
 
+function isLocalEndpoint(baseUrl: string): boolean {
+  return /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(baseUrl);
+}
+
 export function ProvidersPanel({ providers }: ProvidersPanelProps) {
   const refreshProviders = useUiStore((state) => state.refreshProviders);
   const refreshSettings = useUiStore((state) => state.refresh);
   const refreshThreads = useWorkspaceStore((state) => state.refreshThreads);
   const [form, setForm] = useState<FormState | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<StatusMessage | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!confirmDeleteId) return;
+    const timer = setTimeout(() => setConfirmDeleteId(null), 3000);
+    return () => clearTimeout(timer);
+  }, [confirmDeleteId]);
 
   const edit = (provider: ProviderRecord) => {
     setForm({
@@ -59,7 +82,10 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
     const id = (form.id || form.displayName).trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
     const models = resolveFormModels(form.modelIds, form.models);
     if (!id || !form.baseUrl.trim() || models.length === 0) {
-      setStatus("A name, base URL, and at least one model are required.");
+      setStatus({
+        text: "A name, base URL, and at least one model are required.",
+        tone: "error",
+      });
       return;
     }
     setBusy("save");
@@ -76,7 +102,12 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
       await refreshSettings();
       await refreshThreads();
       setForm(null);
-      setStatus("Provider saved.");
+      setStatus({ text: "Provider saved.", tone: "ok" });
+    } catch (error) {
+      setStatus({
+        text: error instanceof Error ? error.message : "Could not save provider.",
+        tone: "error",
+      });
     } finally {
       setBusy(null);
     }
@@ -108,9 +139,12 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
           models: result.models,
           modelIds: result.models.map((model) => model.id).join("\n"),
         });
-        setStatus(`Found ${result.models.length} models.`);
+        setStatus({
+          text: `Found ${result.models.length} ${result.models.length === 1 ? "model" : "models"}.`,
+          tone: "ok",
+        });
       } else {
-        setStatus(result.error || "No models returned.");
+        setStatus({ text: result.error || "No models returned.", tone: "error" });
       }
     } finally {
       setBusy(null);
@@ -118,12 +152,17 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
   };
 
   const remove = async (provider: ProviderRecord) => {
+    if (confirmDeleteId !== provider.id) {
+      setConfirmDeleteId(provider.id);
+      return;
+    }
+    setConfirmDeleteId(null);
     setBusy(provider.id);
     try {
       await request("deleteProvider", { provider: provider.id });
       await refreshProviders();
       await refreshSettings();
-      setStatus(`${provider.displayName} removed.`);
+      setStatus({ text: `${provider.displayName} removed.`, tone: "info" });
     } finally {
       setBusy(null);
     }
@@ -135,8 +174,11 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
       const result = await request("testProvider", { provider: provider.id });
       setStatus(
         result.connected
-          ? `${provider.displayName} connected · ${result.latencyMs}ms`
-          : `${provider.displayName}: ${result.error ?? "Connection failed"}`,
+          ? { text: `${provider.displayName} connected · ${result.latencyMs}ms`, tone: "ok" }
+          : {
+              text: `${provider.displayName}: ${result.error ?? "Connection failed"}`,
+              tone: "error",
+            },
       );
     } finally {
       setBusy(null);
@@ -148,16 +190,17 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h2 className="text-[15px] font-semibold">Model providers</h2>
-          <p className="mt-1 text-[12px] text-[var(--text-secondary)]">
+          <p className="mt-1 text-[12.5px] text-[var(--text-secondary)]">
             Any endpoint that speaks the OpenAI, Anthropic, or Google wire format.
           </p>
         </div>
         <button
+          type="button"
           onClick={() => {
             setForm({ ...EMPTY });
             setStatus(null);
           }}
-          className="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] bg-[var(--accent-ink)] px-3 text-[12px] font-medium text-[var(--accent-ink-fg)]"
+          className="btn-primary h-8 shrink-0 whitespace-nowrap rounded-[8px] px-3 text-[12px]"
         >
           <Plus size={13} strokeWidth={1.5} />
           Add provider
@@ -165,66 +208,87 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
       </div>
 
       <div className="mt-4 space-y-2">
-        {providers.map((provider) => (
-          <div
-            key={provider.id}
-            className="flex items-center gap-3 rounded-[10px] border hairline px-3 py-2.5"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="truncate text-[13px] font-medium">{provider.displayName}</span>
-                <span className="rounded-full bg-[var(--bg-subtle)] px-1.5 py-0.5 text-[11px] text-[var(--text-muted)]">
-                  {provider.protocol}
-                </span>
-                {provider.hasApiKey ? (
-                  <span className="flex items-center gap-0.5 text-[11px] text-[var(--status-ok)]">
-                    <Check size={10} strokeWidth={2} /> key
+        {providers.map((provider) => {
+          const armed = confirmDeleteId === provider.id;
+          const local = isLocalEndpoint(provider.baseUrl);
+          return (
+            <div
+              key={provider.id}
+              className="flex items-center gap-2.5 rounded-[11px] border hairline px-3.5 py-2.5 transition-colors hover:border-[var(--border-focus)]"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="truncate text-[13px] font-medium text-[var(--text-primary)]">
+                    {provider.displayName}
                   </span>
-                ) : (
-                  <span className="text-[11px] text-[var(--status-warn)]">no key</span>
-                )}
+                  <span className="rounded-full bg-[var(--bg-subtle)] px-2 py-0.5 text-[10.5px] font-medium text-[var(--text-muted)]">
+                    {PROTOCOL_LABELS[provider.protocol] ?? provider.protocol}
+                  </span>
+                  {provider.hasApiKey ? (
+                    <span className="inline-flex items-center gap-0.5 text-[11px] text-[var(--status-ok)]">
+                      <Check size={10} strokeWidth={2} /> key
+                    </span>
+                  ) : (
+                    <span
+                      className={`text-[11px] ${
+                        local ? "text-[var(--text-muted)]" : "text-[var(--status-warn)]"
+                      }`}
+                    >
+                      {local ? "keyless" : "no key"}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 truncate font-mono text-[11.5px] text-[var(--text-muted)]">
+                  {provider.baseUrl} · {provider.models.length}{" "}
+                  {provider.models.length === 1 ? "model" : "models"}
+                </p>
               </div>
-              <p className="mt-0.5 truncate font-[var(--font-mono)] text-[11.5px] text-[var(--text-muted)]">
-                {provider.baseUrl} · {provider.models.length} models
-              </p>
+              <button
+                type="button"
+                onClick={() => void test(provider)}
+                disabled={busy === provider.id}
+                className="btn-secondary h-7 shrink-0 rounded-[7px] px-2.5 text-[12px]"
+              >
+                {busy === provider.id ? (
+                  <Loader2 size={11} strokeWidth={1.5} className="animate-spin" />
+                ) : (
+                  <Zap size={11} strokeWidth={1.5} />
+                )}
+                Test
+              </button>
+              <button
+                type="button"
+                onClick={() => edit(provider)}
+                className="btn-ghost h-7 shrink-0 rounded-[7px] px-2.5 text-[12px] font-medium"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => void remove(provider)}
+                className={`flex h-7 shrink-0 items-center justify-center rounded-[7px] transition-all ${
+                  armed
+                    ? "bg-[color-mix(in_srgb,var(--status-err)_12%,transparent)] px-2 text-[11.5px] font-medium text-[var(--status-err)]"
+                    : "btn-icon w-7 rounded-full hover:text-[var(--status-err)]"
+                }`}
+                aria-label={armed ? "Confirm delete provider" : "Delete provider"}
+                title={armed ? "Click again to delete" : "Delete provider"}
+              >
+                {armed ? "Delete?" : <Trash2 size={13} strokeWidth={1.5} />}
+              </button>
             </div>
-            <button
-              onClick={() => void test(provider)}
-              disabled={busy === provider.id}
-              className="flex h-7 items-center gap-1 rounded-[8px] border hairline px-2.5 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
-            >
-              {busy === provider.id ? (
-                <Loader2 size={11} strokeWidth={1.5} className="animate-spin" />
-              ) : (
-                <Zap size={11} strokeWidth={1.5} />
-              )}
-              Test
-            </button>
-            <button
-              onClick={() => edit(provider)}
-              className="h-7 rounded-[8px] px-2.5 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
-            >
-              Edit
-            </button>
-            <button
-              onClick={() => void remove(provider)}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--status-err)]"
-              aria-label="Delete provider"
-            >
-              <Trash2 size={12} strokeWidth={1.5} />
-            </button>
-          </div>
-        ))}
+          );
+        })}
         {providers.length === 0 && (
-          <p className="rounded-[10px] border border-dashed hairline px-3 py-6 text-center text-[12px] text-[var(--text-muted)]">
+          <p className="rounded-[11px] border border-dashed hairline px-3 py-6 text-center text-[12.5px] text-[var(--text-muted)]">
             No providers configured yet.
           </p>
         )}
       </div>
 
       {form && (
-        <div className="mt-4 rounded-[12px] border hairline bg-[var(--bg-subtle)] p-3.5">
-          <div className="grid grid-cols-2 gap-2.5">
+        <div className="mt-4 rounded-[12px] border hairline bg-[var(--bg-subtle)] p-4">
+          <div className="grid grid-cols-2 gap-3">
             <Field label="Name">
               <input
                 value={form.displayName}
@@ -238,7 +302,7 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                 value={form.id}
                 onChange={(event) => setForm({ ...form, id: event.target.value })}
                 placeholder="openrouter"
-                className="settings-input font-[var(--font-mono)]"
+                className="settings-input font-mono"
               />
             </Field>
             <Field label="Protocol">
@@ -260,7 +324,7 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                 value={form.baseUrl}
                 onChange={(event) => setForm({ ...form, baseUrl: event.target.value })}
                 placeholder="https://api.openai.com/v1"
-                className="settings-input font-[var(--font-mono)]"
+                className="settings-input font-mono"
               />
             </Field>
             <div className="col-span-2">
@@ -269,8 +333,12 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                   type="password"
                   value={form.apiKey}
                   onChange={(event) => setForm({ ...form, apiKey: event.target.value })}
-                  placeholder="Leave blank to keep the existing key"
-                  className="settings-input font-[var(--font-mono)]"
+                  placeholder={
+                    form.key
+                      ? "Leave blank to keep the existing key"
+                      : "Optional for local gateways like Ollama"
+                  }
+                  className="settings-input font-mono"
                 />
               </Field>
             </div>
@@ -280,8 +348,8 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                   value={form.modelIds}
                   onChange={(event) => setForm({ ...form, modelIds: event.target.value })}
                   rows={3}
-                  placeholder="gpt-4.1&#10;claude-sonnet-4-5"
-                  className="settings-input resize-none font-[var(--font-mono)]"
+                  placeholder={"gpt-4.1\nclaude-sonnet-4-5"}
+                  className="settings-input resize-none font-mono"
                 />
               </Field>
             </div>
@@ -293,18 +361,19 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                   <span className="mb-1 block text-[12px] font-medium text-[var(--text-secondary)]">
                     Model capabilities
                   </span>
-                  <div className="max-h-36 space-y-1 overflow-y-auto rounded-[8px] border hairline bg-[var(--bg-canvas)] p-2">
+                  <div className="thin-scroll max-h-36 space-y-1 overflow-y-auto rounded-[8px] border hairline bg-[var(--bg-canvas)] p-2">
                     {resolvedModels.map((model) => (
                       <div
                         key={model.id}
                         className="flex items-center justify-between gap-2 rounded-[6px] px-1.5 py-1"
                       >
-                        <span className="min-w-0 truncate font-[var(--font-mono)] text-[11.5px] text-[var(--text-primary)]">
+                        <span className="min-w-0 truncate font-mono text-[11.5px] text-[var(--text-primary)]">
                           {model.id}
                         </span>
                         <div className="flex shrink-0 items-center gap-1.5">
                           <button
                             type="button"
+                            aria-pressed={model.supportsVision}
                             onClick={() => toggleCapability(model.id, "supportsVision")}
                             className={`flex h-6 items-center gap-1 rounded-[6px] border px-2 text-[11px] transition-colors ${
                               model.supportsVision
@@ -317,6 +386,7 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                           </button>
                           <button
                             type="button"
+                            aria-pressed={model.supportsReasoning}
                             onClick={() => toggleCapability(model.id, "supportsReasoning")}
                             className={`flex h-6 items-center gap-1 rounded-[6px] border px-2 text-[11px] transition-colors ${
                               model.supportsReasoning
@@ -335,18 +405,20 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
               );
             })()}
           </div>
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3.5 flex items-center gap-2">
             <button
+              type="button"
               onClick={() => void save()}
               disabled={busy === "save"}
-              className="h-8 rounded-[8px] bg-[var(--accent-ink)] px-3.5 text-[12px] font-medium text-[var(--accent-ink-fg)]"
+              className="btn-primary h-8 rounded-[8px] px-3.5 text-[12px]"
             >
-              {busy === "save" ? "Saving..." : "Save provider"}
+              {busy === "save" ? "Saving…" : "Save provider"}
             </button>
             <button
+              type="button"
               onClick={() => void fetchModels()}
-              disabled={busy === "fetch" || !form.baseUrl}
-              className="flex h-8 items-center gap-1.5 rounded-[8px] border hairline px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+              disabled={busy === "fetch" || !form.baseUrl.trim()}
+              className="btn-secondary h-8 rounded-[8px] px-3 text-[12px]"
             >
               {busy === "fetch" ? (
                 <Loader2 size={12} strokeWidth={1.5} className="animate-spin" />
@@ -356,8 +428,9 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
               Fetch models
             </button>
             <button
+              type="button"
               onClick={() => setForm(null)}
-              className="h-8 rounded-[8px] px-3 text-[12px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+              className="btn-ghost h-8 rounded-[8px] px-3 text-[12px]"
             >
               Cancel
             </button>
@@ -366,7 +439,17 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
       )}
 
       {status && (
-        <p className="mt-3 text-[12px] text-[var(--text-secondary)]">{status}</p>
+        <p
+          className={`mt-3 text-[12px] ${
+            status.tone === "error"
+              ? "text-[var(--status-err)]"
+              : status.tone === "ok"
+                ? "text-[var(--status-ok)]"
+                : "text-[var(--text-secondary)]"
+          }`}
+        >
+          {status.text}
+        </p>
       )}
     </div>
   );
