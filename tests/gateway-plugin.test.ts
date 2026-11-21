@@ -6,6 +6,8 @@ interface GatewayOptions {
   keyRequired?: boolean;
   acceptedKey?: string;
   models?: number;
+  /** The server lists its own `-temp` entries, as gemini2api does. */
+  temporaryVariant?: boolean;
 }
 
 function fakeGateway(options: GatewayOptions = {}) {
@@ -40,11 +42,17 @@ function fakeGateway(options: GatewayOptions = {}) {
         return Response.json({
           object: "list",
           data: Array.from({ length: count }, (_, index) => ({
-            id: `gemini-model-${index + 1}`,
+            id: options.temporaryVariant
+              ? `gemini-model-${index + 1}-temp`
+              : `gemini-model-${index + 1}`,
             context_window: 225_000,
             supports_vision: false,
             supports_reasoning: true,
-            gemini: { display_name: `Model ${index + 1}`, advanced_only: true },
+            gemini: {
+              display_name: `Model ${index + 1}`,
+              advanced_only: true,
+              temporary: options.temporaryVariant === true,
+            },
           })),
         });
       }
@@ -79,13 +87,18 @@ describe("gemini2api gateway plugin", () => {
         `http://127.0.0.1:${gateway.port}/v1`,
       );
       expect(result.proposal?.protocol).toBe("openai-completions");
-      expect(result.proposal?.models).toHaveLength(2);
+      // Each model is offered twice: as-is, and temporary. Only the storage differs.
+      expect(result.proposal?.models).toHaveLength(4);
       expect(result.proposal?.models[0]).toMatchObject({
         id: "gemini-model-1",
         displayName: "Model 1",
         contextWindow: 225_000,
         supportsVision: false,
         supportsReasoning: true,
+      });
+      expect(result.proposal?.models[1]).toMatchObject({
+        id: "gemini-model-1-temp",
+        displayName: "Model 1 (temporary)",
       });
       expect(result.proposal?.apiKey).toBeUndefined();
       expect(gateway.minted).toHaveLength(0);
@@ -167,5 +180,34 @@ describe("gemini2api gateway plugin", () => {
     const result = await gemini2apiPlugin.probe({ port: "eighty" }, {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain("Port");
+  });
+});
+
+describe("gemini2api temporary chats", () => {
+  test("the toggle defaults models to keeping their chats", async () => {
+    const gateway = fakeGateway();
+    try {
+      const result = await gemini2apiPlugin.probe({ port: gateway.port }, {});
+      expect(result.proposal?.models.map((model) => model.id)).toEqual([
+        "gemini-model-1",
+        "gemini-model-1-temp",
+        "gemini-model-2",
+        "gemini-model-2-temp",
+      ]);
+    } finally {
+      gateway.server.stop(true);
+    }
+  });
+
+  test("a server that already lists temporary models is not doubled", async () => {
+    const gateway = fakeGateway({ temporaryVariant: true });
+    try {
+      const result = await gemini2apiPlugin.probe({ port: gateway.port }, {});
+      const ids = result.proposal?.models.map((model) => model.id) ?? [];
+      // Two models were offered and both are already temporary: no duplicates were minted.
+      expect(ids).toEqual(["gemini-model-1-temp", "gemini-model-2-temp"]);
+    } finally {
+      gateway.server.stop(true);
+    }
   });
 });

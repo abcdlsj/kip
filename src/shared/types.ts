@@ -126,7 +126,7 @@ export interface ProviderModel {
 }
 
 export type PluginKind = "gateway";
-export type PluginFieldKind = "text" | "port" | "secret";
+export type PluginFieldKind = "text" | "port" | "secret" | "toggle" | "select";
 
 /** One input a plugin needs before it can reach its gateway. */
 export interface PluginField {
@@ -136,6 +136,8 @@ export interface PluginField {
   placeholder?: string;
   help?: string;
   optional?: boolean;
+  /** For `select`: the values on offer, first one is the default. */
+  options?: { value: string; label: string; help?: string }[];
 }
 
 /** A plugin as the view sees it: what to render, not how it works. */

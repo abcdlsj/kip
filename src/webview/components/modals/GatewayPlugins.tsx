@@ -132,16 +132,61 @@ export function GatewayPlugins() {
                         </span>
                       )}
                     </span>
-                    <input
-                      type={field.kind === "secret" ? "password" : "text"}
-                      inputMode={field.kind === "port" ? "numeric" : undefined}
-                      value={values[plugin.id]?.[field.name] ?? ""}
-                      onChange={(event) =>
-                        setValue(plugin.id, field.name, event.target.value)
-                      }
-                      placeholder={field.placeholder}
-                      className="settings-input font-mono"
-                    />
+                    {field.kind === "select" ? (
+                      <select
+                        value={values[plugin.id]?.[field.name] ?? ""}
+                        onChange={(event) =>
+                          setValue(plugin.id, field.name, event.target.value)
+                        }
+                        className="settings-input"
+                      >
+                        {(field.options ?? []).map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : field.kind === "toggle" ? (
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={values[plugin.id]?.[field.name] === "true"}
+                        onClick={() =>
+                          setValue(
+                            plugin.id,
+                            field.name,
+                            values[plugin.id]?.[field.name] === "true" ? "false" : "true",
+                          )
+                        }
+                        className={`flex h-8 w-full items-center justify-between rounded-[8px] border px-2.5 text-[12px] transition-colors ${
+                          values[plugin.id]?.[field.name] === "true"
+                            ? "border-[var(--border-focus)] bg-[var(--bg-subtle)] font-medium text-[var(--text-primary)]"
+                            : "hairline text-[var(--text-muted)]"
+                        }`}
+                      >
+                        <span>
+                          {values[plugin.id]?.[field.name] === "true" ? "On" : "Off"}
+                        </span>
+                        <span
+                          className={`h-3.5 w-3.5 rounded-full ${
+                            values[plugin.id]?.[field.name] === "true"
+                              ? "bg-[var(--status-ok)]"
+                              : "bg-[var(--border-focus)]"
+                          }`}
+                        />
+                      </button>
+                    ) : (
+                      <input
+                        type={field.kind === "secret" ? "password" : "text"}
+                        inputMode={field.kind === "port" ? "numeric" : undefined}
+                        value={values[plugin.id]?.[field.name] ?? ""}
+                        onChange={(event) =>
+                          setValue(plugin.id, field.name, event.target.value)
+                        }
+                        placeholder={field.placeholder}
+                        className="settings-input font-mono"
+                      />
+                    )}
                     {(missing.get(field.name) ?? field.help) && (
                       <span
                         className={`mt-1 block text-[11px] ${

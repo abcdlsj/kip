@@ -32,7 +32,7 @@ interface RemoteModel {
   context_window?: number;
   supports_vision?: boolean;
   supports_reasoning?: boolean;
-  gemini?: { display_name?: string };
+  gemini?: { display_name?: string; temporary?: boolean };
 }
 
 interface RemoteResponse {
@@ -110,6 +110,12 @@ export const gemini2apiPlugin: KipPlugin = {
       kind: "secret",
       optional: true,
       help: "Used once to mint Kip's own key. Leave empty when the server was started without one.",
+    },
+    {
+      name: "temporaryChat",
+      label: "Temporary chats",
+      kind: "toggle",
+      help: "Off: chats stay in the Gemini account so the context survives. On: nothing is kept in the account, and long conversations lose context because Google may close a temporary chat at any time.",
     },
   ],
 
@@ -224,8 +230,20 @@ export const gemini2apiPlugin: KipPlugin = {
       };
     }
 
+    // Each model is offered twice: as-is, and temporary. Only the storage differs, so the
+    // suffix is the whole difference between the two entries.
+    const temporaryChosen = (values.temporaryChat ?? "").trim() === "true";
     const models = read.models
-      .map((model) => toProviderModel(model, health))
+      .flatMap((model) => {
+        const named = toProviderModel(model, health);
+        if (!named || model.gemini?.temporary) return named ? [named] : [];
+        const temporary: ProviderModel = {
+          ...named,
+          id: `${named.id}-temp`,
+          displayName: `${named.displayName} (temporary)`,
+        };
+        return [named, temporary];
+      })
       .filter((model): model is ProviderModel => model !== null);
     if (models.length === 0) {
       return {
@@ -277,6 +295,12 @@ export const gemini2apiPlugin: KipPlugin = {
             : apiKey
               ? "minted for Kip"
               : "reused from the keychain",
+        },
+        {
+          label: "Temporary",
+          value: temporaryChosen
+            ? "default on; every model also has a plain variant"
+            : "off by default; pick the (temporary) variant to opt in",
         },
       ],
       proposal: {

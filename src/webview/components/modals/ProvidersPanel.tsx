@@ -134,13 +134,19 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
         apiKey: form.apiKey.trim() || undefined,
       });
       if (result.models.length) {
+        // The server tends to know a display name the id does not spell out
+        // ("gemini-neon" is "Deeper analysis"); keep it rather than let
+        // `resolveFormModels` fall back to title-casing the id.
+        const named = result.models.filter((model) => model.displayName).length;
         setForm({
           ...form,
           models: result.models,
           modelIds: result.models.map((model) => model.id).join("\n"),
         });
         setStatus({
-          text: `Found ${result.models.length} ${result.models.length === 1 ? "model" : "models"}.`,
+          text: `Found ${result.models.length} ${
+            result.models.length === 1 ? "model" : "models"
+          }${named > 0 ? " with names and capabilities" : ""}.`,
           tone: "ok",
         });
       } else {
