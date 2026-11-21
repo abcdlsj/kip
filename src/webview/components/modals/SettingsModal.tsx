@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Boxes, Check, Cloud, Palette, Puzzle, RotateCw, ShieldCheck, X } from "lucide-react";
-import type { ApprovalPolicy, ThemeMode, ThinkingLevel } from "../../../shared/types";
+import type { ApprovalPolicy, ThemeMode, ThinkingLevel, ThreadMode } from "../../../shared/types";
 import { modShortcut } from "../../lib/platform";
 import { useUiStore } from "../../stores/ui-store";
 import { PluginsPanel } from "./PluginsPanel";
@@ -25,6 +25,7 @@ export function SettingsModal() {
   const setTheme = useUiStore((state) => state.setTheme);
   const setApprovalPolicy = useUiStore((state) => state.setApprovalPolicy);
   const setDefaultThinking = useUiStore((state) => state.setDefaultThinking);
+  const setDefaultThreadMode = useUiStore((state) => state.setDefaultThreadMode);
   // Same source as the update arrow: the version the running bundle reports.
   const version = useUiStore((state) => state.update?.current);
   const refresh = useUiStore((state) => state.refresh);
@@ -133,6 +134,38 @@ export function SettingsModal() {
                         }`}
                       >
                         {level}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <h3 className="mt-6 text-[13px] font-medium">New threads start as</h3>
+                <p className="mt-1 text-[12px] text-[var(--text-secondary)]">
+                  Agent threads get tools, Kip's system prompt, and workspace context. Chat
+                  threads send only your messages, for models whose value is the conversation
+                  itself. Each thread keeps the mode it started with.
+                </p>
+                <div className="mt-2.5 inline-flex w-full rounded-[9px] border hairline bg-[var(--bg-sidebar)] p-0.5">
+                  {(
+                    [
+                      { value: "agent", label: "Agent" },
+                      { value: "chat", label: "Chat" },
+                    ] as Array<{ value: ThreadMode; label: string }>
+                  ).map((option) => {
+                    const selected = (settings?.defaultThreadMode ?? "agent") === option.value;
+                    return (
+                      <button
+                        type="button"
+                        key={option.value}
+                        aria-pressed={selected}
+                        onClick={() => void setDefaultThreadMode(option.value)}
+                        className={`h-7 flex-1 rounded-[7px] text-[12px] transition-all ${
+                          selected
+                            ? "bg-[var(--bg-elevated)] font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                            : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                        }`}
+                      >
+                        {option.label}
                       </button>
                     );
                   })}

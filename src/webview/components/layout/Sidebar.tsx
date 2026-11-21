@@ -6,6 +6,7 @@ import {
   ChevronsUpDown,
   FolderClosed,
   GitBranch,
+  MessageCircle,
   PanelLeftClose,
   Plus,
   Search,
@@ -284,6 +285,16 @@ export function Sidebar() {
                           >
                             {thread.title}
                           </button>
+                        )}
+                        {thread.mode === "chat" && (
+                          <MessageCircle
+                            size={11}
+                            strokeWidth={1.5}
+                            className="shrink-0 text-[var(--text-muted)]"
+                            aria-label="Chat thread"
+                          >
+                            <title>Chat thread: no tools, no system prompt</title>
+                          </MessageCircle>
                         )}
                         <ThreadStatus
                           state={

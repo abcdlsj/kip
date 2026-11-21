@@ -14,6 +14,7 @@ import {
   createAgentSession,
   type AgentSession,
   type AgentSessionEvent,
+  type InlineExtension,
 } from "@earendil-works/pi-coding-agent";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -27,6 +28,7 @@ import type {
   QueuedPrompt,
   SendPromptInput,
   ThinkingLevel,
+  ThreadMode,
   ThreadSummary,
   ToolCallBlock,
   ToolApprovalPayload,
@@ -38,7 +40,7 @@ import { ContextBuilder } from "./context-builder";
 import type { ModelRegistry } from "./model-registry";
 import { FrameBuffer, type StreamEmit } from "./stream-buffer";
 import { ToolInterceptor, type ToolHook } from "./tool-interceptor";
-import { ToolRegistry } from "./tool-registry";
+import { ToolRegistry, type AnyToolDefinition } from "./tool-registry";
 import {
   projectSessionTurns,
   textOf,
@@ -78,6 +80,22 @@ interface ActiveSession {
 
 /** Prefix for notes Kip adds to a prompt; the transcript view hides these lines. */
 const KIP_NOTE_PREFIX = "[Kip note] ";
+
+/**
+ * Chat threads send the conversation and nothing else. Pi falls back to its own
+ * harness prompt whenever `customPrompt` is empty (and always appends `<cwd>`),
+ * so the only way to reach the provider with no system message at all is to
+ * force an empty prompt for each run.
+ */
+export function createChatPromptExtension(): InlineExtension {
+  return {
+    name: "kip-chat",
+    hidden: true,
+    factory: (pi) => {
+      pi.on("before_agent_start", () => ({ systemPrompt: "" }));
+    },
+  };
+}
 
 /** A message sent during a run, waiting for Pi to deliver it. */
 interface QueuedEntry extends QueuedPrompt {
@@ -197,9 +215,10 @@ export class KipOrchestrator {
     if (thread.title === "New Thread") {
       active.firstPrompt = input.text;
     }
-    // Snapshot in parallel with the model's first response; every tool call
-    // waits for it (see beforeTool), so the snapshot always precedes changes.
-    active.runBefore = snapshotTree(workspace.rootPath).catch(() => null);
+    // Chat threads touch nothing on disk, so there is nothing to undo.
+    active.runBefore = isChatThread(thread)
+      ? null
+      : snapshotTree(workspace.rootPath).catch(() => null);
 
     try {
       await active.session.prompt(promptText, images.length ? { images } : undefined);
@@ -394,6 +413,23 @@ export class KipOrchestrator {
     if (active) active.session.setThinkingLevel(level);
   }
 
+  /**
+   * Switches an untouched thread between Agent and Chat. A thread keeps the mode
+   * it was given as soon as its first message lands, because the request shape
+   * already recorded in the transcript cannot be rebuilt.
+   */
+  async setThreadMode(threadId: string, mode: ThreadMode): Promise<void> {
+    const thread = this.requireThread(threadId);
+    if (thread.mode === mode) return;
+    if (this.isRunning(threadId)) throw new Error("Stop the run before switching modes");
+    const { turns } = await this.loadTurns(threadId);
+    if (turns.length > 0) {
+      throw new Error("Start a new thread to switch between Agent and Chat");
+    }
+    await this.disposeSession(threadId);
+    this.database.updateThread(threadId, { mode });
+  }
+
   setThreadApprovalPolicy(threadId: string, policy: ApprovalPolicy | null): void {
     this.database.updateThread(threadId, { approvalPolicy: policy });
     this.reevaluateApprovals(threadId);
@@ -507,24 +543,29 @@ export class KipOrchestrator {
       hooks: this.hooks,
     });
 
-    const [rawTools, systemPromptSections] = await Promise.all([
-      this.toolRegistry.resolveTools({
-        threadId,
-        workspaceId: workspace.id,
-        workspaceRoot: workspace.rootPath,
-      }),
-      this.contextBuilder.buildSystemPromptSections({
-        threadId,
-        workspaceId: workspace.id,
-        workspaceRoot: workspace.rootPath,
-        workspaceName: workspace.name,
-      }),
-    ]);
+    const chat = isChatThread(thread);
+    let rawTools: AnyToolDefinition[] = [];
+    let systemPromptSections: string[] = [];
+    if (!chat) {
+      [rawTools, systemPromptSections] = await Promise.all([
+        this.toolRegistry.resolveTools({
+          threadId,
+          workspaceId: workspace.id,
+          workspaceRoot: workspace.rootPath,
+        }),
+        this.contextBuilder.buildSystemPromptSections({
+          threadId,
+          workspaceId: workspace.id,
+          workspaceRoot: workspace.rootPath,
+          workspaceName: workspace.name,
+        }),
+      ]);
+    }
     const tools = rawTools.map((tool) => interceptor.wrap(tool));
 
     const agentDir = join(getDataDir(), "agent");
     mkdirSync(agentDir, { recursive: true, mode: 0o700 });
-    const systemPrompt = readSystemPromptOverride(agentDir) ?? KIP_SYSTEM_PROMPT;
+    const systemPrompt = chat ? "" : (readSystemPromptOverride(agentDir) ?? KIP_SYSTEM_PROMPT);
     const settingsManager = SettingsManager.create(workspace.rootPath, agentDir);
     const resourceLoader = new DefaultResourceLoader({
       cwd: workspace.rootPath,
@@ -538,6 +579,7 @@ export class KipOrchestrator {
       systemPrompt: "",
       systemPromptOverride: () => systemPrompt,
       appendSystemPrompt: systemPromptSections,
+      ...(chat ? { extensionFactories: [createChatPromptExtension()] } : {}),
     });
     await resourceLoader.reload();
 
@@ -549,7 +591,7 @@ export class KipOrchestrator {
       sessionManager,
       settingsManager,
       resourceLoader,
-      noTools: "builtin",
+      noTools: chat ? "all" : "builtin",
       customTools: tools,
       tools: tools.map((tool) => tool.name),
     });
@@ -886,5 +928,10 @@ function findToolBlock(turn: ChatTurn | null, toolCallId: string): ToolCallBlock
     if (block.type === "tool_call" && block.id === toolCallId) return block;
   }
   return undefined;
+}
+
+/** Chat threads have no tools, no system prompt, and write nothing to the workspace. */
+function isChatThread(thread: { mode: ThreadMode }): boolean {
+  return thread.mode === "chat";
 }
 

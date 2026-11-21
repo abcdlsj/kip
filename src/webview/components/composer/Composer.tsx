@@ -7,7 +7,7 @@ import {
   Square,
   X,
 } from "lucide-react";
-import type { FileSuggestion, PromptDelivery } from "../../../shared/types";
+import type { FileSuggestion, PromptDelivery, ThreadMode } from "../../../shared/types";
 import { MAX_ATTACHMENT_BYTES } from "../../../shared/constants";
 import { modEnter } from "../../lib/platform";
 import { stopThread, submitPrompt } from "../../lib/send";
@@ -16,6 +16,7 @@ import { useChatStore } from "../../stores/chat-store";
 import { NEW_THREAD_DRAFT, useUiStore } from "../../stores/ui-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
 import { ModelSelector } from "./ModelSelector";
+import { ModeSelector } from "./ModeSelector";
 import { PermissionSelector } from "./PermissionSelector";
 import { SlashMenu, matchCommands, slashQuery, type SlashCommand } from "./SlashMenu";
 
@@ -50,12 +51,15 @@ export function Composer() {
   const [selectedCommand, setSelectedCommand] = useState(0);
   const [dismissedSlash, setDismissedSlash] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  // The mode picked for a thread that does not exist yet; null follows the default setting.
+  const [draftMode, setDraftMode] = useState<ThreadMode | null>(null);
   const settings = useUiStore((state) => state.settings);
   const setApprovalPolicy = useUiStore((state) => state.setApprovalPolicy);
   const activeThread = useWorkspaceStore((state) =>
     state.threads.find((item) => item.id === state.activeThreadId),
   );
   const setThreadApprovalPolicy = useWorkspaceStore((state) => state.setThreadApprovalPolicy);
+  const setThreadMode = useWorkspaceStore((state) => state.setThreadMode);
   const openSettings = useUiStore((state) => state.openSettings);
   const setUsage = useChatStore((state) => state.setUsage);
   const undoChanges = useChatStore((state) => state.undoChanges);
@@ -63,7 +67,10 @@ export function Composer() {
 
   const query = slashQuery(draft);
   const slashOpen = query !== null && dismissedSlash !== draft;
-  const commands = slashOpen ? matchCommands(query, Boolean(activeThreadId)) : [];
+  // The mode only matters before the first message; afterwards the transcript decides.
+  const threadIsEmpty = !activeThread || (view?.loaded === true && view.turns.length === 0);
+  const mode: ThreadMode = activeThread?.mode ?? draftMode ?? settings?.defaultThreadMode ?? "agent";
+  const commands = slashOpen ? matchCommands(query, Boolean(activeThreadId), mode) : [];
 
   useEffect(() => {
     setSelectedCommand(0);
@@ -153,9 +160,12 @@ export function Composer() {
     const delivery: PromptDelivery | undefined = running ? (steer ? "steer" : "followUp") : undefined;
     let threadId = activeThreadId;
     if (!threadId) {
-      const thread = await newThread();
+      const thread = await newThread(draftMode ?? undefined);
       threadId = thread?.id ?? null;
-      if (threadId) selectThread(threadId);
+      if (threadId) {
+        selectThread(threadId);
+        setDraftMode(null);
+      }
     }
     if (!threadId) return;
     const referencedFiles = Array.from(text.matchAll(/(?:^|\s)@([^\s@]+)/g))
@@ -434,7 +444,25 @@ export function Composer() {
           />
           <div className="mt-1 flex h-7 items-center gap-1">
             <ModelSelector />
-            <PermissionSelector />
+            {threadIsEmpty && (
+              <ModeSelector
+                mode={mode}
+                disabled={running}
+                onSelect={(next) => {
+                  if (!activeThread) {
+                    setDraftMode(next);
+                    return;
+                  }
+                  void setThreadMode(activeThread.id, next).catch((error: unknown) => {
+                    setNotice({
+                      text: error instanceof Error ? error.message : "Could not switch modes",
+                      error: true,
+                    });
+                  });
+                }}
+              />
+            )}
+            {mode === "agent" && <PermissionSelector />}
             <input
               ref={fileInputRef}
               type="file"

@@ -15,6 +15,7 @@ import type {
   SendPromptInput,
   SettingsSnapshot,
   ThinkingLevel,
+  ThreadMode,
   ThreadSummary,
 } from "../shared/types";
 import { getSessionDir, newId, type KipDatabase } from "./storage/db";
@@ -120,6 +121,9 @@ export function createKipRpc(deps: RpcDeps) {
         },
         setThinkingLevel: ({ threadId, level }) => {
           deps.orchestrator.setThinkingLevel(threadId, level);
+        },
+        setThreadMode: async ({ threadId, mode }) => {
+          await deps.orchestrator.setThreadMode(threadId, mode);
         },
         setThreadApprovalPolicy: ({ threadId, policy }) => {
           deps.orchestrator.setThreadApprovalPolicy(threadId, policy);
@@ -330,6 +334,7 @@ async function createThread(deps: RpcDeps, input: CreateThreadInput): Promise<Th
     modelProvider: chosenProvider,
     modelId: chosenModel,
     thinkingLevel,
+    mode: input.mode ?? (deps.database.getSetting("defaultThreadMode", "agent") as ThreadMode),
     approvalPolicy: input.approvalPolicy ?? null,
   });
   return thread;
@@ -344,6 +349,7 @@ async function settingsSnapshot(deps: RpcDeps): Promise<SettingsSnapshot> {
     defaultProvider: deps.database.getSetting("defaultProvider", ""),
     defaultModelId: deps.database.getSetting("defaultModelId", ""),
     defaultThinkingLevel: deps.database.getSetting("defaultThinkingLevel", "medium"),
+    defaultThreadMode: deps.database.getSetting("defaultThreadMode", "agent"),
     sidebarCollapsed: deps.database.getSetting("sidebarCollapsed", false),
     configuredProviders: providers.filter((provider) => provider.hasApiKey).map((p) => p.id),
     availableModels: deps.registry.listAvailable(),

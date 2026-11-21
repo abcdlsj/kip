@@ -3,6 +3,7 @@ import { create } from "zustand";
 import type {
   ApprovalPolicy,
   ThinkingLevel,
+  ThreadMode,
   ThreadSummary,
   Workspace,
 } from "../../shared/types";
@@ -25,7 +26,7 @@ interface WorkspaceState {
   removeWorkspace: (workspaceId: string) => Promise<void>;
   refreshWorkspaces: () => Promise<void>;
   refreshThreads: () => Promise<void>;
-  newThread: () => Promise<ThreadSummary | null>;
+  newThread: (mode?: ThreadMode) => Promise<ThreadSummary | null>;
   selectThread: (threadId: string | null) => void;
   deleteThread: (threadId: string) => Promise<void>;
   renameThread: (threadId: string, title: string) => Promise<void>;
@@ -39,6 +40,7 @@ interface WorkspaceState {
   setThreadRunning: (threadId: string, running: boolean) => void;
   updateThreadModel: (threadId: string, provider: string, modelId: string) => Promise<void>;
   setThreadThinking: (threadId: string, level: ThinkingLevel) => Promise<void>;
+  setThreadMode: (threadId: string, mode: ThreadMode) => Promise<void>;
   setThreadApprovalPolicy: (threadId: string, policy: ApprovalPolicy | null) => Promise<void>;
 }
 
@@ -121,10 +123,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ threads });
   },
 
-  newThread: async () => {
+  newThread: async (mode) => {
     const workspaceId = get().activeWorkspaceId;
     if (!workspaceId) return null;
-    const thread = await request("createThread", { workspaceId });
+    const thread = await request("createThread", { workspaceId, mode });
     set((state) => ({
       threads: [thread, ...state.threads],
       activeThreadId: thread.id,
@@ -193,6 +195,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set((state) => ({
       threads: state.threads.map((thread) =>
         thread.id === threadId ? { ...thread, thinkingLevel: level } : thread,
+      ),
+    }));
+  },
+
+  setThreadMode: async (threadId, mode) => {
+    await request("setThreadMode", { threadId, mode });
+    set((state) => ({
+      threads: state.threads.map((thread) =>
+        thread.id === threadId ? { ...thread, mode } : thread,
       ),
     }));
   },

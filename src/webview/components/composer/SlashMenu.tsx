@@ -10,7 +10,7 @@ import {
   SquarePen,
   Undo2,
 } from "lucide-react";
-import type { ApprovalPolicy } from "../../../shared/types";
+import type { ApprovalPolicy, ThreadMode } from "../../../shared/types";
 
 export type SlashCommandId =
   | "new"
@@ -93,8 +93,16 @@ export function slashQuery(draft: string): string | null {
   return match ? (match[1] ?? "").toLowerCase() : null;
 }
 
-export function matchCommands(query: string, hasThread: boolean): SlashCommand[] {
-  const available = SLASH_COMMANDS.filter((command) => hasThread || !command.needsThread);
+export function matchCommands(
+  query: string,
+  hasThread: boolean,
+  mode: ThreadMode = "agent",
+): SlashCommand[] {
+  // Approval commands mean nothing to a thread that cannot call a tool.
+  const available = SLASH_COMMANDS.filter(
+    (command) =>
+      (hasThread || !command.needsThread) && (mode === "agent" || command.group !== "Approval"),
+  );
   if (!query) return available;
   const starts = available.filter((command) => command.id.startsWith(query));
   const contains = available.filter(

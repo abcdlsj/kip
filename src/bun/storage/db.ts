@@ -14,6 +14,7 @@ import type {
   ProviderRecord,
   ThemeMode,
   ThinkingLevel,
+  ThreadMode,
   ThreadSummary,
   Workspace,
 } from "../../shared/types";
@@ -24,6 +25,7 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
   defaultProvider: "",
   defaultModelId: "",
   defaultThinkingLevel: "medium",
+  defaultThreadMode: "agent",
   sidebarCollapsed: false,
 };
 
@@ -42,6 +44,7 @@ interface ThreadRow {
   model_provider: string;
   model_id: string;
   thinking_level: ThinkingLevel;
+  mode: ThreadMode;
   approval_policy: ApprovalPolicy | null;
   updated_at: number;
 }
@@ -137,6 +140,7 @@ export class KipDatabase {
         model_provider TEXT NOT NULL,
         model_id TEXT NOT NULL,
         thinking_level TEXT NOT NULL DEFAULT 'medium',
+        mode TEXT NOT NULL DEFAULT 'agent',
         approval_policy TEXT DEFAULT NULL,
         is_archived INTEGER NOT NULL DEFAULT 0,
         updated_at INTEGER NOT NULL,
@@ -188,6 +192,10 @@ export class KipDatabase {
       .map((col) => col.name);
     if (!columns.includes("approval_policy")) {
       this.db.exec("ALTER TABLE threads ADD COLUMN approval_policy TEXT DEFAULT NULL");
+    }
+    // Threads predate Chat mode; every existing one is an agent thread.
+    if (!columns.includes("mode")) {
+      this.db.exec("ALTER TABLE threads ADD COLUMN mode TEXT NOT NULL DEFAULT 'agent'");
     }
 
     // Earlier builds hardcoded supportsVision: false everywhere with no UI toggle.
@@ -380,13 +388,14 @@ export class KipDatabase {
     modelProvider: string;
     modelId: string;
     thinkingLevel: ThinkingLevel;
+    mode?: ThreadMode;
     approvalPolicy?: ApprovalPolicy | null;
   }): ThreadSummary {
     const now = Date.now();
     this.db
       .prepare(
-        "INSERT INTO threads (id, workspace_id, title, session_file_path, model_provider, model_id, thinking_level, approval_policy, updated_at, created_at) " +
-          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO threads (id, workspace_id, title, session_file_path, model_provider, model_id, thinking_level, mode, approval_policy, updated_at, created_at) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         input.id,
@@ -396,6 +405,7 @@ export class KipDatabase {
         input.modelProvider,
         input.modelId,
         input.thinkingLevel,
+        input.mode ?? "agent",
         input.approvalPolicy ?? null,
         now,
         now,
@@ -412,6 +422,7 @@ export class KipDatabase {
       modelProvider: string;
       modelId: string;
       thinkingLevel: ThinkingLevel;
+      mode: ThreadMode;
       approvalPolicy: ApprovalPolicy | null;
       sessionFilePath: string;
     }>,
@@ -433,6 +444,10 @@ export class KipDatabase {
     if (patch.thinkingLevel !== undefined) {
       sets.push("thinking_level = ?");
       values.push(patch.thinkingLevel);
+    }
+    if (patch.mode !== undefined) {
+      sets.push("mode = ?");
+      values.push(patch.mode);
     }
     if (patch.approvalPolicy !== undefined) {
       sets.push("approval_policy = ?");
@@ -573,6 +588,7 @@ export class KipDatabase {
       modelProvider: row.model_provider,
       modelId: row.model_id,
       thinkingLevel: row.thinking_level,
+      mode: row.mode === "chat" ? "chat" : "agent",
       approvalPolicy: row.approval_policy ?? null,
       updatedAt: row.updated_at,
       isRunning: false,

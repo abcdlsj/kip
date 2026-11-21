@@ -6,6 +6,12 @@
 export type ThemeMode = "light" | "dark" | "system";
 export type ApprovalPolicy = "read-only-auto" | "full-auto" | "strict" | "yolo";
 export type ThinkingLevel = "off" | "low" | "medium" | "high";
+/**
+ * `agent` threads get tools, a system prompt, and workspace context. `chat`
+ * threads send only the conversation, for providers whose value is the model
+ * itself rather than its tool loop.
+ */
+export type ThreadMode = "agent" | "chat";
 export type ProviderProtocol =
   | "openai-completions"
   | "openai-responses"
@@ -29,6 +35,7 @@ export interface ThreadSummary {
   modelProvider: string;
   modelId: string;
   thinkingLevel: ThinkingLevel;
+  mode: ThreadMode;
   /** Per-thread permission override; null/undefined inherits the global policy. */
   approvalPolicy?: ApprovalPolicy | null;
   updatedAt: number;
@@ -177,6 +184,8 @@ export interface SettingsSnapshot {
   defaultProvider: string;
   defaultModelId: string;
   defaultThinkingLevel: ThinkingLevel;
+  /** Mode new threads start in; existing threads keep their own. */
+  defaultThreadMode: ThreadMode;
   sidebarCollapsed: boolean;
   configuredProviders: string[];
   availableModels: ModelOption[];
@@ -283,6 +292,7 @@ export interface CreateThreadInput {
   modelProvider?: string;
   modelId?: string;
   thinkingLevel?: ThinkingLevel;
+  mode?: ThreadMode;
   approvalPolicy?: ApprovalPolicy | null;
 }
 

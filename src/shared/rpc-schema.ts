@@ -23,6 +23,7 @@ import type {
   SyncProvider,
   ThemeMode,
   ThinkingLevel,
+  ThreadMode,
   ThreadSummary,
   UpdateStatus,
   WindowAction,
@@ -44,6 +45,7 @@ export interface UpdateSettingsInput {
   defaultProvider?: string;
   defaultModelId?: string;
   defaultThinkingLevel?: ThinkingLevel;
+  defaultThreadMode?: ThreadMode;
   sidebarCollapsed?: boolean;
 }
 
@@ -72,6 +74,7 @@ export interface KipRPCSchema {
         response: void;
       };
       setThinkingLevel: { params: { threadId: string; level: ThinkingLevel }; response: void };
+      setThreadMode: { params: { threadId: string; mode: ThreadMode }; response: void };
       setThreadApprovalPolicy: {
         params: { threadId: string; policy: ApprovalPolicy | null };
         response: void;
