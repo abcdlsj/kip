@@ -1,9 +1,18 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  DefaultResourceLoader,
+  ModelRuntime,
+  SessionManager,
+  SettingsManager,
+  createAgentSession,
+} from "@earendil-works/pi-coding-agent";
+import { KIP_SYSTEM_PROMPT } from "../src/shared/constants";
 import type { AgentStreamEvent } from "../src/shared/types";
 import { ContextBuilder } from "../src/bun/agent/context-builder";
+import { readSystemPromptOverride } from "../src/bun/agent/pi-orchestrator";
 import { FrameBuffer } from "../src/bun/agent/stream-buffer";
 import { ToolInterceptor, type ToolHook } from "../src/bun/agent/tool-interceptor";
 import { ToolRegistry, type AnyToolDefinition } from "../src/bun/agent/tool-registry";
@@ -69,7 +78,7 @@ describe("ToolRegistry", () => {
 });
 
 describe("ContextBuilder", () => {
-  test("includes runtime environment, AGENTS.md instructions, and custom providers", async () => {
+  test("includes workspace instructions before runtime environment and omits preamble", async () => {
     const root = makeTempDir();
     writeFileSync(join(root, "AGENTS.md"), "Always run bun test before finishing.");
     mkdirSync(join(root, ".kip"), { recursive: true });
@@ -89,10 +98,37 @@ describe("ContextBuilder", () => {
     });
 
     const joined = sections.join("\n\n");
+    expect(joined).not.toContain(KIP_SYSTEM_PROMPT);
+    expect(joined).not.toContain("You are Kip");
     expect(joined).toContain("Runtime environment:");
+    expect(joined).toContain("- Workspace: demo");
+    expect(joined).not.toContain(`(${toPosixPath(root)})`);
     expect(joined).toContain("Always run bun test before finishing.");
     expect(joined).toContain("Prefer pure functions.");
     expect(joined).toContain("User prefers terse answers.");
+    expect(joined.indexOf("Workspace instructions (AGENTS.md):")).toBeLessThan(
+      joined.indexOf("Runtime environment:"),
+    );
+  });
+
+  test("deduplicates CLAUDE.md symlinked to AGENTS.md", async () => {
+    const root = makeTempDir();
+    const content = "Shared project rules for agents.";
+    writeFileSync(join(root, "AGENTS.md"), `\uFEFF${content}\n`);
+    symlinkSync(join(root, "AGENTS.md"), join(root, "CLAUDE.md"));
+
+    const builder = new ContextBuilder();
+    const sections = await builder.buildSystemPromptSections({
+      threadId: "th_1",
+      workspaceId: "ws_1",
+      workspaceRoot: root,
+      workspaceName: "demo",
+    });
+
+    const joined = sections.join("\n\n");
+    expect(joined.split(content)).toHaveLength(2);
+    expect(joined).toContain("Workspace instructions (AGENTS.md):");
+    expect(joined).not.toContain("Workspace instructions (CLAUDE.md):");
   });
 
   test("ignores failing custom context providers without aborting session boot", async () => {
@@ -110,7 +146,113 @@ describe("ContextBuilder", () => {
       workspaceRoot: root,
       workspaceName: "demo",
     });
-    expect(sections.length).toBeGreaterThanOrEqual(2);
+    expect(sections).toHaveLength(1);
+    expect(sections[0]).toContain("Runtime environment:");
+    expect(sections[0]).not.toContain(KIP_SYSTEM_PROMPT);
+  });
+});
+
+describe("System prompt assembly", () => {
+  async function renderSessionSystemPrompt(workspaceRoot: string, agentDir: string): Promise<string> {
+    const builder = new ContextBuilder();
+    const toolRegistry = new ToolRegistry();
+    const [tools, systemPromptSections] = await Promise.all([
+      toolRegistry.resolveTools({
+        threadId: "th_1",
+        workspaceId: "ws_1",
+        workspaceRoot,
+      }),
+      builder.buildSystemPromptSections({
+        threadId: "th_1",
+        workspaceId: "ws_1",
+        workspaceRoot,
+        workspaceName: "demo",
+      }),
+    ]);
+
+    const systemPrompt = readSystemPromptOverride(agentDir) ?? KIP_SYSTEM_PROMPT;
+    const settingsManager = SettingsManager.create(workspaceRoot, agentDir);
+    const resourceLoader = new DefaultResourceLoader({
+      cwd: workspaceRoot,
+      agentDir,
+      settingsManager,
+      noExtensions: true,
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+      systemPrompt: "",
+      systemPromptOverride: () => systemPrompt,
+      appendSystemPrompt: systemPromptSections,
+    });
+    await resourceLoader.reload();
+
+    const modelRuntime = await ModelRuntime.create({
+      refreshOnCreate: false,
+      allowModelNetwork: false,
+    });
+    const { session } = await createAgentSession({
+      cwd: workspaceRoot,
+      modelRuntime,
+      sessionManager: SessionManager.inMemory(workspaceRoot),
+      settingsManager,
+      resourceLoader,
+      noTools: "builtin",
+      customTools: tools,
+      tools: tools.map((tool) => tool.name),
+    });
+    try {
+      return session.systemPrompt;
+    } finally {
+      session.dispose();
+    }
+  }
+
+  test("uses KIP_SYSTEM_PROMPT by default without Pi harness sections or repo .pi/SYSTEM.md", async () => {
+    const workspaceRoot = makeTempDir("kip-ws-");
+    const agentDir = makeTempDir("kip-agent-");
+    mkdirSync(join(workspaceRoot, ".pi"), { recursive: true });
+    writeFileSync(join(workspaceRoot, ".pi", "SYSTEM.md"), "Injected repo prompt.");
+    writeFileSync(join(workspaceRoot, "AGENTS.md"), "Repo-specific rule.");
+
+    const rendered = await renderSessionSystemPrompt(workspaceRoot, agentDir);
+
+    expect(rendered.startsWith(KIP_SYSTEM_PROMPT)).toBe(true);
+    expect(rendered).not.toContain("running inside pi");
+    expect(rendered).not.toContain("<docs>");
+    expect(rendered).not.toContain("<rules>");
+    expect(rendered).not.toContain("<tools>");
+    expect(rendered).not.toContain("<project_context>");
+    expect(rendered).not.toContain("Injected repo prompt.");
+    expect(rendered.split("Repo-specific rule.")).toHaveLength(2);
+    expect(rendered).toContain(`<cwd>\n${toPosixPath(workspaceRoot)}\n</cwd>`);
+  });
+
+  test("falls back to KIP_SYSTEM_PROMPT when agentDir SYSTEM.md is empty", async () => {
+    const workspaceRoot = makeTempDir("kip-ws-");
+    const agentDir = makeTempDir("kip-agent-");
+    writeFileSync(join(agentDir, "SYSTEM.md"), "   \n\t  ");
+
+    const rendered = await renderSessionSystemPrompt(workspaceRoot, agentDir);
+
+    expect(rendered.startsWith(KIP_SYSTEM_PROMPT)).toBe(true);
+    expect(rendered).not.toContain("running inside pi");
+    expect(rendered).not.toContain("<docs>");
+    expect(rendered).not.toContain("<rules>");
+  });
+
+  test("applies non-empty agentDir SYSTEM.md override", async () => {
+    const workspaceRoot = makeTempDir("kip-ws-");
+    const agentDir = makeTempDir("kip-agent-");
+    writeFileSync(join(agentDir, "SYSTEM.md"), "\uFEFFYou are Custom Kip.\n");
+
+    const rendered = await renderSessionSystemPrompt(workspaceRoot, agentDir);
+
+    expect(rendered.startsWith("You are Custom Kip.")).toBe(true);
+    expect(rendered).not.toContain(KIP_SYSTEM_PROMPT);
+    expect(rendered).not.toContain("running inside pi");
+    expect(rendered).not.toContain("<docs>");
+    expect(rendered).not.toContain("<rules>");
   });
 });
 

@@ -15,8 +15,9 @@ import {
   type AgentSession,
   type AgentSessionEvent,
 } from "@earendil-works/pi-coding-agent";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { KIP_SYSTEM_PROMPT } from "../../shared/constants";
 import type {
   ApprovalPolicy,
   ChatTurn,
@@ -523,6 +524,7 @@ export class KipOrchestrator {
 
     const agentDir = join(getDataDir(), "agent");
     mkdirSync(agentDir, { recursive: true, mode: 0o700 });
+    const systemPrompt = readSystemPromptOverride(agentDir) ?? KIP_SYSTEM_PROMPT;
     const settingsManager = SettingsManager.create(workspace.rootPath, agentDir);
     const resourceLoader = new DefaultResourceLoader({
       cwd: workspace.rootPath,
@@ -532,6 +534,9 @@ export class KipOrchestrator {
       noSkills: true,
       noPromptTemplates: true,
       noThemes: true,
+      noContextFiles: true,
+      systemPrompt: "",
+      systemPromptOverride: () => systemPrompt,
       appendSystemPrompt: systemPromptSections,
     });
     await resourceLoader.reload();
@@ -850,6 +855,17 @@ export class KipOrchestrator {
     const thread = this.database.getThread(threadId);
     if (!thread) throw new Error("Thread not found");
     return thread;
+  }
+}
+
+export function readSystemPromptOverride(agentDir: string): string | undefined {
+  const filePath = join(agentDir, "SYSTEM.md");
+  if (!existsSync(filePath)) return undefined;
+  try {
+    const content = readFileSync(filePath, "utf8").replace(/^\uFEFF/, "").trim();
+    return content || undefined;
+  } catch {
+    return undefined;
   }
 }
 

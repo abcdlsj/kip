@@ -7,11 +7,10 @@
  * Additional `PromptContextProvider`s (e.g. skills, memory, MCP resources) can
  * be registered without modifying the orchestrator.
  */
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { DEFAULT_SYSTEM_PROMPT } from "../../shared/constants";
 import { inspectGit } from "../system/git-inspector";
-import { describeRuntimeEnv, toPosixPath } from "../system/platform";
+import { describeRuntimeEnv, normalizeForCompare, toPosixPath } from "../system/platform";
 
 export interface PromptContextInput {
   threadId: string;
@@ -34,7 +33,7 @@ const INSTRUCTION_CANDIDATES = [
 /** Cap injected workspace instruction text so large docs never crowd out context. */
 const MAX_INSTRUCTION_CHARS = 16_000;
 
-/** Appends concise OS, shell, workspace path, and Git branch metadata. */
+/** Appends concise OS, shell, workspace name, and Git branch metadata. */
 export function createRuntimeContextProvider(): PromptContextProvider {
   return {
     id: "runtime-env",
@@ -46,7 +45,7 @@ export function createRuntimeContextProvider(): PromptContextProvider {
       const lines = [
         "Runtime environment:",
         `- OS: ${describeRuntimeEnv()}`,
-        `- Workspace: ${input.workspaceName} (${toPosixPath(input.workspaceRoot)})`,
+        `- Workspace: ${input.workspaceName}`,
       ];
       if (git.branch) {
         lines.push(`- Git branch: ${git.branch}`);
@@ -62,15 +61,27 @@ export function createWorkspaceInstructionsProvider(): PromptContextProvider {
     id: "workspace-instructions",
     build(input) {
       const sections: string[] = [];
+      const seenPaths = new Set<string>();
+      const seenContent = new Set<string>();
       let remaining = MAX_INSTRUCTION_CHARS;
       for (const relativePath of INSTRUCTION_CANDIDATES) {
         if (remaining <= 0) break;
         const fullPath = join(input.workspaceRoot, relativePath);
         if (!existsSync(fullPath)) continue;
         try {
+          let resolvedPath = fullPath;
+          try {
+            resolvedPath = realpathSync(fullPath);
+          } catch {
+            // Fall back to the original path if realpath fails on unusual mounts.
+          }
+          const pathKey = normalizeForCompare(resolvedPath);
+          if (seenPaths.has(pathKey)) continue;
           if (!statSync(fullPath).isFile()) continue;
-          const raw = readFileSync(fullPath, "utf8").trim();
-          if (!raw) continue;
+          seenPaths.add(pathKey);
+          const raw = readFileSync(fullPath, "utf8").replace(/^\uFEFF/, "").trim();
+          if (!raw || seenContent.has(raw)) continue;
+          seenContent.add(raw);
           const clipped =
             raw.length > remaining
               ? `${raw.slice(0, remaining)}\n\n[Truncated for context budget]`
@@ -91,8 +102,8 @@ export class ContextBuilder {
 
   constructor(
     initial: PromptContextProvider[] = [
-      createRuntimeContextProvider(),
       createWorkspaceInstructionsProvider(),
+      createRuntimeContextProvider(),
     ],
   ) {
     for (const provider of initial) {
@@ -109,7 +120,7 @@ export class ContextBuilder {
   }
 
   async buildSystemPromptSections(input: PromptContextInput): Promise<string[]> {
-    const sections = [DEFAULT_SYSTEM_PROMPT];
+    const sections: string[] = [];
     for (const provider of this.providers.values()) {
       try {
         const chunk = await provider.build(input);
