@@ -6,7 +6,7 @@ const config: ElectrobunConfig = {
   app: {
     name: "Kip",
     identifier: "ai.kip.desktop",
-    version: "0.2.4",
+    version: "0.2.5",
     description: "A quiet desktop coding agent built with Electrobun and Pi",
   },
   scripts: {
