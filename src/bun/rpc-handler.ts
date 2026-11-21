@@ -23,8 +23,11 @@ import type { ModelRegistry } from "./agent/model-registry";
 import { displayModelName, fetchRemoteModels } from "./agent/model-registry";
 import {
   findPlugin,
+  getOrCreatePluginDeviceId,
   pluginSummaries,
   savePluginValues,
+  setPluginEnabled,
+  toPluginSummary,
 } from "./plugins/registry";
 import type { KipOrchestrator } from "./agent/pi-orchestrator";
 import { pickWorkspaceFolder, suggestFiles, workspaceName } from "./system/fs-dialog";
@@ -109,6 +112,9 @@ export function createKipRpc(deps: RpcDeps) {
         renameThread: ({ threadId, title }) => {
           deps.database.updateThread(threadId, { title: title.trim() || "New Thread" });
         },
+        regenerateThreadTitle: async ({ threadId }) => ({
+          title: await deps.orchestrator.regenerateThreadTitle(threadId),
+        }),
         setThreadModel: async ({ threadId, provider, modelId }) => {
           await deps.orchestrator.updateThreadModel(threadId, provider, modelId);
         },
@@ -194,10 +200,30 @@ export function createKipRpc(deps: RpcDeps) {
         testProvider: ({ provider }) => deps.registry.testProvider(provider),
         fetchProviderModels: ({ baseUrl, apiKey }) =>
           fetchRemoteModels(baseUrl, apiKey ?? undefined),
-        listGatewayPlugins: async () => pluginSummaries(deps.database),
-        probeGatewayPlugin: async ({ plugin: pluginId, values }) => {
+        listPlugins: async () => pluginSummaries(deps.database),
+        updatePlugin: async ({ plugin: pluginId, enabled, values }) => {
           const plugin = findPlugin(pluginId);
           if (!plugin) throw new Error(`Unknown plugin: ${pluginId}`);
+          if (enabled !== undefined && plugin.kind === "title") {
+            setPluginEnabled(deps.database, plugin, enabled);
+          }
+          if (values) {
+            savePluginValues(deps.database, plugin, values);
+          }
+          return toPluginSummary(deps.database, plugin);
+        },
+        probePlugin: async ({ plugin: pluginId, values }) => {
+          const plugin = findPlugin(pluginId);
+          if (!plugin) throw new Error(`Unknown plugin: ${pluginId}`);
+          if (plugin.kind === "title") {
+            const deviceId = getOrCreatePluginDeviceId(deps.database, plugin);
+            const result = await plugin.probe(values, { deviceId });
+            if (result.ok) {
+              savePluginValues(deps.database, plugin, values);
+            }
+            return result;
+          }
+
           const storedApiKey = (await getApiKey(plugin.providerId)) ?? undefined;
           const outcome = await plugin.probe(values, { storedApiKey });
           if (!outcome.ok || !outcome.proposal) {

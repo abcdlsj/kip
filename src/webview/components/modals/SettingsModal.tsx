@@ -1,14 +1,15 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { Boxes, Check, Cloud, Palette, RotateCw, ShieldCheck, X } from "lucide-react";
+import { Boxes, Check, Cloud, Palette, Puzzle, RotateCw, ShieldCheck, X } from "lucide-react";
 import type { ApprovalPolicy, ThemeMode, ThinkingLevel } from "../../../shared/types";
 import { modShortcut } from "../../lib/platform";
 import { useUiStore } from "../../stores/ui-store";
-import { GatewayPlugins } from "./GatewayPlugins";
+import { PluginsPanel } from "./PluginsPanel";
 import { ProvidersPanel } from "./ProvidersPanel";
 import { SyncPanel } from "./SyncPanel";
 
 const TABS = [
   { id: "providers", label: "Providers", icon: Boxes },
+  { id: "plugins", label: "Plugins", icon: Puzzle },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "safety", label: "Safety", icon: ShieldCheck },
   { id: "sync", label: "Sync", icon: Cloud },
@@ -79,12 +80,8 @@ export function SettingsModal() {
                 <X size={14} strokeWidth={1.5} />
               </button>
             </Dialog.Close>
-            {tab === "providers" && (
-              <>
-                <ProvidersPanel providers={providers} />
-                <GatewayPlugins />
-              </>
-            )}
+            {tab === "providers" && <ProvidersPanel providers={providers} />}
+            {tab === "plugins" && <PluginsPanel />}
             {tab === "appearance" && (
               <div>
                 <h2 className="text-[15px] font-semibold">Appearance</h2>

@@ -5,7 +5,7 @@
  * Everything here is plain HTTP against the server the user runs; nothing reaches Google.
  */
 import type { ProviderModel } from "../../shared/types";
-import type { KipPlugin, PluginProbeOutcome } from "./types";
+import type { GatewayPlugin, PluginProbeOutcome } from "./types";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = "8790";
@@ -94,7 +94,7 @@ function toProviderModel(
   };
 }
 
-export const gemini2apiPlugin: KipPlugin = {
+export const gemini2apiPlugin: GatewayPlugin = {
   id: "gemini2api",
   kind: "gateway",
   label: "gemini2api",

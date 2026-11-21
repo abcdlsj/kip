@@ -45,6 +45,7 @@ import {
   toSharedUsage,
 } from "./session-bridge";
 import { summarizeToolCall } from "./tool-policy";
+import { generateTitleWithPlugins } from "../plugins/registry";
 
 export interface OrchestratorOptions {
   toolRegistry?: ToolRegistry;
@@ -719,20 +720,81 @@ export class KipOrchestrator {
         });
         this.emit(active.threadId, { kind: "turn_complete" });
         void this.recordRunChanges(active).catch(() => undefined);
+        const firstAssistantText = active.currentTurn
+          ? active.currentTurn.blocks
+              .filter((block) => block.type === "text")
+              .map((block) => block.text)
+              .join("\n")
+              .trim()
+          : "";
         active.currentTurn = null;
         active.textBlockId = null;
         active.thinkingBlockId = null;
         if (active.firstPrompt) {
-          const title = titleFromPrompt(active.firstPrompt);
+          const firstPrompt = active.firstPrompt;
+          const fallbackTitle = titleFromPrompt(firstPrompt);
           active.firstPrompt = null;
-          this.database.updateThread(active.threadId, { title });
-          this.emit(active.threadId, { kind: "thread_title_updated", title });
+          this.database.updateThread(active.threadId, { title: fallbackTitle });
+          this.emit(active.threadId, { kind: "thread_title_updated", title: fallbackTitle });
+          void this.enhanceThreadTitle(
+            active.threadId,
+            firstPrompt,
+            firstAssistantText,
+            fallbackTitle,
+          );
         }
         return;
       }
       default:
         return;
     }
+  }
+
+  private async enhanceThreadTitle(
+    threadId: string,
+    userText: string,
+    assistantText: string,
+    fallbackTitle: string,
+  ): Promise<void> {
+    const messages: Array<{ role: "user" | "assistant"; content: string }> = [
+      { role: "user", content: userText },
+    ];
+    if (assistantText) {
+      messages.push({ role: "assistant", content: assistantText });
+    }
+    const aiTitle = await generateTitleWithPlugins(this.database, {
+      mode: "initial",
+      messages,
+    });
+    if (!aiTitle) return;
+    // Never overwrite a title the user renamed while the request was in flight.
+    const current = this.database.getThread(threadId);
+    if (!current || current.title !== fallbackTitle) return;
+    this.database.updateThread(threadId, { title: aiTitle });
+    this.emit(threadId, { kind: "thread_title_updated", title: aiTitle });
+  }
+
+  async regenerateThreadTitle(threadId: string): Promise<string | null> {
+    const { turns } = await this.loadTurns(threadId);
+    const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+    for (const turn of turns) {
+      const content = turn.blocks
+        .filter((block) => block.type === "text")
+        .map((block) => block.text)
+        .join("\n")
+        .trim();
+      if (!content) continue;
+      messages.push({ role: turn.role, content });
+    }
+    if (!messages.some((m) => m.role === "user")) return null;
+    const aiTitle = await generateTitleWithPlugins(this.database, {
+      mode: "conversation",
+      messages: messages.slice(-10),
+    });
+    if (!aiTitle) return null;
+    this.database.updateThread(threadId, { title: aiTitle });
+    this.emit(threadId, { kind: "thread_title_updated", title: aiTitle });
+    return aiTitle;
   }
 
   /**

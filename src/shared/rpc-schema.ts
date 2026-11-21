@@ -66,6 +66,7 @@ export interface KipRPCSchema {
       };
       deleteThread: { params: { threadId: string }; response: void };
       renameThread: { params: { threadId: string; title: string }; response: void };
+      regenerateThreadTitle: { params: { threadId: string }; response: { title: string | null } };
       setThreadModel: {
         params: { threadId: string; provider: string; modelId: string };
         response: void;
@@ -120,8 +121,12 @@ export interface KipRPCSchema {
         params: { baseUrl: string; apiKey?: string };
         response: { models: ProviderModel[]; error?: string };
       };
-      listGatewayPlugins: { params: void; response: PluginSummary[] };
-      probeGatewayPlugin: {
+      listPlugins: { params: void; response: PluginSummary[] };
+      updatePlugin: {
+        params: { plugin: string; enabled?: boolean; values?: Record<string, string> };
+        response: PluginSummary;
+      };
+      probePlugin: {
         params: { plugin: string; values: Record<string, string> };
         response: PluginProbeResult;
       };

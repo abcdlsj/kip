@@ -10,7 +10,7 @@ import type {
 } from "../../shared/types";
 import { request } from "../rpc-client";
 
-type SettingsTab = "providers" | "appearance" | "safety" | "sync";
+type SettingsTab = "providers" | "plugins" | "appearance" | "safety" | "sync";
 
 interface UiState {
   settings: SettingsSnapshot | null;

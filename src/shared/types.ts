@@ -125,7 +125,7 @@ export interface ProviderModel {
   supportsReasoning: boolean;
 }
 
-export type PluginKind = "gateway";
+export type PluginKind = "gateway" | "title";
 export type PluginFieldKind = "text" | "port" | "secret" | "toggle" | "select";
 
 /** One input a plugin needs before it can reach its gateway. */
@@ -146,6 +146,10 @@ export interface PluginSummary {
   kind: PluginKind;
   label: string;
   description: string;
+  /** Whether the user can toggle this plugin on/off independently of probing. */
+  toggleable: boolean;
+  /** Active state for toggleable plugins (always true for gateway discovery plugins). */
+  enabled: boolean;
   fields: PluginField[];
   /** Saved non-secret values, so the form survives a restart. */
   values: Record<string, string>;
