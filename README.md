@@ -165,7 +165,9 @@ OpenAI-compatible API on this machine. The plugin manages it end to end:
 3. Press **Start**. Kip writes a config, starts the binary on the configured loopback port
    (or a free one when that is taken) and tails its log. The gateway belongs to Kip, not to the
    window: it keeps running when you close the window, restarts with Kip, and stops on **Stop**
-   or when Kip quits. A server you run yourself is detected and never duplicated.
+   or when Kip quits. A server you run yourself is used as-is and never duplicated — the window
+   shows it as running (marked *your server*) and **Start** explains that instead of spawning a
+   second client, because two clients would rotate each other's Google cookies.
 4. Back on the plugin card, press **Detect**. Kip reads `/health` and `/v1/models`, registers
    the provider, and keeps the key in the system keychain. A server you run yourself works the
    same way: paste its `api_key` once and Kip mints its own.

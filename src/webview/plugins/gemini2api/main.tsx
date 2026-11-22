@@ -31,6 +31,7 @@ function StatusDot({ state }: { state: GeminiPageState }) {
       {state.running && state.port !== null && (
         <span className="font-mono text-[11.5px] text-[var(--text-muted)]">
           127.0.0.1:{state.port}
+          {state.external ? " · your server" : ""}
         </span>
       )}
     </span>
@@ -158,9 +159,16 @@ function App() {
       </div>
 
       {state.error && (
-        <p className="mt-3 rounded-[9px] border border-[color-mix(in_srgb,var(--status-err)_35%,transparent)] bg-[color-mix(in_srgb,var(--status-err)_8%,transparent)] px-3 py-2 text-[12px] leading-relaxed text-[var(--status-err)]">
-          {state.error}
-        </p>
+        <div className="mt-3 rounded-[9px] border border-[color-mix(in_srgb,var(--status-err)_35%,transparent)] bg-[color-mix(in_srgb,var(--status-err)_8%,transparent)] px-3 py-2">
+          <p className="text-[12px] leading-relaxed text-[var(--status-err)]">
+            {state.error.message}
+          </p>
+          {state.error.hint && (
+            <p className="mt-1.5 whitespace-pre-line text-[11.5px] leading-relaxed text-[var(--text-secondary)]">
+              {state.error.hint}
+            </p>
+          )}
+        </div>
       )}
 
       <section className="mt-5 rounded-[11px] border hairline px-3.5 py-2.5">

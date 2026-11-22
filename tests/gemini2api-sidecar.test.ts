@@ -16,16 +16,19 @@ import {
   status,
   stop,
 } from "../src/bun/plugins/gemini2api/service";
+import { createGeminiPage } from "../src/bun/plugins/gemini2api/page";
 
 let dir = "";
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "kip-sidecar-"));
   process.env.KIP_DATA_DIR = dir;
+  process.env.KIP_KEYCHAIN = "file";
 });
 
 afterEach(async () => {
   await stop();
+  delete process.env.KIP_KEYCHAIN;
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -155,4 +158,92 @@ describe("gemini2api sidecar", () => {
       expect(first.key).toBe(second.key);
     },
   );
+});
+
+describe("gemini2api window", () => {
+  test("uses a server the user already runs instead of starting a second client", async () => {
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        const url = new URL(request.url);
+        if (url.pathname === "/health") {
+          return Response.json({
+            server: "gemini2api",
+            version: "9.9.9",
+            key_required: false,
+            accounts: { firefox: { signed_in: true, status: "AVAILABLE" } },
+          });
+        }
+        if (url.pathname === "/v1/models") {
+          return Response.json({ data: [{ id: "gemini-stub", name: "gemini-stub" }] });
+        }
+        return new Response("not found", { status: 404 });
+      },
+    });
+    const dataDir = join(dir, "plugin");
+    const controller = createGeminiPage({
+      pluginId: "gemini2api",
+      dataDir,
+      values: () => ({ host: "127.0.0.1", port: String(server.port) }),
+      emit: () => {},
+    });
+    try {
+      const snapshot = (await controller.state()) as {
+        running: boolean;
+        external: boolean;
+        health: { accounts: Array<{ signedIn: boolean }> } | null;
+        models: Array<{ id: string }>;
+        error: { message: string; hint: string | null } | null;
+      };
+      expect(snapshot.running).toBe(true);
+      expect(snapshot.external).toBe(true);
+      expect(snapshot.health?.accounts[0]?.signedIn).toBe(true);
+      expect(snapshot.models.map((model) => model.id)).toEqual(["gemini-stub"]);
+
+      await controller.act("start");
+      const afterStart = (await controller.state()) as typeof snapshot;
+      expect(afterStart.error?.message).toContain("already running");
+      expect(afterStart.error?.hint).toContain("Detect");
+      // Nothing was spawned: the managed handle is still empty.
+      expect(status(dataDir, {}).running).toBe(false);
+
+      await controller.act("stop");
+      const afterStop = (await controller.state()) as typeof snapshot;
+      expect(afterStop.error?.message).toContain("was not started by Kip");
+    } finally {
+      server.stop(true);
+      await controller.dispose?.();
+    }
+  });
+
+  test("a failed start explains what to do about the session", async () => {
+    const dataDir = join(dir, "plugin-fail");
+    saveCookies(dataDir, { profile: "/tmp/firefox", cookies: { "__Secure-1PSID": "stale" } });
+    const fakeBinary = join(dir, "fake-gemini2api");
+    writeFileSync(
+      fakeBinary,
+      '#!/bin/sh\necho "RuntimeError: no account signed in: every client fell back to a guest session." >&2\nexit 3\n',
+      { mode: 0o755 },
+    );
+
+    if (process.platform === "win32") return;
+    const controller = createGeminiPage({
+      pluginId: "gemini2api",
+      dataDir,
+      values: () => ({ binaryPath: fakeBinary, host: "127.0.0.1", port: "1" }),
+      emit: () => {},
+    });
+    try {
+      await controller.act("start");
+      const snapshot = (await controller.state()) as {
+        error: { message: string; hint: string | null } | null;
+      };
+      expect(snapshot.error?.message).toContain("exited during startup");
+      expect(snapshot.error?.hint).toContain("Use Firefox session");
+      expect(snapshot.error?.hint).toContain("Detect");
+    } finally {
+      await controller.dispose?.();
+    }
+  });
 });

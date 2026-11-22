@@ -10,12 +10,20 @@ export interface GeminiHealth {
   keyRequired: boolean;
 }
 
+/** What went wrong, plus the next step the user can take. */
+export interface GeminiPageError {
+  message: string;
+  hint: string | null;
+}
+
 export interface GeminiPageState {
   platform: string;
   installed: boolean;
   version: string | null;
   binaryPath: string | null;
   running: boolean;
+  /** Running, but started by the user rather than by Kip. */
+  external: boolean;
   port: number | null;
   pid: number | null;
   health: GeminiHealth | null;
@@ -25,7 +33,7 @@ export interface GeminiPageState {
   homepage: string;
   logs: string[];
   busy: string | null;
-  error: string | null;
+  error: GeminiPageError | null;
 }
 
 export type GeminiAction =

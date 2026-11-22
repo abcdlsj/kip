@@ -11,14 +11,50 @@ import {
   type GeminiModel,
   type GeminiPageState,
 } from "../../../shared/plugins/gemini2api";
+import { getApiKey } from "../../storage/keychain";
 import type { PluginPageContext, PluginPageController } from "../types";
 import * as service from "./service";
+
+const DEFAULT_HOST = "127.0.0.1";
+const DEFAULT_PORT = 8790;
+
+interface Endpoint {
+  host: string;
+  port: number;
+  loopback: boolean;
+}
+
+/**
+ * A failure the user can act on, phrased as what happened plus what to do.
+ * Raw process output stays in the log; this is the part that goes in the box.
+ */
+function hintFor(message: string): string | null {
+  if (/no account signed in|guest session|UNAUTHENTICATED/i.test(message)) {
+    return [
+      "Firefox's Gemini session is not valid any more — usually because another gemini2api client already rotated its cookies.",
+      "1. If a gemini2api server is already running on port " +
+        `${DEFAULT_PORT}, press Detect on the plugin card and use that one instead of starting a second client.`,
+      "2. Otherwise open gemini.google.com in Firefox, confirm you are signed in, then press “Use Firefox session”, then Start.",
+      "Two clients cannot share one Google session: each refresh invalidates the other's cookies.",
+    ].join("\n");
+  }
+  if (/No Firefox profile has a Gemini session/i.test(message)) {
+    return "Sign in to gemini.google.com in Firefox (the profile Kip reads is listed under Cookies), then press “Use Firefox session”.";
+  }
+  if (/not installed/i.test(message)) {
+    return "Press Install to download the standalone binary (about 20 MB).";
+  }
+  if (/did not answer|exited during startup/i.test(message)) {
+    return "Check the log below. The configured port may be taken by another program, or the binary may not be able to start on this machine.";
+  }
+  return null;
+}
 
 export function createGeminiPage(context: PluginPageContext): PluginPageController {
   const { dataDir } = context;
   const values = () => context.values();
   let busy: string | null = null;
-  let error: string | null = null;
+  let error: GeminiPageState["error"] = null;
   let emitQueued = false;
   // New log lines arrive while the gateway runs; repaint without polling.
   service.setLogListener(() => {
@@ -29,6 +65,14 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
       context.emit();
     }, 300);
   });
+
+  function configured(): Endpoint | null {
+    const current = values();
+    const host = (current.host ?? "").trim() || DEFAULT_HOST;
+    const port = Number((current.port ?? "").trim() || DEFAULT_PORT);
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) return null;
+    return { host, port, loopback: host === "127.0.0.1" || host === "localhost" || host === "::1" };
+  }
 
   function healthOf(body: service.HealthBody | null): GeminiHealth | null {
     if (!body) return null;
@@ -43,18 +87,31 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
     };
   }
 
-  async function readHealth(): Promise<service.HealthBody | null> {
+  /** The instance Kip started, if any. */
+  async function managed(): Promise<{ port: number; key: string; health: service.HealthBody } | null> {
     const status = service.status(dataDir, values());
     if (!status.running || !status.port) return null;
-    return service.health(status.port, service.apiKey(dataDir));
+    const key = service.apiKey(dataDir);
+    const health = await service.health(status.port, key);
+    return health ? { port: status.port, key, health } : null;
   }
 
-  async function readModels(body: service.HealthBody | null): Promise<GeminiModel[]> {
-    const status = service.status(dataDir, values());
-    if (!body || !status.port) return [];
+  /** A server the user runs themselves at the configured address. */
+  async function external(): Promise<{ port: number; key: string; health: service.HealthBody } | null> {
+    const endpoint = configured();
+    if (!endpoint?.loopback) return null;
+    const key = (await getApiKey(service.PROVIDER_ID)) ?? service.apiKey(dataDir);
+    const health = await service.health(endpoint.port, key);
+    return health ? { port: endpoint.port, key, health } : null;
+  }
+
+  async function readModels(
+    instance: { port: number; key: string } | null,
+  ): Promise<GeminiModel[]> {
+    if (!instance) return [];
     try {
-      const response = await fetch(`http://127.0.0.1:${status.port}/v1/models`, {
-        headers: { authorization: `Bearer ${service.apiKey(dataDir)}` },
+      const response = await fetch(`http://127.0.0.1:${instance.port}/v1/models`, {
+        headers: { authorization: `Bearer ${instance.key}` },
         signal: AbortSignal.timeout(8_000),
       });
       if (!response.ok) return [];
@@ -75,18 +132,19 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
 
   async function state(): Promise<GeminiPageState> {
     const status = service.status(dataDir, values());
-    const health = await readHealth();
+    const instance = (await managed()) ?? (await external());
     const jar = service.savedCookies(dataDir);
     return {
       platform: service.platformKey(),
       installed: status.installed,
       version: status.version,
       binaryPath: status.binaryPath,
-      running: status.running,
-      port: status.port,
+      running: instance !== null,
+      external: instance !== null && status.running === false,
+      port: instance?.port ?? status.port,
       pid: status.pid,
-      health: healthOf(health),
-      models: await readModels(health),
+      health: healthOf(instance?.health ?? null),
+      models: await readModels(instance),
       cookieProfile: jar?.profile ?? null,
       cookieCount: jar ? Object.keys(jar.cookies).length : 0,
       homepage: GEMINI_HOMEPAGE,
@@ -94,6 +152,11 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
       busy,
       error,
     };
+  }
+
+  function fail(caught: unknown): void {
+    const message = caught instanceof Error ? caught.message : String(caught);
+    error = { message, hint: hintFor(message) };
   }
 
   async function act(action: string): Promise<void> {
@@ -113,10 +176,32 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
           break;
         }
         case "start": {
+          // Never race a server the user already runs: a second client with the
+          // same Google session would rotate cookies for both.
+          if (!service.status(dataDir, values()).running) {
+            const running = await external();
+            if (running) {
+              error = {
+                message: `A gemini2api server is already running at 127.0.0.1:${running.port}.`,
+                hint: `Kip is using it as-is. Press Detect on the plugin card to register its models. Starting a second instance would rotate cookies for both.`,
+              };
+              break;
+            }
+          }
           await service.ensureRunning(dataDir, values());
           break;
         }
         case "stop": {
+          if (!service.status(dataDir, values()).running) {
+            const running = await external();
+            if (running) {
+              error = {
+                message: `The server on 127.0.0.1:${running.port} was not started by Kip.`,
+                hint: "Stop it where you started it (for example the terminal running gemini2api).",
+              };
+              break;
+            }
+          }
           await service.stop();
           break;
         }
@@ -131,7 +216,7 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
           throw new Error(`Unknown action: ${action}`);
       }
     } catch (caught) {
-      error = caught instanceof Error ? caught.message : String(caught);
+      fail(caught);
     } finally {
       busy = null;
       context.emit();
