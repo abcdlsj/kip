@@ -92,6 +92,39 @@ function toProviderModel(
   };
 }
 
+/**
+ * One entry per model, plus a temporary twin for each unless the server already
+ * listed it. Keyed by id: a server that does not mark its `-temp` entries would
+ * otherwise produce two entries with the same id.
+ */
+export function providerModelsFrom(
+  remote: RemoteModel[],
+  health: HealthBody,
+): ProviderModel[] {
+  const byId = new Map<string, ProviderModel>();
+  const isTemporary = (model: RemoteModel): boolean =>
+    model.gemini?.temporary === true || model.id?.endsWith("-temp") === true;
+
+  for (const model of remote) {
+    const named = toProviderModel(model, health);
+    if (!named || byId.has(named.id)) continue;
+    if (isTemporary(model)) {
+      byId.set(named.id, named);
+      continue;
+    }
+    byId.set(named.id, named);
+    const temporary = `${named.id}-temp`;
+    if (!byId.has(temporary)) {
+      byId.set(temporary, {
+        ...named,
+        id: temporary,
+        displayName: `${named.displayName} (temporary)`,
+      });
+    }
+  }
+  return [...byId.values()];
+}
+
 export const gemini2apiPlugin: GatewayPlugin = {
   id: "gemini2api",
   kind: "gateway",
@@ -293,18 +326,7 @@ export const gemini2apiPlugin: GatewayPlugin = {
     // Each model is offered twice: as-is, and temporary. Only the storage differs, so the
     // suffix is the whole difference between the two entries.
     const temporaryChosen = (values.temporaryChat ?? "").trim() === "true";
-    const models = read.models
-      .flatMap((model) => {
-        const named = toProviderModel(model, health);
-        if (!named || model.gemini?.temporary) return named ? [named] : [];
-        const temporary: ProviderModel = {
-          ...named,
-          id: `${named.id}-temp`,
-          displayName: `${named.displayName} (temporary)`,
-        };
-        return [named, temporary];
-      })
-      .filter((model): model is ProviderModel => model !== null);
+    const models = providerModelsFrom(read.models, health);
     if (models.length === 0) {
       return {
         ok: false,

@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { MARKETPLACE, MARKETPLACE_NOTICE, findMarketplaceEntry } from "../src/shared/marketplace";
 import { defaultPluginRegistry } from "../src/bun/plugins/registry";
 import { KipDatabase } from "../src/bun/storage/db";
-import { gemini2apiPlugin } from "../src/bun/plugins/gemini2api";
+import { gemini2apiPlugin, providerModelsFrom } from "../src/bun/plugins/gemini2api";
 import {
   acceptPlugin,
   isPluginAccepted,
@@ -209,5 +209,40 @@ describe("Firefox cookies", () => {
     if (process.platform === "win32") {
       expect((roots[0] ?? "").toLowerCase()).toContain("mozilla");
     }
+  });
+});
+
+describe("gemini2api model list", () => {
+  const health = { server: "gemini2api", api: { context_window: 225_000 } };
+  const model = (id: string, temporary?: boolean) => ({
+    id,
+    context_window: 225_000,
+    gemini: temporary === undefined ? {} : { temporary },
+  });
+
+  test("a plain listing gets one temporary twin per model", () => {
+    const models = providerModelsFrom([model("gemini-a"), model("gemini-b")], health);
+    expect(models.map((item) => item.id)).toEqual([
+      "gemini-a",
+      "gemini-a-temp",
+      "gemini-b",
+      "gemini-b-temp",
+    ]);
+    expect(models[1]?.displayName).toBe("gemini-a (temporary)");
+  });
+
+  test("a listing that already carries temporary entries is not doubled", () => {
+    const models = providerModelsFrom(
+      [model("gemini-a"), model("gemini-a-temp", true)],
+      health,
+    );
+    expect(models.map((item) => item.id)).toEqual(["gemini-a", "gemini-a-temp"]);
+  });
+
+  test("an old server that does not mark temporary entries still yields one each", () => {
+    // This is what produced 12 entries with duplicate `-temp` ids in the picker.
+    const models = providerModelsFrom([model("gemini-a"), model("gemini-a-temp")], health);
+    expect(models.map((item) => item.id)).toEqual(["gemini-a", "gemini-a-temp"]);
+    expect(new Set(models.map((item) => item.id)).size).toBe(models.length);
   });
 });
