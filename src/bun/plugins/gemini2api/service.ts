@@ -5,30 +5,22 @@
  * This is gemini2api's own business logic. Kip hands the plugin a writable
  * directory and an action channel; it does not know what a sidecar is.
  */
-import { Database } from "bun:sqlite";
 import {
   chmodSync,
-  copyFileSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
-  readdirSync,
-  realpathSync,
   renameSync,
-  rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { readFirefoxCookies, type CookieJar } from "./vendor/cookies";
 
 export const PROVIDER_ID = "gemini2api";
 const MANIFEST_URL = "https://github.com/abcdlsj/gemini2api/releases/latest/download/manifest.json";
 const START_TIMEOUT_MS = 20_000;
 const LOG_LIMIT = 200;
-const GOOGLE_HOSTS = [".google.com", "accounts.google.com", "gemini.google.com"];
-const DROPPED_COOKIES = new Set(["_ga", "_gcl_au", "_ga_WC57KJ50ZZ"]);
 
 export interface SidecarArtifact {
   file: string;
@@ -59,11 +51,6 @@ export interface HealthBody {
   key_required?: boolean;
   accounts?: Record<string, { signed_in?: boolean; status?: string }>;
   api?: { context_window?: number; supports_reasoning?: boolean };
-}
-
-export interface CookieJar {
-  profile: string;
-  cookies: Record<string, string>;
 }
 
 interface Running {
@@ -265,120 +252,10 @@ export function apiKey(dataDir: string): string {
   return created;
 }
 
-/** The default Firefox profile roots on this platform. */
-export function firefoxRoots(): string[] {
-  if (process.platform === "darwin") {
-    return [join(homedir(), "Library", "Application Support", "Firefox")];
-  }
-  if (process.platform === "win32") {
-    const appData = process.env.APPDATA ?? join(homedir(), "AppData", "Roaming");
-    return [join(appData, "Mozilla", "Firefox")];
-  }
-  return [
-    join(homedir(), ".mozilla", "firefox"),
-    join(homedir(), "snap", "firefox", "common", ".mozilla", "firefox"),
-    join(homedir(), ".var", "app", "org.mozilla.firefox", ".mozilla", "firefox"),
-  ];
-}
-
-/** Which Firefox profile holds the Gemini session a turn should use. */
-export function firefoxProfiles(roots: string[] = firefoxRoots()): string[] {
-  const seen = new Set<string>();
-  const profiles: string[] = [];
-  for (const root of roots) {
-    const profilesDir = join(root, "Profiles");
-    for (const [base, candidates] of [
-      [profilesDir, safeReaddir(profilesDir)],
-      [root, safeReaddir(root)],
-    ] as const) {
-      for (const name of candidates) {
-        const dir = join(base, name);
-        if (!existsSync(join(dir, "cookies.sqlite"))) continue;
-        let canonical = dir;
-        try {
-          canonical = realpathSync(dir);
-        } catch {
-          // Keep the original path if realpath fails.
-        }
-        if (seen.has(canonical)) continue;
-        seen.add(canonical);
-        profiles.push(dir);
-      }
-    }
-  }
-  return profiles;
-}
-
-function safeReaddir(dir: string): string[] {
-  try {
-    return readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
-  } catch {
-    return [];
-  }
-}
-
-/** Firefox keeps cookie values in clear; copy the database before reading it. */
-function cookiesFromProfile(profile: string): Record<string, string> {
-  const temp = mkdtempSync(join(tmpdir(), "kip-cookies-"));
-  try {
-    const source = join(profile, "cookies.sqlite");
-    if (!existsSync(source)) return {};
-    const target = join(temp, "cookies.sqlite");
-    copyFileSync(source, target);
-    // Copy the WAL file if present so uncommitted writes are visible, but skip
-    // `-shm`: it belongs to Firefox's live process (and can be locked on Windows),
-    // and SQLite rebuilds it cleanly when opening our private copy read-write.
-    try {
-      copyFileSync(`${source}-wal`, `${target}-wal`);
-    } catch {
-      // No WAL or Firefox checkpointed it away between checks.
-    }
-    const database = new Database(target);
-    try {
-      const rows = database
-        .query<{ name: string; value: string }, string[]>(
-          `select name, value from moz_cookies where host in (${GOOGLE_HOSTS.map(() => "?").join(",")})`,
-        )
-        .all(...GOOGLE_HOSTS);
-      const cookies: Record<string, string> = {};
-      for (const row of rows) {
-        if (!row.value || DROPPED_COOKIES.has(row.name) || row.name.startsWith("_ga")) continue;
-        cookies[row.name] = row.value;
-      }
-      return cookies;
-    } finally {
-      database.close();
-    }
-  } finally {
-    rmSync(temp, { recursive: true, force: true });
-  }
-}
-
-/** The profile with the most Google cookies, provided it has a Gemini session. */
-export function readFirefoxCookies(roots: string[] = firefoxRoots()): CookieJar {
-  let best: CookieJar | null = null;
-  for (const profile of firefoxProfiles(roots)) {
-    let cookies: Record<string, string> = {};
-    try {
-      cookies = cookiesFromProfile(profile);
-    } catch {
-      // A profile whose database cannot be read is simply not a candidate.
-      continue;
-    }
-    if (!cookies["__Secure-1PSID"]) continue;
-    if (!best || Object.keys(cookies).length > Object.keys(best.cookies).length) {
-      best = { profile, cookies };
-    }
-  }
-  if (!best) {
-    throw new Error(
-      "No Firefox profile has a Gemini session. Sign in to gemini.google.com in Firefox, then try again.",
-    );
-  }
-  return best;
-}
+// The Firefox cookie reader is owned by the gemini2api repository and synced
+// into ./vendor by `bun run sync:cookies`. Do not edit the copy.
+export { firefoxRoots, readFirefoxCookies } from "./vendor/cookies";
+export type { CookieJar } from "./vendor/cookies";
 
 function cookiesFile(dataDir: string): string {
   return join(dataDir, "cookies.json");

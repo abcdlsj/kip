@@ -14,7 +14,9 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.ts\"",
-    "seed": "bun run scripts/seed-provider.ts"
+    "seed": "bun run scripts/seed-provider.ts",
+    "sync:cookies": "bun run scripts/sync-gemini-cookies.ts",
+    "check:cookies": "bun run scripts/sync-gemini-cookies.ts --check"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "1.5.2",

@@ -139,6 +139,11 @@ and states plainly that **the author is responsible for what a plugin does** —
 inside Kip's main process with Kip's own privileges, and Kip does not audit it. A plugin that
 declares permissions must be reviewed once before it is started, probed, or opened.
 
+A gateway plugin's code is the plugin's, including helpers it needs from the project it talks
+to. The Firefox cookie reader, for example, is not Kip's: it is vendored from gemini2api
+(`integrations/kip/cookies.ts`) with `bun run sync:cookies`, pinned by commit and sha256
+(`vendor/cookies.pin.json`), and a test fails if the copy and the pin disagree.
+
 A gateway plugin can bring **its own window**: it ships a page (`src/webview/plugins/<id>/`,
 built into the app bundle next to the main view) and a controller that answers a state request
 and named actions. The host supplies only the page URL, a snapshot of the plugin's state, and a
