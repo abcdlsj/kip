@@ -204,8 +204,10 @@ notch = new NotchIndicator(() => {
   if (threadId) rpc.send.focusThread({ threadId });
 });
 refreshNotch();
+// Closing the window quits: a running instance with no window cannot be
+// reopened from the Dock, so leaving the process alive would strand the user.
 window.on("close", () => {
-  void shutdown();
+  void shutdown().finally(() => process.exit(0));
 });
 
 let shutdownPromise: Promise<void> | null = null;
