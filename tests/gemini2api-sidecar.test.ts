@@ -19,6 +19,7 @@ import {
   stop,
 } from "../src/bun/plugins/gemini2api/service";
 import { createGeminiPage } from "../src/bun/plugins/gemini2api/page";
+import { getApiKey, setApiKey } from "../src/bun/storage/keychain";
 
 let dir = "";
 
@@ -125,6 +126,28 @@ describe("gemini2api sidecar", () => {
     expect(preferredPort({ port: "0" })).toBe(8790);
     expect(preferredPort({ port: "9001" })).toBe(9001);
     expect(preferredPort({ port: "nope" })).toBe(8790);
+  });
+
+  test("a managed instance adopts the key Kip already holds for the provider", async () => {
+    if (process.platform === "win32") return;
+    await setApiKey("gemini2api", "stored-key");
+    const dataDir = join(dir, "plugin-key");
+    saveCookies(dataDir, {
+      profile: "/tmp/firefox",
+      cookies: { "__Secure-1PSID": "psid", "__Secure-1PSIDTS": "psidts" },
+    });
+
+    const started = await ensureRunning(dataDir, { binaryPath: stubBinary() });
+    try {
+      expect(started.key).toBe("stored-key");
+      expect(await getApiKey("gemini2api")).toBe("stored-key");
+      expect(readFileSync(join(dataDir, "config.yaml"), "utf8")).toContain(
+        'api_key: "stored-key"',
+      );
+      expect((await health(started.port, "stored-key"))?.server).toBe("gemini2api");
+    } finally {
+      await stop();
+    }
   });
 
   test("reuses the rotated session cookie gemini2api cached last run", () => {

@@ -15,6 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { getApiKey } from "../../storage/keychain";
 import { readFirefoxCookies, type CookieJar } from "./vendor/cookies";
 
 export const PROVIDER_ID = "gemini2api";
@@ -252,6 +253,14 @@ function configFile(dataDir: string): string {
   return join(dataDir, "config.yaml");
 }
 
+/** Reuses the key Kip already holds for this provider, so saved records keep working. */
+export function adoptStoredKey(dataDir: string, key: string): void {
+  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  const file = join(dataDir, "api_key");
+  const current = existsSync(file) ? readFileSync(file, "utf8").trim() : "";
+  if (current !== key) writeFileSync(file, key, { mode: 0o600 });
+}
+
 export function apiKey(dataDir: string): string {
   const file = join(dataDir, "api_key");
   if (existsSync(file)) {
@@ -402,6 +411,11 @@ async function startProcess(
   dataDir: string,
   values: Record<string, string>,
 ): Promise<{ baseUrl: string; port: number; key: string }> {
+  // The provider record already carries a key; make the managed instance use it
+  // instead of a fresh one, so no Detect is needed after switching to a managed
+  // gateway. A first install has no key yet and generates one.
+  const storedKey = await getApiKey(PROVIDER_ID);
+  if (storedKey) adoptStoredKey(dataDir, storedKey);
   const key = apiKey(dataDir);
   const binary = resolveBinary(dataDir, values);
   if (!binary) throw new Error("gemini2api is not installed. Open its window and install it.");
