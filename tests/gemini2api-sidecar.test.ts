@@ -74,7 +74,13 @@ Bun.serve({
 `,
   );
   const launcher = join(dir, "stub-gemini2api");
-  writeFileSync(launcher, `#!/bin/sh\nexec "${process.execPath}" "${script}"\n`, { mode: 0o755 });
+  // Two processes, like PyInstaller's bootloader plus its child: a plain kill of
+  // the launcher would leave the server running.
+  writeFileSync(
+    launcher,
+    `#!/bin/sh\n"${process.execPath}" "${script}" &\nchild=$!\nwait $child\n`,
+    { mode: 0o755 },
+  );
   return launcher;
 }
 
@@ -300,4 +306,27 @@ describe("gemini2api window", () => {
       await controller.dispose?.();
     }
   });
+});
+
+describe("gemini2api process tree", () => {
+  test.skipIf(process.platform === "win32")(
+    "Stop ends the child process too, not just the launcher",
+    async () => {
+      const dataDir = join(dir, "plugin-tree");
+      saveCookies(dataDir, {
+        profile: "/tmp/firefox",
+        cookies: { "__Secure-1PSID": "psid", "__Secure-1PSIDTS": "psidts" },
+      });
+      const binary = stubBinary();
+      const started = await ensureRunning(dataDir, { binaryPath: binary });
+      expect((await health(started.port, started.key))?.server).toBe("gemini2api");
+
+      await stop();
+      await Bun.sleep(500);
+
+      expect(await health(started.port, started.key)).toBeNull();
+      const leftover = Bun.spawnSync(["pgrep", "-f", "stub-gemini2api.ts"]);
+      expect(leftover.stdout.toString().trim()).toBe("");
+    },
+  );
 });
