@@ -10,9 +10,10 @@ const config: ElectrobunConfig = {
     description: "A quiet desktop assistant built with Electrobun and Pi",
   },
   scripts: {
-    // Our own rcedit pass: Electrobun's icon embedding cannot resolve its
-    // bundled rcedit, so Windows binaries keep the default icon without this.
-    postBuild: "scripts/patch-windows-icons.ts",
+    // Two passes in one hook: our own rcedit run (Electrobun's icon embedding
+    // cannot resolve its bundled rcedit) and the macOS launcher patch for the
+    // real app bundle that goes inside the self-extracting tarball.
+    postBuild: "scripts/post-build.ts",
     postWrap: "scripts/patch-macos-launcher.ts",
   },
   build: {
