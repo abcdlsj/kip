@@ -19,6 +19,16 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
   const values = () => context.values();
   let busy: string | null = null;
   let error: string | null = null;
+  let emitQueued = false;
+  // New log lines arrive while the gateway runs; repaint without polling.
+  service.setLogListener(() => {
+    if (emitQueued) return;
+    emitQueued = true;
+    setTimeout(() => {
+      emitQueued = false;
+      context.emit();
+    }, 300);
+  });
 
   function healthOf(body: service.HealthBody | null): GeminiHealth | null {
     if (!body) return null;
@@ -72,7 +82,7 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
       installed: status.installed,
       version: status.version,
       binaryPath: status.binaryPath,
-      running: health !== null,
+      running: status.running,
       port: status.port,
       pid: status.pid,
       health: healthOf(health),
@@ -87,6 +97,7 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
   }
 
   async function act(action: string): Promise<void> {
+    if (busy !== null) return;
     error = null;
     busy = action;
     context.emit();
@@ -131,8 +142,9 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
     state,
     act: (action) => act(action),
     async dispose() {
-      // The gateway belongs to this window: closing it stops the process Kip started.
-      await service.stop();
+      // The gateway belongs to Kip, not to this window: closing it only stops
+      // watching. It ends on Stop, or with the app.
+      service.setLogListener(null);
     },
   };
 }

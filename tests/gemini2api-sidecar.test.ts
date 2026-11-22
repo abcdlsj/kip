@@ -117,4 +117,42 @@ describe("gemini2api sidecar", () => {
   test("refuses to start when nothing is installed", async () => {
     await expect(ensureRunning(join(dir, "missing"), {})).rejects.toThrow(/not installed/);
   });
+
+  test.skipIf(process.platform === "win32")(
+    "fails immediately when the binary crashes during startup",
+    async () => {
+      const dataDir = join(dir, "plugin-crash");
+      saveCookies(dataDir, {
+        profile: "/tmp/firefox",
+        cookies: { "__Secure-1PSID": "psid" },
+      });
+      const crasher = join(dir, "crash-gemini2api");
+      writeFileSync(crasher, "#!/bin/sh\necho 'boom on startup' >&2\nexit 2\n", { mode: 0o755 });
+
+      const startedAt = Date.now();
+      await expect(ensureRunning(dataDir, { binaryPath: crasher })).rejects.toThrow(
+        /exited during startup \(code 2\).*boom on startup/,
+      );
+      expect(Date.now() - startedAt).toBeLessThan(5_000);
+    },
+  );
+
+  test.skipIf(process.platform === "win32")(
+    "deduplicates concurrent starts onto one process",
+    async () => {
+      const dataDir = join(dir, "plugin-concurrent");
+      saveCookies(dataDir, {
+        profile: "/tmp/firefox",
+        cookies: { "__Secure-1PSID": "psid", "__Secure-1PSIDTS": "psidts" },
+      });
+      const binary = stubBinary();
+
+      const [first, second] = await Promise.all([
+        ensureRunning(dataDir, { binaryPath: binary }),
+        ensureRunning(dataDir, { binaryPath: binary }),
+      ]);
+      expect(first.port).toBe(second.port);
+      expect(first.key).toBe(second.key);
+    },
+  );
 });

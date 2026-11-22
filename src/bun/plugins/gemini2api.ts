@@ -7,7 +7,15 @@
 import type { ProviderModel } from "../../shared/types";
 import type { GatewayPlugin, PluginProbeOutcome } from "./types";
 import { createGeminiPage } from "./gemini2api/page";
-import { ensureRunning, health as readHealth, type HealthBody } from "./gemini2api/service";
+import {
+  apiKey,
+  ensureRunning,
+  health as readHealth,
+  resolveBinary,
+  stop,
+  type HealthBody,
+} from "./gemini2api/service";
+import { getApiKey } from "../storage/keychain";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = "8790";
@@ -101,6 +109,20 @@ export const gemini2apiPlugin: GatewayPlugin = {
     height: 660,
   },
   page: createGeminiPage,
+  // Kip restarts the gateway at boot, so a provider saved earlier keeps working.
+  start: async ({ dataDir, values }) => {
+    const current = values();
+    if (!resolveBinary(dataDir, current)) return;
+    const host = (current.host ?? "").trim() || DEFAULT_HOST;
+    if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1") return;
+    const portText = (current.port ?? "").trim() || DEFAULT_PORT;
+    const port = Number(portText);
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) return;
+    const key = (await getApiKey(PROVIDER_ID)) ?? apiKey(dataDir);
+    if (await readHealth(port, key)) return;
+    await ensureRunning(dataDir, current);
+  },
+  dispose: () => stop(),
   fields: [
     { name: "host", label: "Host", kind: "text", placeholder: DEFAULT_HOST },
     { name: "port", label: "Port", kind: "port", placeholder: DEFAULT_PORT },
@@ -156,9 +178,13 @@ export const gemini2apiPlugin: GatewayPlugin = {
       health = null;
     }
 
-    // Nothing on the configured port: start the instance Kip manages, if it is
-    // installed. A server the user runs is never duplicated.
+    // Nothing on the configured port: start the instance Kip manages, if the
+    // target is local and it is installed. A server the user runs is never duplicated.
     if (!health) {
+      const isLoopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
+      if (!isLoopback) {
+        return { ok: false, error: `Could not reach ${root}/health.` };
+      }
       if (!context.dataDir) {
         return { ok: false, error: "Kip has no data directory for this plugin." };
       }
@@ -326,9 +352,11 @@ export const gemini2apiPlugin: GatewayPlugin = {
           label: "Key",
           value: !needsKey
             ? "not required"
-            : apiKey
-              ? "minted for Kip"
-              : "reused from the keychain",
+            : managedKey
+              ? "managed by Kip"
+              : apiKey
+                ? "minted for Kip"
+                : "reused from the keychain",
         },
         {
           label: "Temporary",

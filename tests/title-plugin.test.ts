@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { KipDatabase } from "../src/bun/storage/db";
 import {
+  acceptPlugin,
   generateTitleWithPlugins,
   getOrCreatePluginDeviceId,
   isPluginEnabled,
@@ -127,9 +128,19 @@ describe("warren-title plugin", () => {
       expect(skipped).toBeNull();
       expect(mock.requests).toHaveLength(0);
 
-      // Enabling persists and generates a stable device ID.
+      // Enabling persists, but an unaccepted plugin still does not run.
       setPluginEnabled(db, warrenTitlePlugin, true);
       expect(isPluginEnabled(db, warrenTitlePlugin)).toBe(true);
+      const unaccepted = await generateTitleWithPlugins(
+        db,
+        { mode: "initial", messages: [{ role: "user", content: "Add a plugins page" }] },
+        registry,
+      );
+      expect(unaccepted).toBeNull();
+      expect(mock.requests).toHaveLength(0);
+
+      // Accepting permissions allows it to run and generates a stable device ID.
+      acceptPlugin(db, warrenTitlePlugin);
       const id1 = getOrCreatePluginDeviceId(db, warrenTitlePlugin);
       const id2 = getOrCreatePluginDeviceId(db, warrenTitlePlugin);
       expect(id1).toBe(id2);

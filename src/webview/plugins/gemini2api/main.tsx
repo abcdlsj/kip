@@ -209,7 +209,7 @@ function App() {
       <p className="mt-3 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
         Kip writes <span className="font-mono">config.yaml</span> and a random key in this
         plugin's data directory; cookies come from the Firefox profile where you signed in to
-        gemini.google.com. Closing this window stops the gateway Kip started.{" "}
+        gemini.google.com. The gateway keeps running until you press Stop or quit Kip.{" "}
         <span className="font-mono">{state.homepage.replace("https://", "")}</span>
       </p>
 

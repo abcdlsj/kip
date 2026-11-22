@@ -5,6 +5,7 @@
  */
 import { Electroview } from "electrobun/view";
 import type { PluginPageRPC, PluginPageSnapshot } from "../../shared/plugin-page";
+import { applyPlatform } from "./platform";
 import { applyTheme, watchSystemTheme } from "./theme";
 
 export interface PluginPageClient {
@@ -17,6 +18,7 @@ export interface PluginPageClient {
 export function connectPluginPage<TState>(
   onSnapshot: (state: TState, snapshot: PluginPageSnapshot) => void,
 ): PluginPageClient {
+  applyPlatform();
   let last: PluginPageSnapshot | null = null;
   const deliver = (snapshot: PluginPageSnapshot) => {
     last = snapshot;

@@ -72,7 +72,7 @@ export function PluginsPanel() {
   };
 
   const togglePlugin = async (plugin: PluginSummary) => {
-    if (!plugin.accepted) {
+    if (!plugin.enabled && !plugin.accepted) {
       setReviewing(plugin.id);
       return;
     }
@@ -184,6 +184,7 @@ export function PluginsPanel() {
                 onToggle={() => void togglePlugin(plugin)}
                 onAction={() => void probe(plugin)}
                 onReview={() => setReviewing(plugin.id)}
+                onCancelReview={() => setReviewing(null)}
                 onAccept={() => void accept(plugin)}
                 onOpen={() => void openWindow(plugin)}
               />
@@ -215,6 +216,7 @@ export function PluginsPanel() {
                 onCommit={(next) => void commitValues(plugin, next)}
                 onAction={() => void probe(plugin)}
                 onReview={() => setReviewing(plugin.id)}
+                onCancelReview={() => setReviewing(null)}
                 onAccept={() => void accept(plugin)}
                 onOpen={() => void openWindow(plugin)}
               />
@@ -238,6 +240,7 @@ interface PluginCardProps {
   onToggle?: () => void;
   onAction: () => void;
   onReview: () => void;
+  onCancelReview: () => void;
   onAccept: () => void;
   onOpen: () => void;
 }
@@ -254,6 +257,7 @@ function PluginCard({
   onToggle,
   onAction,
   onReview,
+  onCancelReview,
   onAccept,
   onOpen,
 }: PluginCardProps) {
@@ -396,7 +400,7 @@ function PluginCard({
           </ul>
           <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-muted)]">
             {market.name} runs with Kip's own privileges. Its author is responsible for what it
-            does; Kip does not audit it. You can revoke this by clearing the plugin's settings.
+            does; Kip does not audit it. Kip remembers this acceptance per plugin.
           </p>
           <div className="mt-2.5 flex items-center gap-2">
             <button
@@ -405,6 +409,13 @@ function PluginCard({
               className="btn-secondary h-7 rounded-[7px] px-2.5 text-[11.5px]"
             >
               I understand, allow
+            </button>
+            <button
+              type="button"
+              onClick={onCancelReview}
+              className="btn-ghost h-7 rounded-[7px] px-2.5 text-[11.5px]"
+            >
+              Cancel
             </button>
           </div>
         </div>

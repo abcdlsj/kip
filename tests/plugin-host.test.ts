@@ -8,6 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MARKETPLACE, MARKETPLACE_NOTICE, findMarketplaceEntry } from "../src/shared/marketplace";
+import { defaultPluginRegistry } from "../src/bun/plugins/registry";
 import { KipDatabase } from "../src/bun/storage/db";
 import { gemini2apiPlugin } from "../src/bun/plugins/gemini2api";
 import {
@@ -51,6 +52,12 @@ describe("Plugin catalog", () => {
     expect(findMarketplaceEntry("gemini2api")?.window).toBe(true);
     expect(findMarketplaceEntry("gemini2api")?.permissions).toContain("process");
     expect(MARKETPLACE_NOTICE).toContain("responsible");
+  });
+
+  test("every registered plugin is in the catalog", () => {
+    for (const plugin of defaultPluginRegistry.list()) {
+      expect(findMarketplaceEntry(plugin.id)).toBeDefined();
+    }
   });
 
   test("a plugin's summary carries its catalog entry", () => {
@@ -147,6 +154,7 @@ describe("Firefox cookies", () => {
     insert.run(".google.com", "__Secure-1PSIDTS", "psidts");
     insert.run(".google.com", "SID", "sid");
     insert.run(".google.com", "_ga", "analytics");
+    insert.run(".google.com", "_ga_CUSTOM123", "analytics-ga4");
     insert.run("example.com", "unrelated", "x");
     database.close();
     return { root, expected: 3 };
@@ -158,7 +166,27 @@ describe("Firefox cookies", () => {
     expect(Object.keys(jar.cookies)).toHaveLength(expected);
     expect(jar.cookies["__Secure-1PSID"]).toBe("psid");
     expect(jar.cookies["_ga"]).toBeUndefined();
+    expect(jar.cookies["_ga_CUSTOM123"]).toBeUndefined();
     expect(jar.profile.endsWith("kip.default")).toBe(true);
+  });
+
+  test("reads cookies from an open WAL-mode Firefox database", () => {
+    const root = join(dir, "Firefox-WAL");
+    const profile = join(root, "Profiles", "live.default");
+    mkdirSync(profile, { recursive: true });
+    const cookiesPath = join(profile, "cookies.sqlite");
+    const live = new Database(cookiesPath, { create: true });
+    try {
+      live.exec("PRAGMA journal_mode = WAL;");
+      live.exec("create table moz_cookies (host text, name text, value text)");
+      live
+        .prepare("insert into moz_cookies values (?, ?, ?)")
+        .run(".google.com", "__Secure-1PSID", "live-psid");
+      const jar = readFirefoxCookies([root]);
+      expect(jar.cookies["__Secure-1PSID"]).toBe("live-psid");
+    } finally {
+      live.close();
+    }
   });
 
   test("a profile without a Gemini session is refused", () => {

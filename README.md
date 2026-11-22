@@ -157,9 +157,10 @@ OpenAI-compatible API on this machine. The plugin manages it end to end:
    you signed in to gemini.google.com (Firefox stores cookie values in clear; Chromium's Device
    Bound Session Credentials make copied sessions die), writes them to the plugin's data
    directory, and generates a random `api_key` for its own instance.
-3. Press **Start**. Kip writes a config, starts the binary on a free loopback port, and shows
-   its log. Closing the window stops the gateway Kip started; a server you run yourself is
-   detected and never duplicated.
+3. Press **Start**. Kip writes a config, starts the binary on the configured loopback port
+   (or a free one when that is taken) and tails its log. The gateway belongs to Kip, not to the
+   window: it keeps running when you close the window, restarts with Kip, and stops on **Stop**
+   or when Kip quits. A server you run yourself is detected and never duplicated.
 4. Back on the plugin card, press **Detect**. Kip reads `/health` and `/v1/models`, registers
    the provider, and keeps the key in the system keychain. A server you run yourself works the
    same way: paste its `api_key` once and Kip mints its own.

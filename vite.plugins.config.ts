@@ -5,13 +5,13 @@ import { fileURLToPath } from "node:url";
 
 /**
  * Plugin pages are their own windows, so they build separately from the main
- * view and keep their assets beside themselves: the bundle copies
- * `dist-plugins/plugins` and `dist-plugins/assets` next to each other.
+ * view. They load at `views://plugins/<id>/index.html`, where `plugins` is the
+ * URL authority, so `base: "/"` resolves `/assets/...` to `views/plugins/assets/`.
  */
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   root: "src/webview",
-  base: "./",
+  base: "/",
   build: {
     outDir: "../../dist-plugins",
     emptyOutDir: true,

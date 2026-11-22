@@ -14,6 +14,7 @@ import { applyWindowsDpiAwareness } from "./system/windows-dpi";
 import { UpdateChecker } from "./system/update-checker";
 import { createUpdateInstaller } from "./system/update-installer";
 import { PluginWindows } from "./plugins/windows";
+import { disposePlugins, startPlugins } from "./plugins/registry";
 
 // Must run before the first window exists, so it cannot move below.
 applyWindowsDpiAwareness();
@@ -61,6 +62,8 @@ const rpc = createKipRpc({
   pluginWindows,
   windowRef,
 });
+// Background services a plugin owns, only for providers the user already added.
+startPlugins(database);
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 /**
  * Background attention state for the notch indicator. Approvals outrank
@@ -236,6 +239,11 @@ function shutdown(): Promise<void> {
       await pluginWindows.disposeAll();
     } catch {
       // Plugin windows are best-effort on the way out.
+    }
+    try {
+      await disposePlugins();
+    } catch {
+      // Background plugin processes are best-effort on the way out.
     }
     try {
       await orchestrator.shutdown();

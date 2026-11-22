@@ -54,13 +54,17 @@ export interface PluginWindowSpec {
   height?: number;
 }
 
-/** What the host hands a plugin that wants a window of its own. */
-export interface PluginPageContext {
+/** What the host hands a plugin that needs its own directory or settings. */
+export interface PluginRuntimeContext {
   pluginId: string;
   /** A writable directory for this plugin: binaries, config, logs, state. */
   dataDir: string;
   /** The plugin's saved form values, read fresh on each call. */
   values: () => Record<string, string>;
+}
+
+/** What the host hands a plugin that wants a window of its own. */
+export interface PluginPageContext extends PluginRuntimeContext {
   /** Ask the host to push a fresh snapshot to the open page. */
   emit: () => void;
 }
@@ -99,6 +103,14 @@ export interface GatewayPlugin {
   window?: PluginWindowSpec;
   /** Built alongside `window`: the state and actions that page talks to. */
   page?: (context: PluginPageContext) => PluginPageController;
+  /**
+   * Called once at startup, before any page exists, for a plugin whose provider
+   * the user has registered. Starting a background service here is what makes a
+   * saved provider usable again after a restart.
+   */
+  start?(context: PluginRuntimeContext): void | Promise<void>;
+  /** Called on app shutdown so plugins that started background processes can stop them. */
+  dispose?(): void | Promise<void>;
   probe(
     values: Record<string, string>,
     context: PluginProbeContext,

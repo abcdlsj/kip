@@ -14,6 +14,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   renameSync,
   rmSync,
   unlinkSync,
@@ -72,13 +73,25 @@ interface Running {
 }
 
 let running: Running | null = null;
+let starting: Promise<{ baseUrl: string; port: number; key: string }> | null = null;
 let lastError: string | null = null;
+let logListener: (() => void) | null = null;
 const logs: string[] = [];
+
+/** The open page subscribes so new lines appear without pressing Refresh. */
+export function setLogListener(listener: (() => void) | null): void {
+  logListener = listener;
+}
 
 function log(line: string): void {
   const stamped = `${new Date().toISOString().slice(11, 19)} ${line}`;
   logs.push(stamped);
   if (logs.length > LOG_LIMIT) logs.splice(0, logs.length - LOG_LIMIT);
+  try {
+    logListener?.();
+  } catch {
+    // A broken listener must never break the process it is watching.
+  }
 }
 
 export function readLogs(): string[] {
@@ -88,7 +101,7 @@ export function readLogs(): string[] {
 export function platformKey(): string {
   const os =
     process.platform === "darwin" ? "macos" : process.platform === "win32" ? "win" : "linux";
-  return `${os}-${process.arch === "arm64" ? "arm64" : "x64"}`;
+  return `${os}-${process.arch}`;
 }
 
 export function binaryName(): string {
@@ -158,6 +171,9 @@ export async function install(
   if (!artifact) {
     throw new Error(`gemini2api ${manifest.version} has no build for ${platformKey()}`);
   }
+  if (!artifact.url.startsWith("https://")) {
+    throw new Error(`Refusing non-HTTPS download URL: ${artifact.url}`);
+  }
   log(`downloading ${artifact.file} (${manifest.version})`);
   const response = await fetch(artifact.url, {
     headers: { "user-agent": "kip-gemini2api-plugin" },
@@ -166,15 +182,27 @@ export async function install(
   if (!response.ok) throw new Error(`download answered HTTP ${response.status}`);
   const bytes = new Uint8Array(await response.arrayBuffer());
   const digest = sha256(bytes);
-  if (digest !== artifact.sha256) {
+  if (digest !== artifact.sha256.trim().toLowerCase()) {
     throw new Error(`checksum mismatch: expected ${artifact.sha256}, got ${digest}`);
   }
+  // Stop a running sidecar before swapping the binary: on Windows a running
+  // executable cannot be overwritten, and elsewhere the version file would drift.
+  if (running) await stop();
   mkdirSync(binDir(dataDir), { recursive: true, mode: 0o700 });
   const target = installedBinary(dataDir);
   const staging = `${target}.new`;
-  writeFileSync(staging, bytes, { mode: 0o755 });
-  chmodSync(staging, 0o755);
-  renameSync(staging, target);
+  try {
+    writeFileSync(staging, bytes, { mode: 0o755 });
+    if (process.platform !== "win32") chmodSync(staging, 0o755);
+    renameSync(staging, target);
+  } catch (error) {
+    try {
+      if (existsSync(staging)) unlinkSync(staging);
+    } catch {
+      // Best effort cleanup.
+    }
+    throw error;
+  }
   writeFileSync(versionFile(dataDir), manifest.version, { mode: 0o600 });
   log(`installed ${manifest.version}`);
   return { path: target, version: manifest.version };
@@ -188,16 +216,33 @@ export function resolveBinary(dataDir: string, values: Record<string, string>): 
   return existsSync(installed) ? installed : null;
 }
 
-export async function findFreePort(): Promise<number> {
-  const probe = Bun.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    fetch: () => new Response(""),
-  });
-  const port = probe.port;
-  probe.stop(true);
-  if (typeof port !== "number") throw new Error("Could not reserve a loopback port");
-  return port;
+function bindPort(port: number): number | null {
+  try {
+    const probe = Bun.serve({
+      hostname: "127.0.0.1",
+      port,
+      fetch: () => new Response(""),
+    });
+    const bound = probe.port;
+    probe.stop(true);
+    return typeof bound === "number" ? bound : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A free loopback port. The configured one is preferred so that a provider Kip
+ * already saved keeps pointing at the same URL after a restart.
+ */
+export async function findFreePort(preferred?: number): Promise<number> {
+  if (preferred) {
+    const bound = bindPort(preferred);
+    if (bound !== null) return bound;
+  }
+  const bound = bindPort(0);
+  if (bound === null) throw new Error("Could not reserve a loopback port");
+  return bound;
 }
 
 function stateFile(dataDir: string): string {
@@ -232,12 +277,13 @@ export function firefoxRoots(): string[] {
   return [
     join(homedir(), ".mozilla", "firefox"),
     join(homedir(), "snap", "firefox", "common", ".mozilla", "firefox"),
+    join(homedir(), ".var", "app", "org.mozilla.firefox", ".mozilla", "firefox"),
   ];
 }
 
 /** Which Firefox profile holds the Gemini session a turn should use. */
 export function firefoxProfiles(roots: string[] = firefoxRoots()): string[] {
-
+  const seen = new Set<string>();
   const profiles: string[] = [];
   for (const root of roots) {
     const profilesDir = join(root, "Profiles");
@@ -247,7 +293,16 @@ export function firefoxProfiles(roots: string[] = firefoxRoots()): string[] {
     ] as const) {
       for (const name of candidates) {
         const dir = join(base, name);
-        if (existsSync(join(dir, "cookies.sqlite"))) profiles.push(dir);
+        if (!existsSync(join(dir, "cookies.sqlite"))) continue;
+        let canonical = dir;
+        try {
+          canonical = realpathSync(dir);
+        } catch {
+          // Keep the original path if realpath fails.
+        }
+        if (seen.has(canonical)) continue;
+        seen.add(canonical);
+        profiles.push(dir);
       }
     }
   }
@@ -272,11 +327,15 @@ function cookiesFromProfile(profile: string): Record<string, string> {
     if (!existsSync(source)) return {};
     const target = join(temp, "cookies.sqlite");
     copyFileSync(source, target);
-    for (const suffix of ["-wal", "-shm"]) {
-      const sidecar = `${source}${suffix}`;
-      if (existsSync(sidecar)) copyFileSync(sidecar, `${target}${suffix}`);
+    // Copy the WAL file if present so uncommitted writes are visible, but skip
+    // `-shm`: it belongs to Firefox's live process (and can be locked on Windows),
+    // and SQLite rebuilds it cleanly when opening our private copy read-write.
+    try {
+      copyFileSync(`${source}-wal`, `${target}-wal`);
+    } catch {
+      // No WAL or Firefox checkpointed it away between checks.
     }
-    const database = new Database(target, { readonly: true });
+    const database = new Database(target);
     try {
       const rows = database
         .query<{ name: string; value: string }, string[]>(
@@ -285,7 +344,7 @@ function cookiesFromProfile(profile: string): Record<string, string> {
         .all(...GOOGLE_HOSTS);
       const cookies: Record<string, string> = {};
       for (const row of rows) {
-        if (!row.value || DROPPED_COOKIES.has(row.name)) continue;
+        if (!row.value || DROPPED_COOKIES.has(row.name) || row.name.startsWith("_ga")) continue;
         cookies[row.name] = row.value;
       }
       return cookies;
@@ -404,59 +463,88 @@ export async function ensureRunning(
   dataDir: string,
   values: Record<string, string>,
 ): Promise<{ baseUrl: string; port: number; key: string }> {
-  const key = apiKey(dataDir);
+  if (starting) return starting;
   if (running) {
     return { baseUrl: `http://127.0.0.1:${running.port}/v1`, port: running.port, key: running.key };
   }
 
+  const run = startProcess(dataDir, values);
+  starting = run;
+  try {
+    return await run;
+  } finally {
+    if (starting === run) starting = null;
+  }
+}
+
+async function startProcess(
+  dataDir: string,
+  values: Record<string, string>,
+): Promise<{ baseUrl: string; port: number; key: string }> {
+  const key = apiKey(dataDir);
   const binary = resolveBinary(dataDir, values);
   if (!binary) throw new Error("gemini2api is not installed. Open its window and install it.");
 
-  if (!savedCookies(dataDir)) importFirefoxCookies(dataDir);
-  const port = await findFreePort();
+  if (!savedCookies(dataDir)?.cookies["__Secure-1PSID"]) importFirefoxCookies(dataDir);
+  const preferred = Number(values.port);
+  const port = await findFreePort(Number.isInteger(preferred) ? preferred : undefined);
   writeConfig(dataDir, port);
+
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    // G2A_* is the config path; the rest are the server's own variable names.
+    G2A_CONFIG: configFile(dataDir),
+    STATE_DIR: stateFile(dataDir),
+    HOST: "127.0.0.1",
+    PORT: String(port),
+    API_KEY: key,
+    PYTHONUNBUFFERED: "1",
+  };
+  delete env.G2A_SECURE_1PSID;
+  delete env.G2A_SECURE_1PSIDTS;
+  delete env.G2A_COOKIES;
 
   log(`starting ${binary} on 127.0.0.1:${port}`);
   const child = Bun.spawn([binary], {
-    env: {
-      ...process.env,
-      G2A_CONFIG: configFile(dataDir),
-      STATE_DIR: stateFile(dataDir),
-      HOST: "127.0.0.1",
-      PORT: String(port),
-      API_KEY: key,
-      PYTHONUNBUFFERED: "1",
-    },
+    env,
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
   });
+  let exitedCode: number | null = null;
   running = { process: child, port, key };
   child.exited.then((code) => {
+    exitedCode = code;
     log(`gemini2api exited with code ${code}`);
-    running = null;
+    if (running?.process === child) running = null;
   });
-  void pump(child.stdout, child);
-  void pump(child.stderr, child);
+  const stdoutDone = pump(child.stdout);
+  const stderrDone = pump(child.stderr);
 
   const deadline = Date.now() + START_TIMEOUT_MS;
   while (Date.now() < deadline) {
+    if (exitedCode !== null || running?.process !== child) break;
     const body = await health(port, key);
     if (body) {
       log(`gemini2api ${body.version ?? ""} is up`);
       return { baseUrl: `http://127.0.0.1:${port}/v1`, port, key };
     }
+    if (exitedCode !== null || running?.process !== child) break;
     await Bun.sleep(250);
   }
-  await stop();
+  if (running?.process === child) await stop();
+  if (exitedCode !== null) {
+    await Promise.race([Promise.all([stdoutDone, stderrDone]), Bun.sleep(200)]);
+  }
   const detail = logs.slice(-3).join(" · ");
-  throw new Error(`gemini2api did not answer on 127.0.0.1:${port}. ${detail}`.trim());
+  const reason =
+    exitedCode !== null
+      ? `gemini2api exited during startup (code ${exitedCode}).`
+      : `gemini2api did not answer on 127.0.0.1:${port}.`;
+  throw new Error(`${reason} ${detail}`.trim());
 }
 
-async function pump(
-  stream: ReadableStream<Uint8Array> | undefined,
-  child: Bun.Subprocess<"ignore", "pipe", "pipe">,
-): Promise<void> {
+async function pump(stream: ReadableStream<Uint8Array> | undefined): Promise<void> {
   if (!stream) return;
   const decoder = new TextDecoder();
   let buffer = "";
@@ -471,9 +559,12 @@ async function pump(
       for (const line of lines) {
         if (!line.trim()) continue;
         log(line.replace(/\s+$/, ""));
-        if (!running || running.process !== child) return;
       }
     }
+    buffer += decoder.decode();
+    if (buffer.trim()) log(buffer.replace(/\s+$/, ""));
+  } catch {
+    // Stream closed while shutting down.
   } finally {
     reader.releaseLock();
   }
@@ -484,12 +575,40 @@ export async function stop(): Promise<void> {
   running = null;
   if (!current) return;
   log("stopping gemini2api");
+  let exited = false;
+  void current.process.exited.then(() => {
+    exited = true;
+  });
+  if (process.platform === "win32") {
+    // PyInstaller onefile spawns a child Python process; kill the whole tree.
+    const killed = Bun.spawnSync(
+      ["taskkill", "/PID", String(current.process.pid), "/T", "/F"],
+      { stdout: "ignore", stderr: "ignore" },
+    );
+    if (killed.exitCode !== 0) {
+      try {
+        current.process.kill();
+      } catch {
+        // Already gone.
+      }
+    }
+    await Promise.race([current.process.exited, Bun.sleep(3_000)]);
+    return;
+  }
   try {
     current.process.kill();
   } catch {
     // Already gone.
   }
   await Promise.race([current.process.exited, Bun.sleep(3_000)]);
+  if (!exited) {
+    try {
+      current.process.kill("SIGKILL");
+    } catch {
+      // Already gone.
+    }
+    await Promise.race([current.process.exited, Bun.sleep(1_000)]);
+  }
 }
 
 /** Restarts the managed instance so it picks up new cookies. */

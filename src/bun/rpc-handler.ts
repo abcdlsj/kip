@@ -230,10 +230,13 @@ export function createKipRpc(deps: RpcDeps) {
         updatePlugin: async ({ plugin: pluginId, enabled, accepted, values }) => {
           const plugin = findPlugin(pluginId);
           if (!plugin) throw new Error(`Unknown plugin: ${pluginId}`);
+          if (accepted === true) acceptPlugin(deps.database, plugin);
           if (enabled !== undefined && plugin.kind === "title") {
+            if (enabled && !isPluginAccepted(deps.database, plugin)) {
+              throw new Error("Accept this plugin's permissions before enabling it.");
+            }
             setPluginEnabled(deps.database, plugin, enabled);
           }
-          if (accepted === true) acceptPlugin(deps.database, plugin);
           if (values) {
             savePluginValues(deps.database, plugin, values);
           }
@@ -242,6 +245,12 @@ export function createKipRpc(deps: RpcDeps) {
         probePlugin: async ({ plugin: pluginId, values }) => {
           const plugin = findPlugin(pluginId);
           if (!plugin) throw new Error(`Unknown plugin: ${pluginId}`);
+          if (!isPluginAccepted(deps.database, plugin)) {
+            return {
+              ok: false,
+              error: "Accept this plugin's permissions before using it.",
+            };
+          }
           if (plugin.kind === "title") {
             const deviceId = getOrCreatePluginDeviceId(deps.database, plugin);
             const result = await plugin.probe(values, { deviceId });
@@ -249,13 +258,6 @@ export function createKipRpc(deps: RpcDeps) {
               savePluginValues(deps.database, plugin, values);
             }
             return result;
-          }
-
-          if (!isPluginAccepted(deps.database, plugin)) {
-            return {
-              ok: false,
-              error: "Accept this plugin's permissions before using it.",
-            };
           }
           const storedApiKey = (await getApiKey(plugin.providerId)) ?? undefined;
           const outcome = await plugin.probe(values, {

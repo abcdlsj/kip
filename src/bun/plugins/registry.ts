@@ -30,6 +30,9 @@ function acceptedKey(plugin: KipPlugin): string {
 
 /** Each plugin owns a writable directory under Kip's data dir. */
 export function pluginDataDir(pluginId: string): string {
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(pluginId)) {
+    throw new Error(`Invalid plugin id: ${pluginId}`);
+  }
   const dir = join(getDataDir(), "plugins", pluginId);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   return dir;
@@ -245,7 +248,7 @@ export async function generateTitleWithPlugins(
     .list()
     .filter((plugin): plugin is TitlePlugin => plugin.kind === "title");
   for (const plugin of titlePlugins) {
-    if (!isPluginEnabled(database, plugin)) continue;
+    if (!isPluginEnabled(database, plugin) || !isPluginAccepted(database, plugin)) continue;
     const values = readPluginValues(database, plugin);
     const deviceId = getOrCreatePluginDeviceId(database, plugin);
     try {
@@ -256,4 +259,44 @@ export async function generateTitleWithPlugins(
     }
   }
   return null;
+}
+
+/**
+ * Gives accepted gateway plugins a chance to start background work at boot,
+ * but only once their provider is registered — a plugin the user never used
+ * must not spawn anything.
+ */
+export function startPlugins(database: KipDatabase): void {
+  for (const plugin of defaultPluginRegistry.list()) {
+    if (plugin.kind !== "gateway" || !plugin.start) continue;
+    if (!isPluginAccepted(database, plugin)) continue;
+    if (!database.getProvider(plugin.providerId)) continue;
+    try {
+      void Promise.resolve(
+        plugin.start({
+          pluginId: plugin.id,
+          dataDir: pluginDataDir(plugin.id),
+          values: () => readPluginValues(database, plugin),
+        }),
+      ).catch((error: unknown) => {
+        console.error(`Plugin ${plugin.id}: start failed`, error);
+      });
+    } catch (error) {
+      console.error(`Plugin ${plugin.id}: start failed`, error);
+    }
+  }
+}
+
+/** Releases any resources held by registered plugins during app shutdown. */
+export async function disposePlugins(
+  registry: PluginRegistry = defaultPluginRegistry,
+): Promise<void> {
+  for (const plugin of registry.list()) {
+    if (plugin.kind !== "gateway" || !plugin.dispose) continue;
+    try {
+      await plugin.dispose();
+    } catch {
+      // Shutdown is best-effort.
+    }
+  }
 }
