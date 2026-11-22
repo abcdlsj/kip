@@ -4,13 +4,14 @@
  * writes a config, starts the process, waits for health, reads models, and stops.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   apiKey,
   ensureRunning,
   health,
+  refreshSavedCookiesFromCache,
   savedCookies,
   saveCookies,
   status,
@@ -116,6 +117,27 @@ describe("gemini2api sidecar", () => {
       expect(await health(started.port, started.key)).toBeNull();
     },
   );
+
+  test("reuses the rotated session cookie gemini2api cached last run", () => {
+    const dataDir = join(dir, "plugin-rotate");
+    saveCookies(dataDir, {
+      profile: "/tmp/firefox",
+      cookies: { "__Secure-1PSID": "psid", "__Secure-1PSIDTS": "stale" },
+    });
+    mkdirSync(join(dataDir, "state"), { recursive: true });
+    writeFileSync(
+      join(dataDir, "state", ".cached_cookies_psid.json"),
+      JSON.stringify([
+        { name: "__Secure-1PSID", value: "psid" },
+        { name: "__Secure-1PSIDTS", value: "fresh" },
+      ]),
+    );
+
+    expect(refreshSavedCookiesFromCache(dataDir)).toBe(true);
+    expect(savedCookies(dataDir)?.cookies["__Secure-1PSIDTS"]).toBe("fresh");
+    // Second call is a no-op: nothing changed.
+    expect(refreshSavedCookiesFromCache(dataDir)).toBe(false);
+  });
 
   test("refuses to start when nothing is installed", async () => {
     await expect(ensureRunning(join(dir, "missing"), {})).rejects.toThrow(/not installed/);

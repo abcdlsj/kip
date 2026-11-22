@@ -276,6 +276,38 @@ export function saveCookies(dataDir: string, jar: CookieJar): void {
   writeFileSync(cookiesFile(dataDir), JSON.stringify(jar), { mode: 0o600 });
 }
 
+/**
+ * gemini-webapi rotates `__Secure-1PSIDTS` while it runs and caches the result
+ * in the state directory. Without reading that cache back, the next start would
+ * reuse the stale value from Firefox and be signed out.
+ */
+export function refreshSavedCookiesFromCache(dataDir: string): boolean {
+  const jar = savedCookies(dataDir);
+  const psid = jar?.cookies["__Secure-1PSID"];
+  if (!jar || !psid) return false;
+  const cache = join(stateFile(dataDir), `.cached_cookies_${psid}.json`);
+  if (!existsSync(cache)) return false;
+  let rows: Array<{ name?: string; value?: string }>;
+  try {
+    rows = JSON.parse(readFileSync(cache, "utf8")) as typeof rows;
+  } catch {
+    return false;
+  }
+  let changed = false;
+  for (const row of rows) {
+    if (!row?.name || !row.value) continue;
+    if (row.name !== "__Secure-1PSIDTS" && row.name !== "__Secure-3PSIDTS") continue;
+    if (jar.cookies[row.name] === row.value) continue;
+    jar.cookies[row.name] = row.value;
+    changed = true;
+  }
+  if (changed) {
+    saveCookies(dataDir, jar);
+    log("reused the rotated session cookie gemini2api cached last run");
+  }
+  return changed;
+}
+
 export function importFirefoxCookies(dataDir: string): CookieJar {
   const jar = readFirefoxCookies();
   saveCookies(dataDir, jar);
@@ -363,6 +395,7 @@ async function startProcess(
   if (!binary) throw new Error("gemini2api is not installed. Open its window and install it.");
 
   if (!savedCookies(dataDir)?.cookies["__Secure-1PSID"]) importFirefoxCookies(dataDir);
+  refreshSavedCookiesFromCache(dataDir);
   const preferred = Number(values.port);
   const port = await findFreePort(Number.isInteger(preferred) ? preferred : undefined);
   writeConfig(dataDir, port);
