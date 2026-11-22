@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { readFirefoxCookies, type CookieJar } from "./vendor/cookies";
 
 export const PROVIDER_ID = "gemini2api";
+const DEFAULT_PORT = 8790;
 const MANIFEST_URL = "https://github.com/abcdlsj/gemini2api/releases/latest/download/manifest.json";
 const START_TIMEOUT_MS = 20_000;
 const LOG_LIMIT = 200;
@@ -201,6 +202,16 @@ export function resolveBinary(dataDir: string, values: Record<string, string>): 
   if (manual && existsSync(manual)) return manual;
   const installed = installedBinary(dataDir);
   return existsSync(installed) ? installed : null;
+}
+
+/**
+ * The port the managed gateway should try first. The saved provider points at
+ * it, so it has to stay stable. An empty field is not "port 0": `Number("")`
+ * is 0, which used to hand out a random port on every run.
+ */
+export function preferredPort(values: Record<string, string>): number {
+  const configured = Number((values.port ?? "").trim());
+  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_PORT;
 }
 
 function bindPort(port: number): number | null {
@@ -396,8 +407,7 @@ async function startProcess(
 
   if (!savedCookies(dataDir)?.cookies["__Secure-1PSID"]) importFirefoxCookies(dataDir);
   refreshSavedCookiesFromCache(dataDir);
-  const preferred = Number(values.port);
-  const port = await findFreePort(Number.isInteger(preferred) ? preferred : undefined);
+  const port = await findFreePort(preferredPort(values));
   writeConfig(dataDir, port);
 
   const env: Record<string, string | undefined> = {

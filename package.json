@@ -1,6 +1,6 @@
 {
   "name": "kip",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "private": true,
   "type": "module",
   "description": "A quiet, cross-platform desktop assistant built with Electrobun and Pi",

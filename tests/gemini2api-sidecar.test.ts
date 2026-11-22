@@ -11,6 +11,7 @@ import {
   apiKey,
   ensureRunning,
   health,
+  preferredPort,
   refreshSavedCookiesFromCache,
   savedCookies,
   saveCookies,
@@ -117,6 +118,14 @@ describe("gemini2api sidecar", () => {
       expect(await health(started.port, started.key)).toBeNull();
     },
   );
+
+  test("keeps the configured port, and never treats an empty field as port 0", () => {
+    expect(preferredPort({})).toBe(8790);
+    expect(preferredPort({ port: "" })).toBe(8790);
+    expect(preferredPort({ port: "0" })).toBe(8790);
+    expect(preferredPort({ port: "9001" })).toBe(9001);
+    expect(preferredPort({ port: "nope" })).toBe(8790);
+  });
 
   test("reuses the rotated session cookie gemini2api cached last run", () => {
     const dataDir = join(dir, "plugin-rotate");
