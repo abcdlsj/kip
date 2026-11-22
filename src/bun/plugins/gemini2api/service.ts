@@ -20,7 +20,8 @@ import { readFirefoxCookies, type CookieJar } from "./vendor/cookies";
 export const PROVIDER_ID = "gemini2api";
 const DEFAULT_PORT = 8790;
 const MANIFEST_URL = "https://github.com/abcdlsj/gemini2api/releases/latest/download/manifest.json";
-const START_TIMEOUT_MS = 20_000;
+// Google may take tens of seconds to hand out a session on a cold start.
+const START_TIMEOUT_MS = 90_000;
 const LOG_LIMIT = 200;
 
 export interface SidecarArtifact {
@@ -430,6 +431,9 @@ async function startProcess(
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
+    // A PyInstaller onefile binary is a bootloader plus a child process. Own a
+    // process group so Stop kills both instead of leaving the server running.
+    detached: process.platform !== "win32",
   });
   let exitedCode: number | null = null;
   running = { process: child, port, key };
@@ -515,19 +519,18 @@ export async function stop(): Promise<void> {
     await Promise.race([current.process.exited, Bun.sleep(3_000)]);
     return;
   }
-  try {
-    current.process.kill();
-  } catch {
-    // Already gone.
-  }
-  await Promise.race([current.process.exited, Bun.sleep(3_000)]);
-  if (!exited) {
+  for (const signal of ["SIGTERM", "SIGKILL"] as const) {
     try {
-      current.process.kill("SIGKILL");
+      process.kill(-current.process.pid, signal);
     } catch {
-      // Already gone.
+      try {
+        current.process.kill(signal);
+      } catch {
+        // Already gone.
+      }
     }
-    await Promise.race([current.process.exited, Bun.sleep(1_000)]);
+    if (exited) return;
+    await Promise.race([current.process.exited, Bun.sleep(signal === "SIGTERM" ? 3_000 : 1_000)]);
   }
 }
 
