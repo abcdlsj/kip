@@ -9,7 +9,7 @@
     "dev": "bun run icons && bun run build:view && electrobun dev",
     "dev:hmr": "concurrently -k \"vite --port 5173\" \"KIP_DEV_SERVER=1 bun run dev:main\"",
     "dev:main": "electrobun dev --watch",
-    "build:view": "vite build",
+    "build:view": "vite build && vite build --config vite.plugins.config.ts",
     "build": "bun run typecheck && bun run icons && bun run build:view && electrobun build --env=stable",
     "typecheck": "tsc --noEmit",
     "test": "bun test",

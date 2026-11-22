@@ -6,6 +6,8 @@
  */
 import type { ProviderModel } from "../../shared/types";
 import type { GatewayPlugin, PluginProbeOutcome } from "./types";
+import { createGeminiPage } from "./gemini2api/page";
+import { ensureRunning, health as readHealth, type HealthBody } from "./gemini2api/service";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = "8790";
@@ -14,18 +16,6 @@ const TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_OUTPUT = 65_536;
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 const PROVIDER_ID = "gemini2api";
-
-interface HealthBody {
-  server?: string;
-  version?: string;
-  key_required?: boolean;
-  api?: {
-    supports_vision?: boolean;
-    supports_reasoning?: boolean;
-    context_window?: number;
-  };
-  accounts?: Record<string, { signed_in?: boolean; status?: string }>;
-}
 
 interface RemoteModel {
   id?: string;
@@ -103,6 +93,14 @@ export const gemini2apiPlugin: GatewayPlugin = {
   providerId: PROVIDER_ID,
   // Gemini web answers one prompt at a time, so a chat thread is the useful shape.
   chatThreads: true,
+  // The gateway ships separately; this window installs it and shows its state.
+  window: {
+    page: "plugins/gemini2api/index.html",
+    title: "gemini2api",
+    width: 780,
+    height: 660,
+  },
+  page: createGeminiPage,
   fields: [
     { name: "host", label: "Host", kind: "text", placeholder: DEFAULT_HOST },
     { name: "port", label: "Port", kind: "port", placeholder: DEFAULT_PORT },
@@ -118,6 +116,14 @@ export const gemini2apiPlugin: GatewayPlugin = {
       label: "Temporary chats",
       kind: "toggle",
       help: "Off: chats stay in the Gemini account so the context survives. On: nothing is kept in the account, and long conversations lose context because Google may close a temporary chat at any time.",
+    },
+    {
+      name: "binaryPath",
+      label: "Local binary",
+      kind: "text",
+      optional: true,
+      placeholder: "/path/to/gemini2api",
+      help: "Use a build you already have instead of the downloaded one. Leave empty to let Kip install it.",
     },
     {
       name: "threadMode",
@@ -141,18 +147,34 @@ export const gemini2apiPlugin: GatewayPlugin = {
         error: `Port must be a whole number from 1 to 65535, not "${portText}".`,
       };
     }
-    const root = `http://${host}:${port}`;
-
+    let root = `http://${host}:${port}`;
     let health: HealthBody | null = null;
+    let managedKey: string | undefined;
     try {
       health = (await callJson(`${root}/health`)).body as HealthBody | null;
-    } catch (error) {
-      return {
-        ok: false,
-        error: `Nothing answers at ${root} (${describe(error)}). Start gemini2api, or check the port.`,
-      };
+    } catch {
+      health = null;
     }
-    if (health?.server !== "gemini2api") {
+
+    // Nothing on the configured port: start the instance Kip manages, if it is
+    // installed. A server the user runs is never duplicated.
+    if (!health) {
+      if (!context.dataDir) {
+        return { ok: false, error: "Kip has no data directory for this plugin." };
+      }
+      try {
+        const managed = await ensureRunning(context.dataDir, values);
+        root = `http://127.0.0.1:${managed.port}`;
+        managedKey = managed.key;
+        health = await readHealth(managed.port, managed.key);
+      } catch (error) {
+        return {
+          ok: false,
+          error: describe(error),
+        };
+      }
+    }
+    if (!health || health.server !== "gemini2api") {
       return { ok: false, error: `${root} answers, but it is not gemini2api.` };
     }
 
@@ -186,7 +208,8 @@ export const gemini2apiPlugin: GatewayPlugin = {
 
     const operatorKey = (values.operatorKey ?? "").trim() || undefined;
     const needsKey = health.key_required === true;
-    if (needsKey && !operatorKey && !context.storedApiKey) {
+    // A managed instance already has the key Kip wrote into its config.
+    if (!managedKey && needsKey && !operatorKey && !context.storedApiKey) {
       return {
         ok: false,
         details,
@@ -217,9 +240,8 @@ export const gemini2apiPlugin: GatewayPlugin = {
     // What Kip already holds first, then the key the user just typed.
     let read: Awaited<ReturnType<typeof readModels>>;
     try {
-      read = await readModels(needsKey ? context.storedApiKey : undefined);
-      if ("rejected" in read && operatorKey)
-        read = await readModels(operatorKey);
+      read = await readModels(managedKey ?? (needsKey ? context.storedApiKey : undefined));
+      if ("rejected" in read && operatorKey) read = await readModels(operatorKey);
     } catch (error) {
       return {
         ok: false,
@@ -267,7 +289,7 @@ export const gemini2apiPlugin: GatewayPlugin = {
 
     // Only mint when this turn borrowed a key: a key Kip already holds is reused as-is.
     let apiKey: string | undefined;
-    if (needsKey && read.key && read.key !== context.storedApiKey) {
+    if (!managedKey && needsKey && read.key && read.key !== context.storedApiKey) {
       try {
         const minted = await callJson(`${root}/v1/keys`, {
           method: "POST",
@@ -321,7 +343,7 @@ export const gemini2apiPlugin: GatewayPlugin = {
         protocol: "openai-completions",
         baseUrl: `${root}/v1`,
         models,
-        apiKey,
+        apiKey: managedKey ?? apiKey,
       },
     };
   },

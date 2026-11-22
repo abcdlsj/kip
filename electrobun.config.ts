@@ -23,6 +23,10 @@ const config: ElectrobunConfig = {
     copy: {
       "dist/index.html": "views/mainview/index.html",
       "dist/assets": "views/mainview/assets",
+      // Plugin pages sit at views/plugins/<id>/; their HTML points two levels up,
+      // so their assets land beside the main view's, not inside the page folder.
+      "dist-plugins/plugins": "views/plugins",
+      "dist-plugins/assets": "views/assets",
     },
     mac: {
       bundleCEF: true,

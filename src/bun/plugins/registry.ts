@@ -4,7 +4,11 @@
  * whatever fields and toggles each plugin declares without view edits.
  */
 import type { KipDatabase } from "../storage/db";
-import type { PluginSummary, ThreadMode } from "../../shared/types";
+import { getDataDir } from "../storage/db";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+import type { MarketplaceEntry, PluginSummary, ThreadMode } from "../../shared/types";
+import { findMarketplaceEntry } from "../../shared/marketplace";
 import { gemini2apiPlugin } from "./gemini2api";
 import type { KipPlugin, GatewayPlugin, TitleGenerationInput, TitlePlugin } from "./types";
 import { warrenTitlePlugin } from "./warren-title";
@@ -18,6 +22,48 @@ function settingKey(plugin: KipPlugin, field: string): string {
 
 function enabledKey(plugin: KipPlugin): string {
   return `${SETTING_PREFIX}${plugin.id}.enabled`;
+}
+
+function acceptedKey(plugin: KipPlugin): string {
+  return `${SETTING_PREFIX}${plugin.id}.acceptedAt`;
+}
+
+/** Each plugin owns a writable directory under Kip's data dir. */
+export function pluginDataDir(pluginId: string): string {
+  const dir = join(getDataDir(), "plugins", pluginId);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  return dir;
+}
+
+/** The catalog entry, synthesized for a plugin the catalog forgot. */
+export function marketEntryFor(plugin: KipPlugin): MarketplaceEntry {
+  return (
+    findMarketplaceEntry(plugin.id) ?? {
+      id: plugin.id,
+      kind: plugin.kind,
+      name: plugin.label,
+      summary: plugin.description,
+      version: "0",
+      author: "unknown",
+      permissions: [],
+      window: plugin.kind === "gateway" && plugin.window !== undefined,
+      builtin: true,
+    }
+  );
+}
+
+/**
+ * A plugin that declares permissions must be accepted before it is started,
+ * probed, or opened. A plugin that declares none (a pure form) needs no gate.
+ */
+export function isPluginAccepted(database: KipDatabase, plugin: KipPlugin): boolean {
+  if (marketEntryFor(plugin).permissions.length === 0) return true;
+  const accepted = database.getSetting<string>(acceptedKey(plugin), "");
+  return typeof accepted === "string" && accepted.length > 0;
+}
+
+export function acceptPlugin(database: KipDatabase, plugin: KipPlugin): void {
+  database.setSetting(acceptedKey(plugin), new Date().toISOString());
 }
 
 function deviceIdKey(plugin: KipPlugin): string {
@@ -166,6 +212,7 @@ export function savePluginValues(
 }
 
 export function toPluginSummary(database: KipDatabase, plugin: KipPlugin): PluginSummary {
+  const market = marketEntryFor(plugin);
   return {
     id: plugin.id,
     kind: plugin.kind,
@@ -175,6 +222,9 @@ export function toPluginSummary(database: KipDatabase, plugin: KipPlugin): Plugi
     enabled: isPluginEnabled(database, plugin),
     fields: plugin.fields,
     values: readPluginValues(database, plugin),
+    market,
+    accepted: isPluginAccepted(database, plugin),
+    hasWindow: plugin.kind === "gateway" && plugin.window !== undefined && plugin.page !== undefined,
   };
 }
 

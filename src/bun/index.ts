@@ -13,6 +13,7 @@ import { NotchIndicator, type NotchState } from "./system/notch";
 import { applyWindowsDpiAwareness } from "./system/windows-dpi";
 import { UpdateChecker } from "./system/update-checker";
 import { createUpdateInstaller } from "./system/update-installer";
+import { PluginWindows } from "./plugins/windows";
 
 // Must run before the first window exists, so it cannot move below.
 applyWindowsDpiAwareness();
@@ -48,7 +49,18 @@ const updateChecker = new UpdateChecker({
   }),
   onStatus: (status) => rpc.send.updateStatus(status),
 });
-const rpc = createKipRpc({ database, registry, orchestrator, updateChecker, windowRef });
+const pluginWindows = new PluginWindows(
+  database,
+  process.platform === "darwin" ? "cef" : "native",
+);
+const rpc = createKipRpc({
+  database,
+  registry,
+  orchestrator,
+  updateChecker,
+  pluginWindows,
+  windowRef,
+});
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 /**
  * Background attention state for the notch indicator. Approvals outrank
@@ -220,6 +232,11 @@ function shutdown(): Promise<void> {
       syncTimer = null;
     }
     updateChecker.stop();
+    try {
+      await pluginWindows.disposeAll();
+    } catch {
+      // Plugin windows are best-effort on the way out.
+    }
     try {
       await orchestrator.shutdown();
     } catch {

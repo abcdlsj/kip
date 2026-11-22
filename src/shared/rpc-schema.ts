@@ -11,6 +11,7 @@ import type {
   CreateThreadInput,
   FileSuggestion,
   ModelOption,
+  PluginMarketplace,
   PluginProbeResult,
   PluginSummary,
   ProviderModel,
@@ -124,8 +125,18 @@ export interface KipRPCSchema {
         response: { models: ProviderModel[]; error?: string };
       };
       listPlugins: { params: void; response: PluginSummary[] };
+      /** The shipped catalog: who wrote each plugin, what it may touch, the notice. */
+      getMarketplace: { params: void; response: PluginMarketplace };
+      /** Opens a plugin's own window; the plugin supplies the page and its logic. */
+      openPluginWindow: { params: { plugin: string }; response: void };
       updatePlugin: {
-        params: { plugin: string; enabled?: boolean; values?: Record<string, string> };
+        params: {
+          plugin: string;
+          enabled?: boolean;
+          /** Records that the user accepted this plugin's permissions. */
+          accepted?: boolean;
+          values?: Record<string, string>;
+        };
         response: PluginSummary;
       };
       probePlugin: {

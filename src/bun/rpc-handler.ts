@@ -23,16 +23,21 @@ import { deleteApiKey, getApiKey, hasApiKey, setApiKey } from "./storage/keychai
 import type { ModelRegistry } from "./agent/model-registry";
 import { displayModelName, fetchRemoteModels } from "./agent/model-registry";
 import {
+  acceptPlugin,
   chatModeSupport,
   findPlugin,
   getOrCreatePluginDeviceId,
+  isPluginAccepted,
+  pluginDataDir,
   pluginSummaries,
   resolveNewThreadMode,
   savePluginValues,
   setPluginEnabled,
   toPluginSummary,
 } from "./plugins/registry";
+import { MARKETPLACE, MARKETPLACE_NOTICE } from "../shared/marketplace";
 import type { KipOrchestrator } from "./agent/pi-orchestrator";
+import type { PluginWindows } from "./plugins/windows";
 import { pickWorkspaceFolder, suggestFiles, workspaceName } from "./system/fs-dialog";
 import { inspectGit } from "./system/git-inspector";
 import {
@@ -49,6 +54,7 @@ export interface RpcDeps {
   registry: ModelRegistry;
   orchestrator: KipOrchestrator;
   updateChecker: UpdateChecker;
+  pluginWindows: PluginWindows;
   windowRef: { current: BrowserWindow | null };
 }
 
@@ -177,6 +183,7 @@ export function createKipRpc(deps: RpcDeps) {
           if (patch.approvalPolicy !== undefined) {
             deps.orchestrator.reevaluateApprovals();
           }
+          if (patch.theme !== undefined) deps.pluginWindows.refreshAll();
           return settingsSnapshot(deps);
         },
         setProviderApiKey: async ({ provider, apiKey }) => {
@@ -207,12 +214,26 @@ export function createKipRpc(deps: RpcDeps) {
         fetchProviderModels: ({ baseUrl, apiKey }) =>
           fetchRemoteModels(baseUrl, apiKey ?? undefined),
         listPlugins: async () => pluginSummaries(deps.database),
-        updatePlugin: async ({ plugin: pluginId, enabled, values }) => {
+        getMarketplace: () => ({ notice: MARKETPLACE_NOTICE, entries: MARKETPLACE }),
+        openPluginWindow: ({ plugin: pluginId }) => {
+          const plugin = findPlugin(pluginId);
+          if (!plugin || plugin.kind !== "gateway") {
+            throw new Error(`Plugin ${pluginId} has no window`);
+          }
+          if (!isPluginAccepted(deps.database, plugin)) {
+            throw new Error("Accept this plugin's permissions before opening it.");
+          }
+          if (!deps.pluginWindows.openPlugin(plugin)) {
+            throw new Error(`Plugin ${pluginId} has no window`);
+          }
+        },
+        updatePlugin: async ({ plugin: pluginId, enabled, accepted, values }) => {
           const plugin = findPlugin(pluginId);
           if (!plugin) throw new Error(`Unknown plugin: ${pluginId}`);
           if (enabled !== undefined && plugin.kind === "title") {
             setPluginEnabled(deps.database, plugin, enabled);
           }
+          if (accepted === true) acceptPlugin(deps.database, plugin);
           if (values) {
             savePluginValues(deps.database, plugin, values);
           }
@@ -230,8 +251,17 @@ export function createKipRpc(deps: RpcDeps) {
             return result;
           }
 
+          if (!isPluginAccepted(deps.database, plugin)) {
+            return {
+              ok: false,
+              error: "Accept this plugin's permissions before using it.",
+            };
+          }
           const storedApiKey = (await getApiKey(plugin.providerId)) ?? undefined;
-          const outcome = await plugin.probe(values, { storedApiKey });
+          const outcome = await plugin.probe(values, {
+            storedApiKey,
+            dataDir: pluginDataDir(plugin.id),
+          });
           if (!outcome.ok || !outcome.proposal) {
             const { proposal: _proposal, ...result } = outcome;
             return result;

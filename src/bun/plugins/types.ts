@@ -10,6 +10,8 @@ export interface PluginProbeContext {
   storedApiKey?: string;
   /** Persistent per-device identifier for rate-limited hosted plugins. */
   deviceId?: string;
+  /** A writable directory for this plugin, created before the call. */
+  dataDir?: string;
 }
 
 /** What a successful gateway probe hands to the app: a provider it can save as-is. */
@@ -42,6 +44,39 @@ export interface TitlePluginContext {
 }
 
 /**
+ * Where a plugin's own window lives in the app bundle. `page` is relative to
+ * the bundle's views folder, e.g. `plugins/gemini2api/index.html`.
+ */
+export interface PluginWindowSpec {
+  page: string;
+  title?: string;
+  width?: number;
+  height?: number;
+}
+
+/** What the host hands a plugin that wants a window of its own. */
+export interface PluginPageContext {
+  pluginId: string;
+  /** A writable directory for this plugin: binaries, config, logs, state. */
+  dataDir: string;
+  /** The plugin's saved form values, read fresh on each call. */
+  values: () => Record<string, string>;
+  /** Ask the host to push a fresh snapshot to the open page. */
+  emit: () => void;
+}
+
+/**
+ * A plugin page is a state getter plus named actions. The page speaks the same
+ * names; the host only forwards them, so no host code knows what an action does.
+ */
+export interface PluginPageController {
+  state(): unknown | Promise<unknown>;
+  act(action: string, input?: unknown): unknown | Promise<unknown>;
+  /** Called once when the page closes. Release processes here, not in `act`. */
+  dispose?(): void | Promise<void>;
+}
+
+/**
  * A local gateway plugin owns one provider record (`providerId`) and discovers
  * models from a service running on the user's machine.
  */
@@ -60,6 +95,10 @@ export interface GatewayPlugin {
    */
   chatThreads?: boolean;
   fields: PluginField[];
+  /** Declared only by plugins that ship a page in the app bundle. */
+  window?: PluginWindowSpec;
+  /** Built alongside `window`: the state and actions that page talks to. */
+  page?: (context: PluginPageContext) => PluginPageController;
   probe(
     values: Record<string, string>,
     context: PluginProbeContext,

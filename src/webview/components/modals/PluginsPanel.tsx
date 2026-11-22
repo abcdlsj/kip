@@ -1,11 +1,13 @@
 /**
- * Dedicated Plugins settings page. Renders both optional extensions (such as
- * AI Thread Titles, which users can freely enable or leave off) and local
- * model gateways from the same plugin registry without hardcoding each plugin.
+ * The plugin catalog and its settings. Everything a plugin declares is rendered
+ * here — form fields, the window it can open, and the catalog entry that names
+ * its author, version, and what it may touch. Nothing in this file knows what a
+ * particular plugin does.
  */
 import { useEffect, useState } from "react";
-import { Check, Loader2, Radar, Sparkles } from "lucide-react";
-import type { PluginProbeResult, PluginSummary } from "../../../shared/types";
+import { Check, ExternalLink, Loader2, Radar, ShieldAlert, Sparkles, SquareArrowOutUpRight } from "lucide-react";
+import type { PluginMarketplace, PluginProbeResult, PluginSummary } from "../../../shared/types";
+import { permissionLabel } from "../../../shared/marketplace";
 import { request } from "../../rpc-client";
 import { useUiStore } from "../../stores/ui-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
@@ -14,20 +16,25 @@ export function PluginsPanel() {
   const refreshProviders = useUiStore((state) => state.refreshProviders);
   const refreshSettings = useUiStore((state) => state.refresh);
   const refreshThreads = useWorkspaceStore((state) => state.refreshThreads);
+  const [market, setMarket] = useState<PluginMarketplace | null>(null);
   const [plugins, setPlugins] = useState<PluginSummary[]>([]);
   const [values, setValues] = useState<Record<string, Record<string, string>>>({});
   const [results, setResults] = useState<Record<string, PluginProbeResult>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  /** The plugin whose permission sheet is open. */
+  const [reviewing, setReviewing] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
-      const list = await request("listPlugins", undefined);
+      const [catalog, list] = await Promise.all([
+        request("getMarketplace", undefined),
+        request("listPlugins", undefined),
+      ]);
+      setMarket(catalog);
       setPlugins(list);
       setValues(
-        Object.fromEntries(
-          list.map((plugin) => [plugin.id, { ...plugin.values }]),
-        ),
+        Object.fromEntries(list.map((plugin) => [plugin.id, { ...plugin.values }])),
       );
     })();
   }, []);
@@ -51,16 +58,24 @@ export function PluginsPanel() {
         plugin: plugin.id,
         values: next,
       });
-      setPlugins((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      );
+      setPlugins((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       await refreshSettings();
     } catch {
       // A failed save must not interrupt editing; the next Detect retries it.
     }
   };
 
+  const accept = async (plugin: PluginSummary) => {
+    const updated = await request("updatePlugin", { plugin: plugin.id, accepted: true });
+    setPlugins((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    setReviewing(null);
+  };
+
   const togglePlugin = async (plugin: PluginSummary) => {
+    if (!plugin.accepted) {
+      setReviewing(plugin.id);
+      return;
+    }
     const nextEnabled = !plugin.enabled;
     setSavingId(plugin.id);
     try {
@@ -69,9 +84,7 @@ export function PluginsPanel() {
         enabled: nextEnabled,
         values: values[plugin.id] ?? {},
       });
-      setPlugins((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      );
+      setPlugins((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     } finally {
       setSavingId(null);
     }
@@ -82,10 +95,7 @@ export function PluginsPanel() {
     try {
       const currentValues = values[plugin.id] ?? {};
       if (plugin.toggleable) {
-        await request("updatePlugin", {
-          plugin: plugin.id,
-          values: currentValues,
-        });
+        await request("updatePlugin", { plugin: plugin.id, values: currentValues });
       }
       const result = await request("probePlugin", {
         plugin: plugin.id,
@@ -110,6 +120,20 @@ export function PluginsPanel() {
     }
   };
 
+  const openWindow = async (plugin: PluginSummary) => {
+    try {
+      await request("openPluginWindow", { plugin: plugin.id });
+    } catch (error) {
+      setResults((current) => ({
+        ...current,
+        [plugin.id]: {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      }));
+    }
+  };
+
   const extensions = plugins.filter((plugin) => plugin.kind !== "gateway");
   const gateways = plugins.filter((plugin) => plugin.kind === "gateway");
 
@@ -117,9 +141,29 @@ export function PluginsPanel() {
     <div>
       <h2 className="text-[15px] font-semibold">Plugins</h2>
       <p className="mt-1 text-[12.5px] text-[var(--text-secondary)]">
-        Optional extensions and local gateways. Everything here is opt-in and
-        can be turned off at any time.
+        Optional extensions and local gateways. Everything here is opt-in and can be turned off
+        at any time.
       </p>
+
+      {market && (
+        <div className="mt-4 rounded-[11px] border border-[color-mix(in_srgb,var(--status-warn)_30%,transparent)] bg-[color-mix(in_srgb,var(--status-warn)_7%,transparent)] px-3.5 py-2.5">
+          <div className="flex items-start gap-2">
+            <ShieldAlert
+              size={13}
+              strokeWidth={1.6}
+              className="mt-[2px] shrink-0 text-[var(--status-warn)]"
+            />
+            <div className="min-w-0">
+              <p className="text-[12px] font-medium text-[var(--text-primary)]">
+                You are responsible for the plugins you enable
+              </p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--text-secondary)]">
+                {market.notice}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {extensions.length > 0 && (
         <section className="mt-5">
@@ -135,9 +179,13 @@ export function PluginsPanel() {
                 result={results[plugin.id]}
                 busy={busy === plugin.id}
                 saving={savingId === plugin.id}
+                reviewing={reviewing === plugin.id}
                 onChange={(field, value) => setValue(plugin.id, field, value)}
                 onToggle={() => void togglePlugin(plugin)}
                 onAction={() => void probe(plugin)}
+                onReview={() => setReviewing(plugin.id)}
+                onAccept={() => void accept(plugin)}
+                onOpen={() => void openWindow(plugin)}
               />
             ))}
           </div>
@@ -150,8 +198,8 @@ export function PluginsPanel() {
             Local gateways
           </h3>
           <p className="mt-1 text-[12px] text-[var(--text-secondary)]">
-            Servers running on this machine. Kip detects the service, reads its
-            models, and keeps a key of its own in the keychain.
+            Servers running on this machine. A gateway runs its own program; its window shows
+            what it is doing and owns its settings.
           </p>
           <div className="mt-2.5 space-y-2.5">
             {gateways.map((plugin) => (
@@ -162,9 +210,13 @@ export function PluginsPanel() {
                 result={results[plugin.id]}
                 busy={busy === plugin.id}
                 saving={false}
+                reviewing={reviewing === plugin.id}
                 onChange={(field, value) => setValue(plugin.id, field, value)}
                 onCommit={(next) => void commitValues(plugin, next)}
                 onAction={() => void probe(plugin)}
+                onReview={() => setReviewing(plugin.id)}
+                onAccept={() => void accept(plugin)}
+                onOpen={() => void openWindow(plugin)}
               />
             ))}
           </div>
@@ -180,11 +232,14 @@ interface PluginCardProps {
   result?: PluginProbeResult;
   busy: boolean;
   saving: boolean;
+  reviewing: boolean;
   onChange: (field: string, value: string) => void;
-  /** Persists the current field values; only gateway cards get this. */
   onCommit?: (values: Record<string, string>) => void;
   onToggle?: () => void;
   onAction: () => void;
+  onReview: () => void;
+  onAccept: () => void;
+  onOpen: () => void;
 }
 
 function PluginCard({
@@ -193,30 +248,34 @@ function PluginCard({
   result,
   busy,
   saving,
+  reviewing,
   onChange,
   onCommit,
   onToggle,
   onAction,
+  onReview,
+  onAccept,
+  onOpen,
 }: PluginCardProps) {
-  const missing = new Map(
-    (result?.missing ?? []).map((item) => [item.field, item.message]),
-  );
+  const missing = new Map((result?.missing ?? []).map((item) => [item.field, item.message]));
   const isGateway = plugin.kind === "gateway";
+  const market = plugin.market;
 
   return (
     <div
       className={`rounded-[11px] border px-3.5 py-3 transition-colors ${
-        plugin.toggleable && plugin.enabled
+        (plugin.toggleable && plugin.enabled) || plugin.hasWindow
           ? "border-[var(--border-focus)] bg-[var(--bg-subtle)]"
           : "hairline"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-[13px] font-medium text-[var(--text-primary)]">
-              {plugin.label}
+              {market.name}
             </span>
+            <span className="text-[10.5px] text-[var(--text-muted)]">v{market.version}</span>
             {result?.ok && (
               <span className="flex items-center gap-0.5 text-[11px] text-[var(--status-ok)]">
                 <Check size={10} strokeWidth={2} />
@@ -225,11 +284,46 @@ function PluginCard({
             )}
           </div>
           <p className="mt-0.5 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
-            {plugin.description}
+            {market.summary}
           </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {market.permissions.map((permission) => (
+              <span
+                key={permission}
+                className="rounded-full bg-[var(--bg-sidebar)] px-2 py-0.5 text-[10.5px] text-[var(--text-secondary)]"
+              >
+                {permissionLabel(permission)}
+              </span>
+            ))}
+            <span className="text-[10.5px] text-[var(--text-muted)]">
+              by {market.author} · not audited by Kip
+            </span>
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          {market.homepage && (
+            <a
+              href={market.homepage}
+              target="_blank"
+              rel="noreferrer"
+              title={market.homepage}
+              className="btn-ghost h-8 w-8 justify-center rounded-[8px] p-0 text-[var(--text-muted)]"
+            >
+              <ExternalLink size={12} strokeWidth={1.5} />
+            </a>
+          )}
+          {plugin.hasWindow && (
+            <button
+              type="button"
+              onClick={plugin.accepted ? onOpen : onReview}
+              className="btn-secondary h-8 shrink-0 rounded-[8px] px-3 text-[12px]"
+              title="Open this plugin's own window"
+            >
+              <SquareArrowOutUpRight size={12} strokeWidth={1.5} />
+              Open
+            </button>
+          )}
           {plugin.toggleable && onToggle && (
             <button
               type="button"
@@ -247,30 +341,74 @@ function PluginCard({
               <span>{plugin.enabled ? "On" : "Off"}</span>
               <span
                 className={`h-3 w-3 rounded-full transition-colors ${
-                  plugin.enabled
-                    ? "bg-[var(--status-ok)]"
-                    : "bg-[var(--border-focus)]"
+                  plugin.enabled ? "bg-[var(--status-ok)]" : "bg-[var(--border-focus)]"
                 }`}
               />
             </button>
           )}
-          <button
-            type="button"
-            onClick={onAction}
-            disabled={busy}
-            className="btn-secondary h-8 shrink-0 rounded-[8px] px-3 text-[12px]"
-          >
-            {busy ? (
-              <Loader2 size={12} strokeWidth={1.5} className="animate-spin" />
-            ) : isGateway ? (
-              <Radar size={12} strokeWidth={1.5} />
-            ) : (
-              <Sparkles size={12} strokeWidth={1.5} />
-            )}
-            {isGateway ? "Detect" : "Save & Test"}
-          </button>
+          {plugin.accepted ? (
+            <button
+              type="button"
+              onClick={onAction}
+              disabled={busy}
+              className="btn-secondary h-8 shrink-0 rounded-[8px] px-3 text-[12px]"
+            >
+              {busy ? (
+                <Loader2 size={12} strokeWidth={1.5} className="animate-spin" />
+              ) : isGateway ? (
+                <Radar size={12} strokeWidth={1.5} />
+              ) : (
+                <Sparkles size={12} strokeWidth={1.5} />
+              )}
+              {isGateway ? "Detect" : "Save & Test"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onReview}
+              className="btn-secondary h-8 shrink-0 rounded-[8px] px-3 text-[12px]"
+            >
+              <ShieldAlert size={12} strokeWidth={1.5} />
+              Review
+            </button>
+          )}
         </div>
       </div>
+
+      {reviewing && (
+        <div className="mt-3 rounded-[9px] border border-[color-mix(in_srgb,var(--status-warn)_30%,transparent)] bg-[var(--bg-elevated)] px-3 py-2.5">
+          <p className="text-[12px] font-medium text-[var(--text-primary)]">
+            Allow {market.name}?
+          </p>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--text-secondary)]">
+            {market.summary}
+          </p>
+          <ul className="mt-2 space-y-1">
+            {market.permissions.map((permission) => (
+              <li
+                key={permission}
+                className="flex items-center gap-1.5 text-[11.5px] text-[var(--text-secondary)]"
+              >
+                <span className="h-1 w-1 rounded-full bg-[var(--status-warn)]" aria-hidden />
+                {permissionLabel(permission)}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-muted)]">
+            {market.name} runs with Kip's own privileges. Its author is responsible for what it
+            does; Kip does not audit it. You can revoke this by clearing the plugin's settings.
+          </p>
+          <div className="mt-2.5 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onAccept}
+              className="btn-secondary h-7 rounded-[7px] px-2.5 text-[11.5px]"
+            >
+              I understand, allow
+            </button>
+          </div>
+        </div>
+      )}
 
       {plugin.fields.length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-2">
@@ -279,9 +417,7 @@ function PluginCard({
               <span className="mb-1 block text-[11.5px] font-medium text-[var(--text-secondary)]">
                 {field.label}
                 {field.optional && (
-                  <span className="ml-1 font-normal text-[var(--text-muted)]">
-                    optional
-                  </span>
+                  <span className="ml-1 font-normal text-[var(--text-muted)]">optional</span>
                 )}
               </span>
               {field.kind === "select" ? (
@@ -352,22 +488,9 @@ function PluginCard({
       )}
 
       {result && !result.ok && result.error && (
-        <p className="mt-2 text-[11.5px] text-[var(--status-err)]">
+        <p className="mt-2 text-[11.5px] leading-relaxed text-[var(--status-err)]">
           {result.error}
         </p>
-      )}
-      {result?.ok && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px]">
-          <span className="text-[var(--text-secondary)]">{result.summary}</span>
-          {(result.details ?? []).map((detail) => (
-            <span key={detail.label} className="text-[var(--text-muted)]">
-              {detail.label}:{" "}
-              <span className="font-mono text-[var(--text-secondary)]">
-                {detail.value}
-              </span>
-            </span>
-          ))}
-        </div>
       )}
     </div>
   );

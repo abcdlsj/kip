@@ -9,6 +9,7 @@ import type {
   UpdateStatus,
 } from "../../shared/types";
 import { request } from "../rpc-client";
+import { applyTheme, watchSystemTheme } from "../lib/theme";
 
 type SettingsTab = "providers" | "plugins" | "appearance" | "safety" | "sync";
 
@@ -44,16 +45,6 @@ interface UiState {
   setUpdate: (update: UpdateStatus) => void;
   openUpdatePage: () => Promise<void>;
   restartForUpdate: () => Promise<void>;
-}
-
-function resolvedTheme(theme: ThemeMode): "light" | "dark" {
-  if (theme !== "system") return theme;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-function applyTheme(theme: ThemeMode): void {
-  document.documentElement.dataset.theme = resolvedTheme(theme);
-  document.documentElement.style.colorScheme = resolvedTheme(theme);
 }
 
 let systemListenerAttached = false;
@@ -97,11 +88,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     set({ update });
     if (!systemListenerAttached) {
       systemListenerAttached = true;
-      window
-        .matchMedia("(prefers-color-scheme: dark)")
-        .addEventListener("change", () => {
-          if (get().theme === "system") applyTheme("system");
-        });
+      watchSystemTheme(() => get().theme);
     }
   },
 

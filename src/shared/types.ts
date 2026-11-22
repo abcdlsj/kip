@@ -135,6 +135,27 @@ export interface ProviderModel {
 export type PluginKind = "gateway" | "title";
 export type PluginFieldKind = "text" | "port" | "secret" | "toggle" | "select";
 
+/** What a plugin may touch while doing its work. Shown before the user enables it. */
+export type PluginPermission = "network" | "process" | "files" | "credentials";
+
+/** One catalog entry the Plugins page renders; no network, shipped with the repo. */
+export interface MarketplaceEntry {
+  id: string;
+  kind: PluginKind;
+  name: string;
+  summary: string;
+  version: string;
+  author: string;
+  homepage?: string;
+  /** The provider record a gateway plugin owns. */
+  providerId?: string;
+  permissions: PluginPermission[];
+  /** The plugin opens a window with a page of its own. */
+  window: boolean;
+  /** Bundled in this repository rather than fetched from somewhere. */
+  builtin: boolean;
+}
+
 /** One input a plugin needs before it can reach its gateway. */
 export interface PluginField {
   name: string;
@@ -160,6 +181,21 @@ export interface PluginSummary {
   fields: PluginField[];
   /** Saved non-secret values, so the form survives a restart. */
   values: Record<string, string>;
+  /** The catalog entry for this plugin, including its author and permissions. */
+  market: MarketplaceEntry;
+  /**
+   * Whether the user accepted this plugin's permissions. Plugins that declare
+   * permissions are not started, probed, or opened until they are accepted.
+   */
+  accepted: boolean;
+  /** The plugin can open its own window; the Plugins page offers a button. */
+  hasWindow: boolean;
+}
+
+/** The catalog the Plugins page renders, plus the liability notice above it. */
+export interface PluginMarketplace {
+  notice: string;
+  entries: MarketplaceEntry[];
 }
 
 export interface PluginProbeDetail {

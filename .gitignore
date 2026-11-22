@@ -16,3 +16,4 @@ credentials.enc
 
 # local-only release runbook
 /RELEASING.local.md
+dist-plugins/

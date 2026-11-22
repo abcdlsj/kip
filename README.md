@@ -131,21 +131,38 @@ bun run seed
 `KIP_SEED_KEY_FROM_PI=1` reads the credential from `~/.pi/agent/auth.json` at runtime and
 stores it in Kip's keychain. The key is never printed and never written to SQLite.
 
+### Plugins
+
+Settings → **Plugins** lists the catalog that ships in this repository. Each entry names the
+plugin's author and version, what it may touch (network, local programs, files, credentials),
+and states plainly that **the author is responsible for what a plugin does** — a plugin runs
+inside Kip's main process with Kip's own privileges, and Kip does not audit it. A plugin that
+declares permissions must be reviewed once before it is started, probed, or opened.
+
+A gateway plugin can bring **its own window**: it ships a page (`src/webview/plugins/<id>/`,
+built into the app bundle next to the main view) and a controller that answers a state request
+and named actions. The host supplies only the page URL, a snapshot of the plugin's state, and a
+forward for those actions; no host code knows what a plugin's action means. The window uses
+Kip's stylesheet, so it looks like the rest of the app.
+
 ### Local gateways
 
-Settings → Providers → **Local gateways** finds a server that is already running on this
-machine instead of asking you to type its URL, models, and key by hand. The panel shows one
-card per bundled plugin; today that is [gemini2api](https://github.com/abcdlsj/gemini2api).
+[gemini2api](https://github.com/abcdlsj/gemini2api) puts the Gemini web app behind an
+OpenAI-compatible API on this machine. The plugin manages it end to end:
 
-1. Enter the host and port (default `127.0.0.1:8790`). The port is remembered.
-2. Press **Detect**. Kip calls `${base}/health` and refuses anything that does not name itself
-   `gemini2api`, so a port that belongs to another service cannot be mistaken for it.
-3. If the server was started with an `api_key`, paste it once. Kip trades it for a key of its
-   own through `POST /v1/keys` and keeps only that key, in the system keychain — the operator's
-   key is not stored. Re-detecting reuses the key Kip already holds and never mints a second
-   one.
-4. The models come from `/v1/models` with their own `context_window` and capability flags, so
-   nothing is guessed. The provider appears above as `gemini2api` at `http://host:port/v1`.
+1. Press **Open** on the gemini2api card (accept its permissions first). Its window installs
+   the standalone binary from gemini2api's own GitHub Releases, verifying the published
+   `sha256`, into `~/.kip/plugins/gemini2api/`.
+2. Press **Use Firefox session**. Kip reads the Google cookies from the Firefox profile where
+   you signed in to gemini.google.com (Firefox stores cookie values in clear; Chromium's Device
+   Bound Session Credentials make copied sessions die), writes them to the plugin's data
+   directory, and generates a random `api_key` for its own instance.
+3. Press **Start**. Kip writes a config, starts the binary on a free loopback port, and shows
+   its log. Closing the window stops the gateway Kip started; a server you run yourself is
+   detected and never duplicated.
+4. Back on the plugin card, press **Detect**. Kip reads `/health` and `/v1/models`, registers
+   the provider, and keeps the key in the system keychain. A server you run yourself works the
+   same way: paste its `api_key` once and Kip mints its own.
 5. Gemini web answers one prompt at a time and gains nothing from a tool loop, so the plugin
    offers **Chat** threads: no tools, no system prompt, just the conversation. The card's
    **New threads** field picks Chat (the default) or Agent, and the composer switches an empty
