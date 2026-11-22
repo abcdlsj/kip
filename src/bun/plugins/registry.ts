@@ -6,7 +6,7 @@
 import type { KipDatabase } from "../storage/db";
 import type { PluginSummary, ThreadMode } from "../../shared/types";
 import { gemini2apiPlugin } from "./gemini2api";
-import type { KipPlugin, TitleGenerationInput, TitlePlugin } from "./types";
+import type { KipPlugin, GatewayPlugin, TitleGenerationInput, TitlePlugin } from "./types";
 import { warrenTitlePlugin } from "./warren-title";
 
 /** Saved values live under `plugin.<plugin>.<field>`. */
@@ -68,30 +68,52 @@ export function findPlugin(id: string): KipPlugin | undefined {
 }
 
 /**
- * Providers whose plugin offers Chat threads. Every other provider only ever
- * creates agent threads, and the composer hides the switch for them.
+ * Providers whose plugin offers Chat threads, with the mode their new threads
+ * start in. Every other provider only ever creates agent threads.
  */
-export function chatModeProviderIds(): string[] {
+export interface ChatModeSupport {
+  providerId: string;
+  defaultMode: ThreadMode;
+}
+
+/** The plugin field that holds a gateway's default thread mode. */
+export const PLUGIN_THREAD_MODE_FIELD = "threadMode";
+
+function gatewayPluginsOfferingChat(): GatewayPlugin[] {
   return defaultPluginRegistry
     .list()
     .filter(
-      (plugin): plugin is Extract<KipPlugin, { kind: "gateway" }> =>
+      (plugin): plugin is GatewayPlugin =>
         plugin.kind === "gateway" && plugin.chatThreads === true,
-    )
-    .map((plugin) => plugin.providerId);
+    );
+}
+
+function readDefaultThreadMode(database: KipDatabase, plugin: GatewayPlugin): ThreadMode {
+  const stored = database.getSetting<string>(settingKey(plugin, PLUGIN_THREAD_MODE_FIELD), "");
+  return stored === "agent" ? "agent" : "chat";
+}
+
+export function chatModeSupport(database: KipDatabase): ChatModeSupport[] {
+  return gatewayPluginsOfferingChat().map((plugin) => ({
+    providerId: plugin.providerId,
+    defaultMode: readDefaultThreadMode(database, plugin),
+  }));
 }
 
 /**
- * The mode a new thread starts in: Chat where the provider offers it, Agent
- * everywhere else. An explicit Agent choice always wins; asking for Chat from a
- * provider without the capability falls back to Agent instead of inventing it.
+ * The mode a new thread starts in: the plugin's saved default where the provider
+ * offers Chat, Agent everywhere else. A per-thread request wins; asking for Chat
+ * from a provider without the capability falls back to Agent.
  */
 export function resolveNewThreadMode(
+  database: KipDatabase,
   providerId: string,
   requested?: ThreadMode,
 ): ThreadMode {
-  if (requested === "agent") return "agent";
-  return chatModeProviderIds().includes(providerId) ? "chat" : "agent";
+  const support = chatModeSupport(database).find((item) => item.providerId === providerId);
+  if (!support) return "agent";
+  if (requested === "agent" || requested === "chat") return requested;
+  return support.defaultMode;
 }
 
 export function isPluginEnabled(database: KipDatabase, plugin: KipPlugin): boolean {

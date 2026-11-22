@@ -39,6 +39,27 @@ export function PluginsPanel() {
     }));
   };
 
+  /**
+   * Gateway field edits take effect without pressing Detect: the default thread
+   * mode, for example, is read as soon as it changes. Secrets are skipped by
+   * `savePluginValues`, so nothing sensitive is written here.
+   */
+  const commitValues = async (plugin: PluginSummary, next: Record<string, string>) => {
+    if (plugin.kind !== "gateway") return;
+    try {
+      const updated = await request("updatePlugin", {
+        plugin: plugin.id,
+        values: next,
+      });
+      setPlugins((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      await refreshSettings();
+    } catch {
+      // A failed save must not interrupt editing; the next Detect retries it.
+    }
+  };
+
   const togglePlugin = async (plugin: PluginSummary) => {
     const nextEnabled = !plugin.enabled;
     setSavingId(plugin.id);
@@ -142,6 +163,7 @@ export function PluginsPanel() {
                 busy={busy === plugin.id}
                 saving={false}
                 onChange={(field, value) => setValue(plugin.id, field, value)}
+                onCommit={(next) => void commitValues(plugin, next)}
                 onAction={() => void probe(plugin)}
               />
             ))}
@@ -159,6 +181,8 @@ interface PluginCardProps {
   busy: boolean;
   saving: boolean;
   onChange: (field: string, value: string) => void;
+  /** Persists the current field values; only gateway cards get this. */
+  onCommit?: (values: Record<string, string>) => void;
   onToggle?: () => void;
   onAction: () => void;
 }
@@ -170,6 +194,7 @@ function PluginCard({
   busy,
   saving,
   onChange,
+  onCommit,
   onToggle,
   onAction,
 }: PluginCardProps) {
@@ -262,7 +287,10 @@ function PluginCard({
               {field.kind === "select" ? (
                 <select
                   value={values[field.name] ?? ""}
-                  onChange={(event) => onChange(field.name, event.target.value)}
+                  onChange={(event) => {
+                    onChange(field.name, event.target.value);
+                    onCommit?.({ ...values, [field.name]: event.target.value });
+                  }}
                   className="settings-input"
                 >
                   {(field.options ?? []).map((option) => (
@@ -276,12 +304,11 @@ function PluginCard({
                   type="button"
                   role="switch"
                   aria-checked={values[field.name] === "true"}
-                  onClick={() =>
-                    onChange(
-                      field.name,
-                      values[field.name] === "true" ? "false" : "true",
-                    )
-                  }
+                  onClick={() => {
+                    const next = values[field.name] === "true" ? "false" : "true";
+                    onChange(field.name, next);
+                    onCommit?.({ ...values, [field.name]: next });
+                  }}
                   className={`flex h-8 w-full items-center justify-between rounded-[8px] border px-2.5 text-[12px] transition-colors ${
                     values[field.name] === "true"
                       ? "border-[var(--border-focus)] bg-[var(--bg-subtle)] font-medium text-[var(--text-primary)]"
@@ -303,6 +330,7 @@ function PluginCard({
                   inputMode={field.kind === "port" ? "numeric" : undefined}
                   value={values[field.name] ?? ""}
                   onChange={(event) => onChange(field.name, event.target.value)}
+                  onBlur={() => onCommit?.(values)}
                   placeholder={field.placeholder}
                   className="settings-input font-mono"
                 />

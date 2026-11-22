@@ -74,10 +74,11 @@ soft shimmer on the live action, and a caret on streaming text. No bounce, no co
 **Thread modes.** A thread is either an **Agent** (tools, Kip's system prompt, workspace
 context) or a **Chat** (only the conversation). The capability lives in the core, but only a
 plugin that opts in exposes the switch; today that is gemini2api, where a tool loop and a
-system prompt only get in the way. New threads for that provider start as Chat, the composer
-switches to Agent before the first message, and the mode is fixed once a message lands. A chat
-thread sends no tools, no system prompt, and no workspace files, and it never snapshots or
-edits the workspace. Every other provider only ever creates agent threads.
+system prompt only get in the way. Its card under Plugins → Local gateways sets what new
+threads start as (**Chat** by default), and the composer chooses per thread. The chip stays
+visible once a thread has messages, but the mode is fixed from the first message. A chat thread
+sends no tools, no system prompt, and no workspace files, and it never snapshots or edits the
+workspace. Every other provider only ever creates agent threads.
 
 ![Kip in dark theme](docs/images/thread-dark.png)
 
@@ -145,10 +146,11 @@ card per bundled plugin; today that is [gemini2api](https://github.com/abcdlsj/g
    one.
 4. The models come from `/v1/models` with their own `context_window` and capability flags, so
    nothing is guessed. The provider appears above as `gemini2api` at `http://host:port/v1`.
-5. Gemini web answers one prompt at a time and gains nothing from a tool loop, so new threads
-   for this provider start as **Chat**: no tools, no system prompt, just the conversation. The
-   composer switches to **Agent** before the first message if you want the tool loop after all.
-   This switch is declared by the plugin (`chatThreads: true`); no other provider shows it.
+5. Gemini web answers one prompt at a time and gains nothing from a tool loop, so the plugin
+   offers **Chat** threads: no tools, no system prompt, just the conversation. The card's
+   **New threads** field picks Chat (the default) or Agent, and the composer switches an empty
+   thread either way. The capability is declared by the plugin (`chatThreads: true`); no other
+   provider shows the switch.
 
 A plugin is a module under `src/bun/plugins/` that implements `KipPlugin`: an id, a provider id
 it owns, the fields its form needs, and a `probe()` that returns a provider record. The view

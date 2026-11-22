@@ -29,14 +29,17 @@ interface ModeSelectorProps {
   mode: ThreadMode;
   onSelect: (mode: ThreadMode) => void;
   disabled?: boolean;
+  /** Shown as the tooltip while the switch is disabled. */
+  disabledReason?: string;
 }
 
 /**
- * Chooses Agent or Chat before a thread's first message. The mode is fixed
- * afterwards, because the request already recorded in the transcript cannot be
+ * Switches an empty thread between Agent and Chat. The option only exists where
+ * the provider's plugin declares chat threads; the mode is fixed once a message
+ * lands, because the request already recorded in the transcript cannot be
  * rebuilt with a different shape.
  */
-export function ModeSelector({ mode, onSelect, disabled }: ModeSelectorProps) {
+export function ModeSelector({ mode, onSelect, disabled, disabledReason }: ModeSelectorProps) {
   const [open, setOpen] = useState(false);
   const current = MODE_OPTIONS.find((option) => option.value === mode) ?? MODE_OPTIONS[0]!;
   const CurrentIcon = current.icon;
@@ -47,8 +50,8 @@ export function ModeSelector({ mode, onSelect, disabled }: ModeSelectorProps) {
         <button
           type="button"
           disabled={disabled}
-          className="flex h-7 items-center gap-1.5 rounded-[8px] px-2 text-[12.5px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] data-[state=open]:bg-[var(--bg-subtle)] disabled:opacity-50"
-          title={`Mode: ${current.label}`}
+          className="flex h-7 items-center gap-1.5 rounded-[8px] px-2 text-[12.5px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] data-[state=open]:bg-[var(--bg-subtle)] disabled:cursor-default disabled:hover:bg-transparent"
+          title={disabled && disabledReason ? disabledReason : `Mode: ${current.label}`}
           aria-label="Thread mode"
         >
           <CurrentIcon size={13} strokeWidth={1.5} className="text-[var(--text-muted)]" />

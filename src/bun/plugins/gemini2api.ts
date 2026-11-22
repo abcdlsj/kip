@@ -119,6 +119,16 @@ export const gemini2apiPlugin: GatewayPlugin = {
       kind: "toggle",
       help: "Off: chats stay in the Gemini account so the context survives. On: nothing is kept in the account, and long conversations lose context because Google may close a temporary chat at any time.",
     },
+    {
+      name: "threadMode",
+      label: "New threads",
+      kind: "select",
+      options: [
+        { value: "chat", label: "Chat" },
+        { value: "agent", label: "Agent" },
+      ],
+      help: "Chat sends only the conversation: no tools, no system prompt, no workspace context. Agent runs the usual tool loop. The composer switches an empty thread either way.",
+    },
   ],
 
   async probe(values, context): Promise<PluginProbeOutcome> {

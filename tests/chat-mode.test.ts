@@ -9,6 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { KipOrchestrator } from "../src/bun/agent/pi-orchestrator";
 import { ModelRegistry } from "../src/bun/agent/model-registry";
+import { gemini2apiPlugin } from "../src/bun/plugins/gemini2api";
+import { chatModeSupport, resolveNewThreadMode, savePluginValues } from "../src/bun/plugins/registry";
 import { KIP_SYSTEM_PROMPT } from "../src/shared/constants";
 import { KipDatabase } from "../src/bun/storage/db";
 import { setApiKey } from "../src/bun/storage/keychain";
@@ -152,5 +154,25 @@ describe("Thread modes", () => {
     expect(typeof system?.content).toBe("string");
     expect((system?.content as string).startsWith(KIP_SYSTEM_PROMPT)).toBe(true);
     expect((request.tools ?? []).length).toBeGreaterThan(0);
+  });
+});
+
+describe("New thread defaults", () => {
+  test("a provider with the capability starts in its plugin's saved mode", () => {
+    expect(chatModeSupport(db)).toEqual([{ providerId: "gemini2api", defaultMode: "chat" }]);
+    expect(resolveNewThreadMode(db, "gemini2api")).toBe("chat");
+    expect(resolveNewThreadMode(db, "gemini2api", "agent")).toBe("agent");
+
+    savePluginValues(db, gemini2apiPlugin, { threadMode: "agent" });
+    expect(chatModeSupport(db)[0]?.defaultMode).toBe("agent");
+    expect(resolveNewThreadMode(db, "gemini2api")).toBe("agent");
+    // The composer can still override an empty thread either way.
+    expect(resolveNewThreadMode(db, "gemini2api", "chat")).toBe("chat");
+  });
+
+  test("providers without the capability never start in Chat", () => {
+    expect(resolveNewThreadMode(db, "openai")).toBe("agent");
+    // A stray Chat request cannot invent a capability the provider lacks.
+    expect(resolveNewThreadMode(db, "openai", "chat")).toBe("agent");
   });
 });

@@ -23,7 +23,7 @@ import { deleteApiKey, getApiKey, hasApiKey, setApiKey } from "./storage/keychai
 import type { ModelRegistry } from "./agent/model-registry";
 import { displayModelName, fetchRemoteModels } from "./agent/model-registry";
 import {
-  chatModeProviderIds,
+  chatModeSupport,
   findPlugin,
   getOrCreatePluginDeviceId,
   pluginSummaries,
@@ -323,9 +323,9 @@ async function createThread(deps: RpcDeps, input: CreateThreadInput): Promise<Th
     (deps.database.getSetting("defaultThinkingLevel", "medium") as ThinkingLevel);
   const chosenProvider = provider || defaults?.provider || "";
   const chosenModel = modelId || defaults?.modelId || "";
-  // Only a provider whose plugin offers chat threads starts there; an explicit
-  // Agent choice always wins.
-  const mode: ThreadMode = resolveNewThreadMode(chosenProvider, input.mode);
+  // Only a provider whose plugin offers chat threads has a choice; the plugin's
+  // saved default applies unless this thread asked for something else.
+  const mode: ThreadMode = resolveNewThreadMode(deps.database, chosenProvider, input.mode);
   const id = newId("th");
   const sessionDir = getSessionDir(workspace.id);
   const manager = SessionManager.create(workspace.rootPath, sessionDir, { id });
@@ -354,7 +354,7 @@ async function settingsSnapshot(deps: RpcDeps): Promise<SettingsSnapshot> {
     defaultProvider: deps.database.getSetting("defaultProvider", ""),
     defaultModelId: deps.database.getSetting("defaultModelId", ""),
     defaultThinkingLevel: deps.database.getSetting("defaultThinkingLevel", "medium"),
-    chatModeProviders: chatModeProviderIds(),
+    chatModeProviders: chatModeSupport(deps.database),
     sidebarCollapsed: deps.database.getSetting("sidebarCollapsed", false),
     configuredProviders: providers.filter((provider) => provider.hasApiKey).map((p) => p.id),
     availableModels: deps.registry.listAvailable(),
