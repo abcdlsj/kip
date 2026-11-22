@@ -91,14 +91,14 @@ describe("gemini2api gateway plugin", () => {
       expect(result.proposal?.models).toHaveLength(4);
       expect(result.proposal?.models[0]).toMatchObject({
         id: "gemini-model-1",
-        displayName: "Model 1",
+        displayName: "Gemini Model 1",
         contextWindow: 225_000,
         supportsVision: false,
         supportsReasoning: true,
       });
       expect(result.proposal?.models[1]).toMatchObject({
         id: "gemini-model-1-temp",
-        displayName: "Model 1 (temporary)",
+        displayName: "Gemini Model 1 (Temporary)",
       });
       expect(result.proposal?.apiKey).toBeUndefined();
       expect(gateway.minted).toHaveLength(0);

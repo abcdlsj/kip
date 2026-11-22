@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MARKETPLACE, MARKETPLACE_NOTICE, findMarketplaceEntry } from "../src/shared/marketplace";
 import { defaultPluginRegistry } from "../src/bun/plugins/registry";
+import { geminiModelName } from "../src/shared/plugins/gemini2api";
 import { KipDatabase } from "../src/bun/storage/db";
 import { gemini2apiPlugin, providerModelsFrom } from "../src/bun/plugins/gemini2api";
 import {
@@ -228,7 +229,7 @@ describe("gemini2api model list", () => {
       "gemini-b",
       "gemini-b-temp",
     ]);
-    expect(models[1]?.displayName).toBe("gemini-a (temporary)");
+    expect(models[1]?.displayName).toBe("Gemini A (Temporary)");
   });
 
   test("a listing that already carries temporary entries is not doubled", () => {
@@ -244,5 +245,31 @@ describe("gemini2api model list", () => {
     const models = providerModelsFrom([model("gemini-a"), model("gemini-a-temp")], health);
     expect(models.map((item) => item.id)).toEqual(["gemini-a", "gemini-a-temp"]);
     expect(new Set(models.map((item) => item.id)).size).toBe(models.length);
+  });
+});
+
+describe("gemini2api model names", () => {
+  test("SKUs read like the product, not like ids", () => {
+    expect(geminiModelName("gemini-neon")).toBe("Gemini Neon");
+    expect(geminiModelName("gemini-4-hydrogen")).toBe("Gemini 4 Hydrogen");
+    expect(geminiModelName("gemini-auto")).toBe("Gemini Auto");
+  });
+
+  test("temporary variants say so, however the server spells them", () => {
+    expect(geminiModelName("gemini-neon-temp")).toBe("Gemini Neon (Temporary)");
+    expect(geminiModelName("gemini-neon (temporary)")).toBe("Gemini Neon (Temporary)");
+    expect(geminiModelName("gemini-neon", true)).toBe("Gemini Neon (Temporary)");
+    expect(geminiModelName("gemini-4-hydrogen-temp")).toBe("Gemini 4 Hydrogen (Temporary)");
+  });
+
+  test("provider models carry the pretty name and its temporary twin", () => {
+    const models = providerModelsFrom(
+      [{ id: "gemini-4-hydrogen", gemini: {} }],
+      { server: "gemini2api" },
+    );
+    expect(models.map((model) => model.displayName)).toEqual([
+      "Gemini 4 Hydrogen",
+      "Gemini 4 Hydrogen (Temporary)",
+    ]);
   });
 });

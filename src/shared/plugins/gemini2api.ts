@@ -1,4 +1,30 @@
 /** The state and actions the gemini2api plugin page and its controller share. */
+const TEMPORARY_SUFFIX = /\s*\((?:temporary|temp)\)\s*$/i;
+const TEMPORARY_ID = /[-_](?:temp|temporary)$/i;
+
+/**
+ * The name a picker should show for a Gemini SKU: "gemini-4-neon" reads
+ * "Gemini 4 Neon", and a temporary variant says so in words.
+ */
+export function geminiModelName(raw: string, temporary?: boolean): string {
+  let name = (raw ?? "").trim();
+  let isTemporary = temporary === true;
+  if (TEMPORARY_SUFFIX.test(name)) {
+    isTemporary = true;
+    name = name.replace(TEMPORARY_SUFFIX, "");
+  }
+  if (TEMPORARY_ID.test(name)) {
+    isTemporary = true;
+    name = name.replace(TEMPORARY_ID, "");
+  }
+  const words = name
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((word) => (/^\d/.test(word) ? word : `${word[0]!.toUpperCase()}${word.slice(1)}`));
+  const pretty = words.join(" ") || name;
+  return isTemporary ? `${pretty} (Temporary)` : pretty;
+}
+
 export interface GeminiModel {
   id: string;
   displayName: string;

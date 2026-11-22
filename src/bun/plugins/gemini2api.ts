@@ -5,6 +5,7 @@
  * Everything here is plain HTTP against the server the user runs; nothing reaches Google.
  */
 import type { ProviderModel } from "../../shared/types";
+import { geminiModelName } from "../../shared/plugins/gemini2api";
 import type { GatewayPlugin, PluginProbeOutcome } from "./types";
 import { createGeminiPage } from "./gemini2api/page";
 import {
@@ -81,7 +82,7 @@ function toProviderModel(
   if (!id) return null;
   return {
     id,
-    displayName: model.gemini?.display_name?.trim() || id,
+    displayName: geminiModelName(id),
     contextWindow:
       model.context_window ||
       health.api?.context_window ||
@@ -118,7 +119,7 @@ export function providerModelsFrom(
       byId.set(temporary, {
         ...named,
         id: temporary,
-        displayName: `${named.displayName} (temporary)`,
+        displayName: geminiModelName(named.id, true),
       });
     }
   }

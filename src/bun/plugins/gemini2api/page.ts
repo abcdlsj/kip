@@ -6,6 +6,7 @@
  */
 import {
   GEMINI_HOMEPAGE,
+  geminiModelName,
   type GeminiAction,
   type GeminiHealth,
   type GeminiModel,
@@ -123,7 +124,7 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
         .filter((model) => !model.id!.endsWith("-temp"))
         .map((model) => ({
           id: model.id!,
-          displayName: model.gemini?.display_name || model.name || model.id!,
+          displayName: geminiModelName(model.id!, model.id!.endsWith("-temp")),
         }));
     } catch {
       return [];
