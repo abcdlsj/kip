@@ -126,6 +126,7 @@ export function createKipRpc(deps: RpcDeps) {
         }),
         setThreadModel: async ({ threadId, provider, modelId }) => {
           await deps.orchestrator.updateThreadModel(threadId, provider, modelId);
+          rememberModelChoice(deps, provider, modelId);
         },
         setThinkingLevel: ({ threadId, level }) => {
           deps.orchestrator.setThinkingLevel(threadId, level);
@@ -375,6 +376,17 @@ async function createThread(deps: RpcDeps, input: CreateThreadInput): Promise<Th
     approvalPolicy: input.approvalPolicy ?? null,
   });
   return thread;
+}
+
+/**
+ * Picking a model in any thread also makes it the default, so the next new
+ * thread starts where the last choice left off. Only models the registry still
+ * exposes are remembered; a deleted provider must not poison the default.
+ */
+function rememberModelChoice(deps: RpcDeps, provider: string, modelId: string): void {
+  if (!deps.registry.getModel(provider, modelId)) return;
+  deps.database.setSetting("defaultProvider", provider);
+  deps.database.setSetting("defaultModelId", modelId);
 }
 
 async function settingsSnapshot(deps: RpcDeps): Promise<SettingsSnapshot> {
