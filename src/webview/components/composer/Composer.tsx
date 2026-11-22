@@ -69,7 +69,16 @@ export function Composer() {
   const slashOpen = query !== null && dismissedSlash !== draft;
   // The mode only matters before the first message; afterwards the transcript decides.
   const threadIsEmpty = !activeThread || (view?.loaded === true && view.turns.length === 0);
-  const mode: ThreadMode = activeThread?.mode ?? draftMode ?? settings?.defaultThreadMode ?? "agent";
+  // Only a provider whose plugin offers chat threads shows the switch, and new
+  // threads for it start in Chat.
+  const canChooseMode = (settings?.chatModeProviders ?? []).includes(
+    activeThread?.modelProvider ?? settings?.defaultProvider ?? "",
+  );
+  const mode: ThreadMode = activeThread
+    ? activeThread.mode
+    : canChooseMode
+      ? (draftMode ?? "chat")
+      : "agent";
   const commands = slashOpen ? matchCommands(query, Boolean(activeThreadId), mode) : [];
 
   useEffect(() => {
@@ -444,7 +453,7 @@ export function Composer() {
           />
           <div className="mt-1 flex h-7 items-center gap-1">
             <ModelSelector />
-            {threadIsEmpty && (
+            {threadIsEmpty && canChooseMode && (
               <ModeSelector
                 mode={mode}
                 disabled={running}

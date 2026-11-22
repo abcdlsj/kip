@@ -52,6 +52,13 @@ export interface GatewayPlugin {
   description: string;
   /** The provider record this plugin owns; its key is fetched from the keychain by this id. */
   providerId: string;
+  /**
+   * Offers Chat threads for this provider: a switch in the composer, plus a
+   * chat-by-default mode for new threads. The capability lives in the core; only
+   * a plugin that opts in gets the switch, because it only makes sense where the
+   * conversation is the product.
+   */
+  chatThreads?: boolean;
   fields: PluginField[];
   probe(
     values: Record<string, string>,

@@ -25,7 +25,6 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
   defaultProvider: "",
   defaultModelId: "",
   defaultThinkingLevel: "medium",
-  defaultThreadMode: "agent",
   sidebarCollapsed: false,
 };
 

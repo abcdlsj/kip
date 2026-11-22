@@ -4,7 +4,7 @@
  * whatever fields and toggles each plugin declares without view edits.
  */
 import type { KipDatabase } from "../storage/db";
-import type { PluginSummary } from "../../shared/types";
+import type { PluginSummary, ThreadMode } from "../../shared/types";
 import { gemini2apiPlugin } from "./gemini2api";
 import type { KipPlugin, TitleGenerationInput, TitlePlugin } from "./types";
 import { warrenTitlePlugin } from "./warren-title";
@@ -65,6 +65,33 @@ export function listPlugins(): KipPlugin[] {
 
 export function findPlugin(id: string): KipPlugin | undefined {
   return defaultPluginRegistry.find(id);
+}
+
+/**
+ * Providers whose plugin offers Chat threads. Every other provider only ever
+ * creates agent threads, and the composer hides the switch for them.
+ */
+export function chatModeProviderIds(): string[] {
+  return defaultPluginRegistry
+    .list()
+    .filter(
+      (plugin): plugin is Extract<KipPlugin, { kind: "gateway" }> =>
+        plugin.kind === "gateway" && plugin.chatThreads === true,
+    )
+    .map((plugin) => plugin.providerId);
+}
+
+/**
+ * The mode a new thread starts in: Chat where the provider offers it, Agent
+ * everywhere else. An explicit Agent choice always wins; asking for Chat from a
+ * provider without the capability falls back to Agent instead of inventing it.
+ */
+export function resolveNewThreadMode(
+  providerId: string,
+  requested?: ThreadMode,
+): ThreadMode {
+  if (requested === "agent") return "agent";
+  return chatModeProviderIds().includes(providerId) ? "chat" : "agent";
 }
 
 export function isPluginEnabled(database: KipDatabase, plugin: KipPlugin): boolean {

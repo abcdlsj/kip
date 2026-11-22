@@ -23,9 +23,11 @@ import { deleteApiKey, getApiKey, hasApiKey, setApiKey } from "./storage/keychai
 import type { ModelRegistry } from "./agent/model-registry";
 import { displayModelName, fetchRemoteModels } from "./agent/model-registry";
 import {
+  chatModeProviderIds,
   findPlugin,
   getOrCreatePluginDeviceId,
   pluginSummaries,
+  resolveNewThreadMode,
   savePluginValues,
   setPluginEnabled,
   toPluginSummary,
@@ -321,6 +323,9 @@ async function createThread(deps: RpcDeps, input: CreateThreadInput): Promise<Th
     (deps.database.getSetting("defaultThinkingLevel", "medium") as ThinkingLevel);
   const chosenProvider = provider || defaults?.provider || "";
   const chosenModel = modelId || defaults?.modelId || "";
+  // Only a provider whose plugin offers chat threads starts there; an explicit
+  // Agent choice always wins.
+  const mode: ThreadMode = resolveNewThreadMode(chosenProvider, input.mode);
   const id = newId("th");
   const sessionDir = getSessionDir(workspace.id);
   const manager = SessionManager.create(workspace.rootPath, sessionDir, { id });
@@ -334,7 +339,7 @@ async function createThread(deps: RpcDeps, input: CreateThreadInput): Promise<Th
     modelProvider: chosenProvider,
     modelId: chosenModel,
     thinkingLevel,
-    mode: input.mode ?? (deps.database.getSetting("defaultThreadMode", "agent") as ThreadMode),
+    mode,
     approvalPolicy: input.approvalPolicy ?? null,
   });
   return thread;
@@ -349,7 +354,7 @@ async function settingsSnapshot(deps: RpcDeps): Promise<SettingsSnapshot> {
     defaultProvider: deps.database.getSetting("defaultProvider", ""),
     defaultModelId: deps.database.getSetting("defaultModelId", ""),
     defaultThinkingLevel: deps.database.getSetting("defaultThinkingLevel", "medium"),
-    defaultThreadMode: deps.database.getSetting("defaultThreadMode", "agent"),
+    chatModeProviders: chatModeProviderIds(),
     sidebarCollapsed: deps.database.getSetting("sidebarCollapsed", false),
     configuredProviders: providers.filter((provider) => provider.hasApiKey).map((p) => p.id),
     availableModels: deps.registry.listAvailable(),

@@ -45,7 +45,6 @@ export interface UpdateSettingsInput {
   defaultProvider?: string;
   defaultModelId?: string;
   defaultThinkingLevel?: ThinkingLevel;
-  defaultThreadMode?: ThreadMode;
   sidebarCollapsed?: boolean;
 }
 

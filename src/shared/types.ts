@@ -184,8 +184,8 @@ export interface SettingsSnapshot {
   defaultProvider: string;
   defaultModelId: string;
   defaultThinkingLevel: ThinkingLevel;
-  /** Mode new threads start in; existing threads keep their own. */
-  defaultThreadMode: ThreadMode;
+  /** Providers whose plugin offers Chat threads; the composer shows the mode switch only for them. */
+  chatModeProviders: string[];
   sidebarCollapsed: boolean;
   configuredProviders: string[];
   availableModels: ModelOption[];

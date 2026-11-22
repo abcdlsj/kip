@@ -101,6 +101,8 @@ export const gemini2apiPlugin: GatewayPlugin = {
   description:
     "The Gemini web app behind an OpenAI-compatible API. Runs on this machine; Kip finds it, reads its models, and mints a key of its own.",
   providerId: PROVIDER_ID,
+  // Gemini web answers one prompt at a time, so a chat thread is the useful shape.
+  chatThreads: true,
   fields: [
     { name: "host", label: "Host", kind: "text", placeholder: DEFAULT_HOST },
     { name: "port", label: "Port", kind: "port", placeholder: DEFAULT_PORT },

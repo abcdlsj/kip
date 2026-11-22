@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { gemini2apiPlugin } from "../src/bun/plugins/gemini2api";
+import { chatModeProviderIds, resolveNewThreadMode } from "../src/bun/plugins/registry";
 
 interface GatewayOptions {
   server?: string;
@@ -209,5 +210,21 @@ describe("gemini2api temporary chats", () => {
     } finally {
       gateway.server.stop(true);
     }
+  });
+});
+
+describe("Chat threads capability", () => {
+  test("only gemini2api opts in, and its threads start in Chat", () => {
+    expect(chatModeProviderIds()).toEqual(["gemini2api"]);
+    expect(gemini2apiPlugin.chatThreads).toBe(true);
+    expect(resolveNewThreadMode("gemini2api")).toBe("chat");
+    expect(resolveNewThreadMode("gemini2api", "agent")).toBe("agent");
+  });
+
+  test("other providers never start in Chat", () => {
+    expect(chatModeProviderIds()).not.toContain("openai");
+    expect(resolveNewThreadMode("openai")).toBe("agent");
+    // A stray Chat request cannot invent a capability the provider lacks.
+    expect(resolveNewThreadMode("openai", "chat")).toBe("agent");
   });
 });

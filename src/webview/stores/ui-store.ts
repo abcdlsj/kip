@@ -6,7 +6,6 @@ import type {
   SettingsSnapshot,
   ThemeMode,
   ThinkingLevel,
-  ThreadMode,
   UpdateStatus,
 } from "../../shared/types";
 import { request } from "../rpc-client";
@@ -36,7 +35,6 @@ interface UiState {
   setTheme: (theme: ThemeMode) => Promise<void>;
   setApprovalPolicy: (policy: ApprovalPolicy) => Promise<void>;
   setDefaultThinking: (level: ThinkingLevel) => Promise<void>;
-  setDefaultThreadMode: (mode: ThreadMode) => Promise<void>;
   toggleSidebar: () => Promise<void>;
   openSettings: (tab?: SettingsTab) => void;
   closeSettings: () => void;
@@ -133,11 +131,6 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   setDefaultThinking: async (defaultThinkingLevel) => {
     const settings = await request("updateSettings", { defaultThinkingLevel });
-    set({ settings });
-  },
-
-  setDefaultThreadMode: async (defaultThreadMode) => {
-    const settings = await request("updateSettings", { defaultThreadMode });
     set({ settings });
   },
 
