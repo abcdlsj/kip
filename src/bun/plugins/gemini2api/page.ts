@@ -51,7 +51,11 @@ function hintFor(message: string): string | null {
   return null;
 }
 
-export function createGeminiPage(context: PluginPageContext): PluginPageController {
+export function createGeminiPage(
+  context: PluginPageContext,
+  /** Called after this window brings the managed gateway up, so the idle countdown starts. */
+  onAwake?: () => void,
+): PluginPageController {
   const { dataDir } = context;
   const values = () => context.values();
   let busy: string | null = null;
@@ -190,6 +194,7 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
             }
           }
           await service.ensureRunning(dataDir, values());
+          onAwake?.();
           break;
         }
         case "stop": {
@@ -208,7 +213,10 @@ export function createGeminiPage(context: PluginPageContext): PluginPageControll
         }
         case "import-cookies": {
           service.importFirefoxCookies(dataDir);
-          if (service.status(dataDir, values()).running) await service.restart(dataDir, values());
+          if (service.status(dataDir, values()).running) {
+            await service.restart(dataDir, values());
+            onAwake?.();
+          }
           break;
         }
         case "refresh":

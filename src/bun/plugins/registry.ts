@@ -10,7 +10,13 @@ import { join } from "node:path";
 import type { MarketplaceEntry, PluginSummary, ThreadMode } from "../../shared/types";
 import { findMarketplaceEntry } from "../../shared/marketplace";
 import { gemini2apiPlugin } from "./gemini2api";
-import type { KipPlugin, GatewayPlugin, TitleGenerationInput, TitlePlugin } from "./types";
+import type {
+  KipPlugin,
+  GatewayPlugin,
+  PluginRuntimeContext,
+  TitleGenerationInput,
+  TitlePlugin,
+} from "./types";
 import { warrenTitlePlugin } from "./warren-title";
 
 /** Saved values live under `plugin.<plugin>.<field>`. */
@@ -259,6 +265,62 @@ export async function generateTitleWithPlugins(
     }
   }
   return null;
+}
+
+/** The context a plugin's own code needs: its directory and its saved values. */
+export function pluginRuntime(
+  plugin: GatewayPlugin,
+  database: KipDatabase,
+): PluginRuntimeContext {
+  return {
+    pluginId: plugin.id,
+    dataDir: pluginDataDir(plugin.id),
+    values: () => readPluginValues(database, plugin),
+  };
+}
+
+function gatewayFor(providerId: string): GatewayPlugin | undefined {
+  return defaultPluginRegistry
+    .list()
+    .find(
+      (plugin): plugin is GatewayPlugin =>
+        plugin.kind === "gateway" && plugin.providerId === providerId,
+    );
+}
+
+/**
+ * Prepares a provider's gateway before a run reaches it. A plugin that cannot
+ * get its service up throws, so the run fails with the reason instead of a
+ * connection reset from a process that is not there.
+ */
+export async function beforeGatewayRequest(
+  database: KipDatabase,
+  providerId: string,
+): Promise<void> {
+  const plugin = gatewayFor(providerId);
+  if (!plugin?.beforeRequest || !isPluginAccepted(database, plugin)) return;
+  await plugin.beforeRequest(pluginRuntime(plugin, database));
+}
+
+/** The run ended, so the gateway may count itself idle from now on. */
+export function afterGatewayRequest(database: KipDatabase, providerId: string): void {
+  const plugin = gatewayFor(providerId);
+  if (!plugin?.afterRequest) return;
+  try {
+    plugin.afterRequest(pluginRuntime(plugin, database));
+  } catch (error) {
+    console.error(`Plugin ${plugin.id}: afterRequest failed`, error);
+  }
+}
+
+/** The user saved this plugin's form; let it re-read what it copied out. */
+export function notifyGatewaySettings(database: KipDatabase, plugin: KipPlugin): void {
+  if (plugin.kind !== "gateway" || !plugin.settingsChanged) return;
+  try {
+    plugin.settingsChanged(pluginRuntime(plugin, database));
+  } catch (error) {
+    console.error(`Plugin ${plugin.id}: settingsChanged failed`, error);
+  }
 }
 
 /**

@@ -6,13 +6,16 @@
  */
 import type { ProviderModel } from "../../shared/types";
 import { geminiModelName } from "../../shared/plugins/gemini2api";
-import type { GatewayPlugin, PluginProbeOutcome } from "./types";
+import type { GatewayPlugin, PluginProbeOutcome, PluginRuntimeContext } from "./types";
 import { createGeminiPage } from "./gemini2api/page";
+import { IdleGuard } from "./gemini2api/idle";
 import {
   apiKey,
   ensureRunning,
   health as readHealth,
+  log as logLine,
   resolveBinary,
+  status as serviceStatus,
   stop,
   type HealthBody,
 } from "./gemini2api/service";
@@ -25,6 +28,10 @@ const TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_OUTPUT = 65_536;
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 const PROVIDER_ID = "gemini2api";
+/** What the gateway leaves idle before it is stopped, in minutes. */
+const DEFAULT_IDLE_MINUTES = 120;
+/** Below this a pause would land in the middle of a run that is still starting. */
+const MIN_IDLE_MINUTES = 5;
 
 interface RemoteModel {
   id?: string;
@@ -73,6 +80,43 @@ function describe(error: unknown): string {
   }
   return String(error);
 }
+
+/** The port a managed instance should use, or null when the target is not loopback. */
+function managedPort(values: Record<string, string>): number | null {
+  const host = (values.host ?? "").trim() || DEFAULT_HOST;
+  if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1") return null;
+  const port = Number((values.port ?? "").trim() || DEFAULT_PORT);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) return null;
+  return port;
+}
+
+function idleMinutes(values: Record<string, string>): number {
+  const parsed = Number((values.idlePauseMinutes ?? "").trim());
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_IDLE_MINUTES;
+  return Math.max(MIN_IDLE_MINUTES, Math.round(parsed));
+}
+
+/**
+ * The plugin's own service state, held across page opens: the countdown has to
+ * survive the window being closed and keeps running while Kip is in the background.
+ */
+let idleContext: PluginRuntimeContext | null = null;
+/** Runs currently pointed at this provider; a pause waits for the last one to end. */
+let inflight = 0;
+
+const idle = new IdleGuard({
+  delayMs: () => {
+    const values = idleContext?.values() ?? {};
+    if ((values.idlePause ?? "").trim() !== "true") return null;
+    return idleMinutes(values) * 60_000;
+  },
+  busy: () => inflight > 0,
+  running: () =>
+    idleContext !== null &&
+    serviceStatus(idleContext.dataDir, idleContext.values()).running,
+  pause: () => stop(),
+  log: (line) => logLine(line),
+});
 
 function toProviderModel(
   model: RemoteModel,
@@ -142,21 +186,46 @@ export const gemini2apiPlugin: GatewayPlugin = {
     width: 780,
     height: 660,
   },
-  page: createGeminiPage,
+  page: (context) => createGeminiPage(context, () => idle.touch()),
   // Kip restarts the gateway at boot, so a provider saved earlier keeps working.
-  start: async ({ dataDir, values }) => {
-    const current = values();
-    if (!resolveBinary(dataDir, current)) return;
-    const host = (current.host ?? "").trim() || DEFAULT_HOST;
-    if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1") return;
-    const portText = (current.port ?? "").trim() || DEFAULT_PORT;
-    const port = Number(portText);
-    if (!Number.isInteger(port) || port < 1 || port > 65_535) return;
-    const key = (await getApiKey(PROVIDER_ID)) ?? apiKey(dataDir);
-    if (await readHealth(port, key)) return;
-    await ensureRunning(dataDir, current);
+  start: async (context) => {
+    idleContext = context;
+    const current = context.values();
+    if (!resolveBinary(context.dataDir, current)) return;
+    const port = managedPort(current);
+    if (port === null) return;
+    const key = (await getApiKey(PROVIDER_ID)) ?? apiKey(context.dataDir);
+    if (!(await readHealth(port, key))) await ensureRunning(context.dataDir, current);
+    idle.touch();
   },
-  dispose: () => stop(),
+  dispose: () => {
+    idle.cancel();
+    return stop();
+  },
+  /** Coming back from an idle pause happens here, before the first request goes out. */
+  beforeRequest: async (context) => {
+    idleContext = context;
+    inflight += 1;
+    try {
+      const values = context.values();
+      if (serviceStatus(context.dataDir, values).running) return;
+      const port = managedPort(values);
+      if (port === null || !resolveBinary(context.dataDir, values)) return;
+      const key = (await getApiKey(PROVIDER_ID)) ?? apiKey(context.dataDir);
+      if (await readHealth(port, key)) return;
+      await ensureRunning(context.dataDir, values);
+    } finally {
+      idle.touch();
+    }
+  },
+  afterRequest: () => {
+    inflight = Math.max(0, inflight - 1);
+    idle.touch();
+  },
+  settingsChanged: (context) => {
+    idleContext = context;
+    idle.touch();
+  },
   fields: [
     { name: "host", label: "Host", kind: "text", placeholder: DEFAULT_HOST },
     { name: "port", label: "Port", kind: "port", placeholder: DEFAULT_PORT },
@@ -182,6 +251,19 @@ export const gemini2apiPlugin: GatewayPlugin = {
       help: "Use a build you already have instead of the downloaded one. Leave empty to let Kip install it.",
     },
     {
+      name: "idlePause",
+      label: "Pause when idle",
+      kind: "toggle",
+      help: "Stop the gateway after it has been unused for a while, and start it again on the next run. Both are silent; the first run after a pause waits for the gateway to come up.",
+    },
+    {
+      name: "idlePauseMinutes",
+      label: "Idle minutes",
+      kind: "text",
+      placeholder: String(DEFAULT_IDLE_MINUTES),
+      help: `Only used while pausing is on. Everything below ${MIN_IDLE_MINUTES} is treated as ${MIN_IDLE_MINUTES}.`,
+    },
+    {
       name: "threadMode",
       label: "New threads",
       kind: "select",
@@ -194,6 +276,12 @@ export const gemini2apiPlugin: GatewayPlugin = {
   ],
 
   async probe(values, context): Promise<PluginProbeOutcome> {
+    // A window or a Detect can start the gateway without a run following; the
+    // countdown needs to know about it either way.
+    if (context.dataDir) {
+      const dataDir = context.dataDir;
+      idleContext = { pluginId: "gemini2api", dataDir, values: () => values };
+    }
     const host = (values.host ?? "").trim() || DEFAULT_HOST;
     const portText = (values.port ?? "").trim() || DEFAULT_PORT;
     const port = Number(portText);
@@ -227,6 +315,7 @@ export const gemini2apiPlugin: GatewayPlugin = {
         root = `http://127.0.0.1:${managed.port}`;
         managedKey = managed.key;
         health = await readHealth(managed.port, managed.key);
+        idle.touch();
       } catch (error) {
         return {
           ok: false,

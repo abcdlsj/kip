@@ -24,6 +24,9 @@ const MANIFEST_URL = "https://github.com/abcdlsj/gemini2api/releases/latest/down
 // Google may take tens of seconds to hand out a session on a cold start.
 const START_TIMEOUT_MS = 90_000;
 const LOG_LIMIT = 200;
+/** Two seconds of retries: a process that was just asked to stop needs a moment. */
+const PORT_ATTEMPTS = 8;
+const PORT_RETRY_MS = 250;
 
 export interface SidecarArtifact {
   file: string;
@@ -73,7 +76,8 @@ export function setLogListener(listener: (() => void) | null): void {
   logListener = listener;
 }
 
-function log(line: string): void {
+/** Also the channel the plugin uses to explain an idle pause in the same place. */
+export function log(line: string): void {
   const stamped = `${new Date().toISOString().slice(11, 19)} ${line}`;
   logs.push(stamped);
   if (logs.length > LOG_LIMIT) logs.splice(0, logs.length - LOG_LIMIT);
@@ -233,16 +237,32 @@ function bindPort(port: number): number | null {
 
 /**
  * A free loopback port. The configured one is preferred so that a provider Kip
- * already saved keeps pointing at the same URL after a restart.
+ * already saved keeps pointing at the same URL after a restart, and it is the
+ * only port this function will hand out when one is configured: a random port
+ * would leave the saved provider pointing at nothing.
  */
 export async function findFreePort(preferred?: number): Promise<number> {
-  if (preferred) {
-    const bound = bindPort(preferred);
-    if (bound !== null) return bound;
-  }
+  if (preferred) return await reservePreferred(preferred);
   const bound = bindPort(0);
   if (bound === null) throw new Error("Could not reserve a loopback port");
   return bound;
+}
+
+/**
+ * Waits for a port a previous instance has just let go of, then reports who is
+ * in the way rather than silently moving the gateway somewhere else.
+ */
+async function reservePreferred(port: number): Promise<number> {
+  for (let attempt = 0; attempt < PORT_ATTEMPTS; attempt++) {
+    const bound = bindPort(port);
+    if (bound !== null) return bound;
+    if (attempt === 0) log(`port ${port} is in use; waiting for it to be released`);
+    await Bun.sleep(PORT_RETRY_MS);
+  }
+  throw new Error(
+    `Could not open port ${port}: it is in use, or this machine does not allow it. ` +
+      "Free it, or pick another port in the plugin settings.",
+  );
 }
 
 function stateFile(dataDir: string): string {

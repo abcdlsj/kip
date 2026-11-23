@@ -14,7 +14,12 @@ import { applyWindowsDpiAwareness } from "./system/windows-dpi";
 import { UpdateChecker } from "./system/update-checker";
 import { createUpdateInstaller } from "./system/update-installer";
 import { PluginWindows } from "./plugins/windows";
-import { disposePlugins, startPlugins } from "./plugins/registry";
+import {
+  disposePlugins,
+  startPlugins,
+  afterGatewayRequest,
+  beforeGatewayRequest,
+} from "./plugins/registry";
 
 // Must run before the first window exists, so it cannot move below.
 applyWindowsDpiAwareness();
@@ -33,9 +38,20 @@ const database = new KipDatabase();
 const registry = await ModelRegistry.create(database);
 
 const streamHolder: { send: (payload: AgentStreamEnvelope) => void } = { send: () => {} };
-const orchestrator = new KipOrchestrator(database, registry, (threadId, event) => {
-  streamHolder.send({ threadId, event });
-});
+const orchestrator = new KipOrchestrator(
+  database,
+  registry,
+  (threadId, event) => {
+    streamHolder.send({ threadId, event });
+  },
+  {
+    // A local gateway can stop itself when unused and come back on the next run.
+    providerActivity: {
+      before: (providerId) => beforeGatewayRequest(database, providerId),
+      after: (providerId) => afterGatewayRequest(database, providerId),
+    },
+  },
+);
 
 const windowRef: { current: BrowserWindow | null } = { current: null };
 const updateChecker = new UpdateChecker({

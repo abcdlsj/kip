@@ -10,6 +10,7 @@ import { join } from "node:path";
 import {
   apiKey,
   ensureRunning,
+  findFreePort,
   health,
   preferredPort,
   refreshSavedCookiesFromCache,
@@ -19,6 +20,7 @@ import {
   stop,
 } from "../src/bun/plugins/gemini2api/service";
 import { createGeminiPage } from "../src/bun/plugins/gemini2api/page";
+import { gemini2apiPlugin } from "../src/bun/plugins/gemini2api";
 import { getApiKey, setApiKey } from "../src/bun/storage/keychain";
 
 let dir = "";
@@ -34,6 +36,17 @@ afterEach(async () => {
   delete process.env.KIP_KEYCHAIN;
   rmSync(dir, { recursive: true, force: true });
 });
+
+/**
+ * A port nobody holds. The configured port is honoured exactly now, so a test
+ * that wants the sidecar up has to hand it one that is free.
+ */
+function freePort(): number {
+  const held = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("") });
+  const port = held.port as number;
+  held.stop(true);
+  return port;
+}
 
 /** A stand-in for the frozen binary: same env contract, same two endpoints. */
 function stubBinary(): string {
@@ -95,7 +108,10 @@ describe("gemini2api sidecar", () => {
       });
       const binary = stubBinary();
 
-      const started = await ensureRunning(dataDir, { binaryPath: binary });
+      const started = await ensureRunning(dataDir, {
+        binaryPath: binary,
+        port: String(freePort()),
+      });
       try {
         expect(started.port).toBeGreaterThan(0);
         expect(started.key).toBe(apiKey(dataDir));
@@ -134,6 +150,17 @@ describe("gemini2api sidecar", () => {
     expect(preferredPort({ port: "nope" })).toBe(8790);
   });
 
+  test("refuses to move to another port when the configured one is taken", async () => {
+    // A saved provider points at the configured port: a random one would leave it
+    // pointing at nothing, so this has to fail loudly instead.
+    const held = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("") });
+    try {
+      await expect(findFreePort(held.port)).rejects.toThrow(/Could not open port \d+/);
+    } finally {
+      held.stop(true);
+    }
+  }, 10_000);
+
   test("a managed instance adopts the key Kip already holds for the provider", async () => {
     if (process.platform === "win32") return;
     await setApiKey("gemini2api", "stored-key");
@@ -143,7 +170,10 @@ describe("gemini2api sidecar", () => {
       cookies: { "__Secure-1PSID": "psid", "__Secure-1PSIDTS": "psidts" },
     });
 
-    const started = await ensureRunning(dataDir, { binaryPath: stubBinary() });
+    const started = await ensureRunning(dataDir, {
+      binaryPath: stubBinary(),
+      port: String(freePort()),
+    });
     try {
       expect(started.key).toBe("stored-key");
       expect(await getApiKey("gemini2api")).toBe("stored-key");
@@ -193,7 +223,9 @@ describe("gemini2api sidecar", () => {
       writeFileSync(crasher, "#!/bin/sh\necho 'boom on startup' >&2\nexit 2\n", { mode: 0o755 });
 
       const startedAt = Date.now();
-      await expect(ensureRunning(dataDir, { binaryPath: crasher })).rejects.toThrow(
+      await expect(
+        ensureRunning(dataDir, { binaryPath: crasher, port: String(freePort()) }),
+      ).rejects.toThrow(
         /exited during startup \(code 2\).*boom on startup/,
       );
       expect(Date.now() - startedAt).toBeLessThan(5_000);
@@ -210,9 +242,10 @@ describe("gemini2api sidecar", () => {
       });
       const binary = stubBinary();
 
+      const values = { binaryPath: binary, port: String(freePort()) };
       const [first, second] = await Promise.all([
-        ensureRunning(dataDir, { binaryPath: binary }),
-        ensureRunning(dataDir, { binaryPath: binary }),
+        ensureRunning(dataDir, values),
+        ensureRunning(dataDir, values),
       ]);
       expect(first.port).toBe(second.port);
       expect(first.key).toBe(second.key);
@@ -288,10 +321,11 @@ describe("gemini2api window", () => {
     );
 
     if (process.platform === "win32") return;
+    const port = String(freePort());
     const controller = createGeminiPage({
       pluginId: "gemini2api",
       dataDir,
-      values: () => ({ binaryPath: fakeBinary, host: "127.0.0.1", port: "1" }),
+      values: () => ({ binaryPath: fakeBinary, host: "127.0.0.1", port }),
       emit: () => {},
     });
     try {
@@ -308,6 +342,47 @@ describe("gemini2api window", () => {
   });
 });
 
+describe("gemini2api idle pause", () => {
+  test.skipIf(process.platform === "win32")(
+    "a run brings the gateway back after it was paused, without asking",
+    async () => {
+      const dataDir = join(dir, "plugin-wake");
+      saveCookies(dataDir, {
+        profile: "/tmp/firefox",
+        cookies: { "__Secure-1PSID": "psid", "__Secure-1PSIDTS": "psidts" },
+      });
+      const port = String(freePort());
+      const context = {
+        pluginId: "gemini2api",
+        dataDir,
+        values: () => ({
+          binaryPath: stubBinary(),
+          host: "127.0.0.1",
+          port,
+          idlePause: "true",
+          idlePauseMinutes: "120",
+        }),
+      };
+
+      await gemini2apiPlugin.start?.(context);
+      expect(status(dataDir, context.values()).running).toBe(true);
+
+      // What the idle guard does once the countdown runs out.
+      await stop();
+      expect(status(dataDir, context.values()).running).toBe(false);
+
+      await gemini2apiPlugin.beforeRequest?.(context);
+      try {
+        expect(status(dataDir, context.values()).running).toBe(true);
+        expect((await health(Number(port), apiKey(dataDir)))?.server).toBe("gemini2api");
+      } finally {
+        gemini2apiPlugin.afterRequest?.(context);
+        await stop();
+      }
+    },
+  );
+});
+
 describe("gemini2api process tree", () => {
   test.skipIf(process.platform === "win32")(
     "Stop ends the child process too, not just the launcher",
@@ -318,7 +393,10 @@ describe("gemini2api process tree", () => {
         cookies: { "__Secure-1PSID": "psid", "__Secure-1PSIDTS": "psidts" },
       });
       const binary = stubBinary();
-      const started = await ensureRunning(dataDir, { binaryPath: binary });
+      const started = await ensureRunning(dataDir, {
+        binaryPath: binary,
+        port: String(freePort()),
+      });
       expect((await health(started.port, started.key))?.server).toBe("gemini2api");
 
       await stop();

@@ -50,12 +50,24 @@ import {
 import { summarizeToolCall } from "./tool-policy";
 import { generateTitleWithPlugins } from "../plugins/registry";
 
+export interface ProviderActivityHooks {
+  /** Called before a run sends its first request to this provider. */
+  before?(providerId: string): Promise<void> | void;
+  /** Called when that run ends, whether it worked or not. */
+  after?(providerId: string): void;
+}
+
 export interface OrchestratorOptions {
   toolRegistry?: ToolRegistry;
   contextBuilder?: ContextBuilder;
   hooks?: ToolHook[];
   /** Maximum number of idle sessions retained in memory before LRU eviction. */
   maxIdleSessions?: number;
+  /**
+   * Told around every run that reaches a provider, so a plugin can start its
+   * service on demand and let it idle out afterwards.
+   */
+  providerActivity?: ProviderActivityHooks;
 }
 
 const DEFAULT_MAX_IDLE_SESSIONS = 12;
@@ -114,6 +126,7 @@ export class KipOrchestrator {
   readonly contextBuilder: ContextBuilder;
   private readonly hooks: ToolHook[];
   private readonly maxIdleSessions: number;
+  private readonly providerActivity: ProviderActivityHooks;
 
   constructor(
     private readonly database: KipDatabase,
@@ -125,6 +138,7 @@ export class KipOrchestrator {
     this.contextBuilder = options.contextBuilder ?? new ContextBuilder();
     this.hooks = options.hooks ?? [];
     this.maxIdleSessions = options.maxIdleSessions ?? DEFAULT_MAX_IDLE_SESSIONS;
+    this.providerActivity = options.providerActivity ?? {};
   }
 
   runningThreadIds(): string[] {
@@ -221,6 +235,8 @@ export class KipOrchestrator {
       : snapshotTree(workspace.rootPath).catch(() => null);
 
     try {
+      // A gateway paused for idleness comes back here, before the first request.
+      await this.providerActivity.before?.(thread.modelProvider);
       await active.session.prompt(promptText, images.length ? { images } : undefined);
     } catch (error) {
       active.running = false;
@@ -230,6 +246,7 @@ export class KipOrchestrator {
         message: error instanceof Error ? error.message : "The agent run failed",
       });
     } finally {
+      this.providerActivity.after?.(thread.modelProvider);
       active.buffer.flush();
       active.running = false;
       // A failed run may never settle; still record what it changed.
@@ -372,7 +389,13 @@ export class KipOrchestrator {
 
   async compact(threadId: string): Promise<ContextUsage> {
     const active = await this.ensureSession(threadId);
-    await active.session.compact();
+    const thread = this.requireThread(threadId);
+    try {
+      await this.providerActivity.before?.(thread.modelProvider);
+      await active.session.compact();
+    } finally {
+      this.providerActivity.after?.(thread.modelProvider);
+    }
     return toSharedUsage(active.session.getContextUsage());
   }
 

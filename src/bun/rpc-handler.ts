@@ -28,6 +28,8 @@ import {
   findPlugin,
   getOrCreatePluginDeviceId,
   isPluginAccepted,
+  notifyGatewaySettings,
+  beforeGatewayRequest,
   pluginDataDir,
   pluginSummaries,
   resolveNewThreadMode,
@@ -211,7 +213,11 @@ export function createKipRpc(deps: RpcDeps) {
           deps.database.deleteProvider(provider);
           deps.registry.removeProvider(provider);
         },
-        testProvider: ({ provider }) => deps.registry.testProvider(provider),
+        testProvider: async ({ provider }) => {
+          // Testing a paused gateway is a use of it: bring it up first.
+          await beforeGatewayRequest(deps.database, provider);
+          return deps.registry.testProvider(provider);
+        },
         fetchProviderModels: ({ baseUrl, apiKey }) =>
           fetchRemoteModels(baseUrl, apiKey ?? undefined),
         listPlugins: async () => pluginSummaries(deps.database),
@@ -240,6 +246,7 @@ export function createKipRpc(deps: RpcDeps) {
           }
           if (values) {
             savePluginValues(deps.database, plugin, values);
+            notifyGatewaySettings(deps.database, plugin);
           }
           return toPluginSummary(deps.database, plugin);
         },
@@ -284,6 +291,7 @@ export function createKipRpc(deps: RpcDeps) {
           await deps.registry.addOrUpdateProvider(withKey, apiKey);
           await ensureDefaultProvider(deps, record);
           savePluginValues(deps.database, plugin, values);
+          notifyGatewaySettings(deps.database, plugin);
 
           const { proposal: _proposal, ...result } = outcome;
           return { ...result, provider: withKey };

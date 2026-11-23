@@ -111,6 +111,16 @@ export interface GatewayPlugin {
   start?(context: PluginRuntimeContext): void | Promise<void>;
   /** Called on app shutdown so plugins that started background processes can stop them. */
   dispose?(): void | Promise<void>;
+  /**
+   * Called before a run sends anything to this provider, for a plugin whose
+   * service may have been stopped while it was unused. Throwing here fails the
+   * run with the reason instead of a bare connection error.
+   */
+  beforeRequest?(context: PluginRuntimeContext): void | Promise<void>;
+  /** Called when that run ends, whether it worked or not. */
+  afterRequest?(context: PluginRuntimeContext): void;
+  /** Called after the user saves this plugin's form, so copied-out settings can be re-read. */
+  settingsChanged?(context: PluginRuntimeContext): void;
   probe(
     values: Record<string, string>,
     context: PluginProbeContext,
