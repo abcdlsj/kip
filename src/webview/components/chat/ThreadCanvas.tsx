@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowDown, ArrowUpRight, Plus } from "lucide-react";
 import type { Workspace } from "../../../shared/types";
@@ -17,8 +23,14 @@ interface ThreadCanvasProps {
   onScrolled?: (scrolled: boolean) => void;
 }
 
-export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasProps) {
-  const view = useChatStore((state) => (threadId ? state.threads[threadId] : undefined));
+export function ThreadCanvas({
+  threadId,
+  workspace,
+  onScrolled,
+}: ThreadCanvasProps) {
+  const view = useChatStore((state) =>
+    threadId ? state.threads[threadId] : undefined,
+  );
   const load = useChatStore((state) => state.load);
   const openSettings = useUiStore((state) => state.openSettings);
   const providers = useUiStore((state) => state.providers);
@@ -41,7 +53,8 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
   const scrollToBottom = useCallback((smooth = false) => {
     const container = scrollRef.current;
     if (!container) return;
-    if (smooth) container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    if (smooth)
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
     else container.scrollTop = container.scrollHeight;
   }, []);
 
@@ -66,7 +79,8 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
   const onScroll = () => {
     const container = scrollRef.current;
     if (!container) return;
-    const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const distance =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
     const nextPinned = distance <= 48;
     setPinned(nextPinned);
     setShowJump(!nextPinned && distance > 120);
@@ -80,7 +94,9 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
     if (!threadId || !view) return;
     const index = view.turns.findIndex((turn) => turn.id === turnId);
     if (index < 0) return;
-    const source = [...view.turns.slice(0, index)].reverse().find((turn) => turn.role === "user");
+    const source = [...view.turns.slice(0, index)]
+      .reverse()
+      .find((turn) => turn.role === "user");
     if (!source) return;
     const text = source.blocks
       .map((block) => (block.type === "text" ? block.text : ""))
@@ -109,7 +125,9 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
 
   const needsProvider = providers.length === 0;
   const isEmpty = !view || view.turns.length === 0;
-  const displayPath = workspace ? compactHomePath(workspace.rootPath) : "~/.kip/scratchpad";
+  const displayPath = workspace
+    ? compactHomePath(workspace.rootPath)
+    : "~/.kip/scratchpad";
 
   return (
     <div className="relative flex-1 overflow-hidden">
@@ -123,11 +141,14 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
             <div className="flex min-h-[46vh] flex-col justify-center pt-10">
               {needsProvider ? (
                 <div className="max-w-[520px]">
-                  <p className="text-meta text-[var(--text-muted)]">FIRST RUN</p>
+                  <p className="text-meta text-[var(--text-muted)]">
+                    FIRST RUN
+                  </p>
                   <h1 className="title-large mt-3">Welcome to Kip.</h1>
                   <p className="mt-3 text-[15px] leading-[1.65] text-[var(--text-secondary)]">
-                    Connect an OpenAI-compatible, Anthropic, or Google endpoint to begin. Kip
-                    keeps credentials in your system keychain and never writes them to a database.
+                    Connect an OpenAI-compatible, Anthropic, or Google endpoint
+                    to begin. Kip keeps credentials in your system keychain and
+                    never writes them to a database.
                   </p>
                   <button
                     type="button"
@@ -226,7 +247,12 @@ export function ThreadCanvas({ threadId, workspace, onScrolled }: ThreadCanvasPr
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
-            transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}
+            transition={{
+              type: "spring",
+              stiffness: 420,
+              damping: 34,
+              mass: 0.8,
+            }}
             onClick={() => {
               setPinned(true);
               scrollToBottom(true);

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { copyText } from "../../lib/clipboard";
-import { currentShikiTheme, getHighlighter, normalizeLanguage } from "../../lib/shiki";
+import {
+  currentShikiTheme,
+  getHighlighter,
+  normalizeLanguage,
+} from "../../lib/shiki";
 
 interface CodeBlockProps {
   code: string;
@@ -9,7 +13,11 @@ interface CodeBlockProps {
   streaming?: boolean;
 }
 
-export function CodeBlock({ code, language, streaming = false }: CodeBlockProps) {
+export function CodeBlock({
+  code,
+  language,
+  streaming = false,
+}: CodeBlockProps) {
   const [html, setHtml] = useState("");
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -22,7 +30,8 @@ export function CodeBlock({ code, language, streaming = false }: CodeBlockProps)
         .then((highlighter) => {
           if (cancelled) return;
           const loaded = highlighter.getLoadedLanguages();
-          const useLang = lang === "text" || loaded.includes(lang) ? lang : "text";
+          const useLang =
+            lang === "text" || loaded.includes(lang) ? lang : "text";
           setHtml(
             highlighter.codeToHtml(code, {
               lang: useLang,
@@ -50,9 +59,13 @@ export function CodeBlock({ code, language, streaming = false }: CodeBlockProps)
     const observer = new MutationObserver(() => {
       void getHighlighter().then((highlighter) => {
         const loaded = highlighter.getLoadedLanguages();
-        const useLang = lang === "text" || loaded.includes(lang) ? lang : "text";
+        const useLang =
+          lang === "text" || loaded.includes(lang) ? lang : "text";
         setHtml(
-          highlighter.codeToHtml(code, { lang: useLang, theme: currentShikiTheme() }),
+          highlighter.codeToHtml(code, {
+            lang: useLang,
+            theme: currentShikiTheme(),
+          }),
         );
       });
     });
@@ -86,7 +99,11 @@ export function CodeBlock({ code, language, streaming = false }: CodeBlockProps)
           }`}
           aria-label="Copy code"
         >
-          {copied ? <Check size={12} strokeWidth={1.7} /> : <Copy size={12} strokeWidth={1.5} />}
+          {copied ? (
+            <Check size={12} strokeWidth={1.7} />
+          ) : (
+            <Copy size={12} strokeWidth={1.5} />
+          )}
           <span>{copied ? "Copied" : "Copy"}</span>
         </button>
       </div>

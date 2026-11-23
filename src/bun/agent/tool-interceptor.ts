@@ -127,7 +127,13 @@ export class ToolInterceptor {
         }
         try {
           await this.authorize(toolCallId, tool.name, args, signal);
-          const result = (await original(toolCallId, params, signal, onUpdate, ctx)) as never;
+          const result = (await original(
+            toolCallId,
+            params,
+            signal,
+            onUpdate,
+            ctx,
+          )) as never;
           if (this.options.hooks?.length) {
             const durationMs = Date.now() - startedAt;
             for (const hook of this.options.hooks) {
@@ -175,13 +181,17 @@ export class ToolInterceptor {
       const meta = this.callMeta.get(toolCallId);
       if (meta && meta.risk !== "high-risk" && !meta.outsideWorkspace) {
         if (meta.command) {
-          for (const key of commandApprovalKeys(meta.command)) this.sessionAllowlist.add(key);
+          for (const key of commandApprovalKeys(meta.command))
+            this.sessionAllowlist.add(key);
         } else if (meta.filePath) {
           this.sessionAllowlist.add(fileApprovalKey(meta.filePath));
         }
       }
     }
-    pending.resolve({ approved, reason: reason?.trim().slice(0, 600) || undefined });
+    pending.resolve({
+      approved,
+      reason: reason?.trim().slice(0, 600) || undefined,
+    });
   }
 
   /**
@@ -190,10 +200,19 @@ export class ToolInterceptor {
    */
   reevaluatePending(): string[] {
     const policy =
-      typeof this.options.policy === "function" ? this.options.policy() : this.options.policy;
+      typeof this.options.policy === "function"
+        ? this.options.policy()
+        : this.options.policy;
     const approvedIds: string[] = [];
     for (const [toolCallId, pending] of this.pending) {
-      if (!needsApproval(policy, pending.risk, pending.outsideWorkspace, pending.isMutation)) {
+      if (
+        !needsApproval(
+          policy,
+          pending.risk,
+          pending.outsideWorkspace,
+          pending.isMutation,
+        )
+      ) {
         this.pending.delete(toolCallId);
         pending.resolve({ approved: true });
         approvedIds.push(toolCallId);
@@ -217,20 +236,30 @@ export class ToolInterceptor {
     signal: AbortSignal | undefined,
   ): Promise<void> {
     const targetPath =
-      typeof args.path === "string" ? resolveToolPath(this.options.workspaceRoot, args.path) : null;
+      typeof args.path === "string"
+        ? resolveToolPath(this.options.workspaceRoot, args.path)
+        : null;
 
     if (targetPath && isSensitivePath(targetPath)) {
       throw new Error("Access to this path is blocked by Kip's safety policy");
     }
-    if (toolName === "bash" && commandTouchesSensitivePath(String(args.command ?? ""))) {
-      throw new Error("This command touches a credential path blocked by Kip's safety policy");
+    if (
+      toolName === "bash" &&
+      commandTouchesSensitivePath(String(args.command ?? ""))
+    ) {
+      throw new Error(
+        "This command touches a credential path blocked by Kip's safety policy",
+      );
     }
 
-    const command = toolName === "bash" ? String(args.command ?? "") : undefined;
+    const command =
+      toolName === "bash" ? String(args.command ?? "") : undefined;
     const outsideWorkspace =
-      (targetPath !== null && !isWithinRoot(this.options.workspaceRoot, targetPath)) ||
+      (targetPath !== null &&
+        !isWithinRoot(this.options.workspaceRoot, targetPath)) ||
       (command !== undefined &&
-        commandPathsOutsideRoot(command, this.options.workspaceRoot).length > 0);
+        commandPathsOutsideRoot(command, this.options.workspaceRoot).length >
+          0);
     const isMutation = MUTATING_TOOLS.has(toolName);
 
     let risk: "safe" | "standard" | "high-risk" = "safe";
@@ -241,13 +270,22 @@ export class ToolInterceptor {
     }
 
     let previewDiff: CallMeta["diff"];
-    let summaryLabel = summarizeToolCall(toolName, args, this.options.workspaceRoot);
+    let summaryLabel = summarizeToolCall(
+      toolName,
+      args,
+      this.options.workspaceRoot,
+    );
 
     if (toolName === "write" || toolName === "edit") {
       previewDiff = this.buildDiff(toolName, args, targetPath);
       if (previewDiff) {
         const change = countLineChanges(previewDiff.before, previewDiff.after);
-        summaryLabel = summarizeToolCall(toolName, args, this.options.workspaceRoot, change);
+        summaryLabel = summarizeToolCall(
+          toolName,
+          args,
+          this.options.workspaceRoot,
+          change,
+        );
       }
     }
 
@@ -270,44 +308,59 @@ export class ToolInterceptor {
       !outsideWorkspace &&
       (filePath
         ? this.sessionAllowlist.has(fileApprovalKey(filePath))
-        : keys.length > 0 && keys.every((key) => this.sessionAllowlist.has(key)));
+        : keys.length > 0 &&
+          keys.every((key) => this.sessionAllowlist.has(key)));
 
     const policy =
-      typeof this.options.policy === "function" ? this.options.policy() : this.options.policy;
-    const mustAsk = !allowlisted && needsApproval(policy, risk, outsideWorkspace, isMutation);
+      typeof this.options.policy === "function"
+        ? this.options.policy()
+        : this.options.policy;
+    const mustAsk =
+      !allowlisted && needsApproval(policy, risk, outsideWorkspace, isMutation);
 
     if (!mustAsk) return;
 
-    const decision = await new Promise<{ approved: boolean; reason?: string }>((resolve) => {
-      this.pending.set(toolCallId, { resolve, risk, outsideWorkspace, isMutation });
-      signal?.addEventListener(
-        "abort",
-        () => {
-          const pending = this.pending.get(toolCallId);
-          if (!pending) return;
-          this.pending.delete(toolCallId);
-          pending.resolve({ approved: false });
-        },
-        { once: true },
-      );
-      this.options.requestApproval({
-        threadId: this.options.threadId,
-        toolCallId,
-        toolName,
-        summaryLabel,
-        commandOrPath:
-          toolName === "bash"
-            ? String(args.command ?? "")
-            : previewDiff?.filePath
-              ? toPosixPath(relative(this.options.workspaceRoot, previewDiff.filePath))
-              : targetPath
-                ? toPosixPath(relative(this.options.workspaceRoot, targetPath))
-                : "",
-        risk,
-        outsideWorkspace,
-        previewDiff,
-      });
-    });
+    const decision = await new Promise<{ approved: boolean; reason?: string }>(
+      (resolve) => {
+        this.pending.set(toolCallId, {
+          resolve,
+          risk,
+          outsideWorkspace,
+          isMutation,
+        });
+        signal?.addEventListener(
+          "abort",
+          () => {
+            const pending = this.pending.get(toolCallId);
+            if (!pending) return;
+            this.pending.delete(toolCallId);
+            pending.resolve({ approved: false });
+          },
+          { once: true },
+        );
+        this.options.requestApproval({
+          threadId: this.options.threadId,
+          toolCallId,
+          toolName,
+          summaryLabel,
+          commandOrPath:
+            toolName === "bash"
+              ? String(args.command ?? "")
+              : previewDiff?.filePath
+                ? toPosixPath(
+                    relative(this.options.workspaceRoot, previewDiff.filePath),
+                  )
+                : targetPath
+                  ? toPosixPath(
+                      relative(this.options.workspaceRoot, targetPath),
+                    )
+                  : "",
+          risk,
+          outsideWorkspace,
+          previewDiff,
+        });
+      },
+    );
 
     if (!decision.approved) {
       throw new Error(

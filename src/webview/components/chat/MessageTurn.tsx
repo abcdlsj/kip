@@ -1,5 +1,12 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Check, Copy, FileText, Pencil, RotateCcw } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  FileText,
+  Pencil,
+  RotateCcw,
+} from "lucide-react";
 import type {
   ChatTurn,
   TextBlock,
@@ -37,7 +44,8 @@ function groupBlocks(turn: ChatTurn): Segment[] {
   const flush = () => {
     if (work.length === 0) return;
     const first = work[0];
-    if (first) segments.push({ kind: "work", key: `work_${first.id}`, blocks: work });
+    if (first)
+      segments.push({ kind: "work", key: `work_${first.id}`, blocks: work });
     work = [];
   };
   for (const block of turn.blocks) {
@@ -68,25 +76,38 @@ function MessageTurnInner({
   }
 
   const streaming = running && isLast;
-  const lastTextBlock = [...turn.blocks].reverse().find((block) => block.type === "text");
-  const textBlocks = turn.blocks.filter((block): block is TextBlock => block.type === "text");
-  const workSegments = segments.filter((segment) => segment.kind === "work").length;
+  const lastTextBlock = [...turn.blocks]
+    .reverse()
+    .find((block) => block.type === "text");
+  const textBlocks = turn.blocks.filter(
+    (block): block is TextBlock => block.type === "text",
+  );
+  const workSegments = segments.filter(
+    (segment) => segment.kind === "work",
+  ).length;
 
   return (
     <div className="group/turn my-5">
       {segments.map((segment) => {
         if (segment.kind === "text") {
-          const isStreamingBlock = streaming && segment.block.id === lastTextBlock?.id;
+          const isStreamingBlock =
+            streaming && segment.block.id === lastTextBlock?.id;
           return (
-            <div key={segment.block.id} className={isStreamingBlock ? "caret" : ""}>
-              <Markdown streaming={isStreamingBlock}>{segment.block.text}</Markdown>
+            <div
+              key={segment.block.id}
+              className={isStreamingBlock ? "caret" : ""}
+            >
+              <Markdown streaming={isStreamingBlock}>
+                {segment.block.text}
+              </Markdown>
             </div>
           );
         }
 
         const pending = approvals.filter((approval) =>
           segment.blocks.some(
-            (block) => block.type === "tool_call" && block.id === approval.toolCallId,
+            (block) =>
+              block.type === "tool_call" && block.id === approval.toolCallId,
           ),
         );
 
@@ -137,8 +158,14 @@ function MessageTurnInner({
       {turn.error && (
         <div className="my-3 flex items-start justify-between gap-3 rounded-[10px] border border-[color-mix(in_srgb,var(--status-err)_28%,transparent)] bg-[color-mix(in_srgb,var(--status-err)_6%,transparent)] px-3.5 py-2.5 text-[12.5px] text-[var(--status-err)]">
           <div className="flex min-w-0 items-start gap-2">
-            <AlertCircle size={14} strokeWidth={1.5} className="mt-0.5 shrink-0" />
-            <span className="selectable break-words leading-[1.5]">{turn.error}</span>
+            <AlertCircle
+              size={14}
+              strokeWidth={1.5}
+              className="mt-0.5 shrink-0"
+            />
+            <span className="selectable break-words leading-[1.5]">
+              {turn.error}
+            </span>
           </div>
           {onRetry && (
             <button
@@ -293,9 +320,18 @@ function UserMessage({
                 Edit
               </button>
             )}
-            <button type="button" onClick={() => void copy()} className={actionClass} aria-label="Copy message">
+            <button
+              type="button"
+              onClick={() => void copy()}
+              className={actionClass}
+              aria-label="Copy message"
+            >
               {copied ? (
-                <Check size={11} strokeWidth={1.7} className="text-[var(--status-ok)]" />
+                <Check
+                  size={11}
+                  strokeWidth={1.7}
+                  className="text-[var(--status-ok)]"
+                />
               ) : (
                 <Copy size={11} strokeWidth={1.5} />
               )}

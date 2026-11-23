@@ -95,7 +95,10 @@ export function SyncPanel() {
 
   const connectGoogle = async () => {
     setBusy("google-connect");
-    setStatus({ text: "Waiting for Google sign-in in your browser…", tone: "info" });
+    setStatus({
+      text: "Waiting for Google sign-in in your browser…",
+      tone: "info",
+    });
     try {
       const result = await request("connectGoogleDrive", {
         clientId: form.googleClientId,
@@ -118,7 +121,10 @@ export function SyncPanel() {
         setForm((current) => ({ ...current, googleClientSecret: "" }));
         await reloadConfig();
       } else {
-        setStatus({ text: result.error ?? "Google sign-in failed.", tone: "error" });
+        setStatus({
+          text: result.error ?? "Google sign-in failed.",
+          tone: "error",
+        });
       }
     } catch (error) {
       setStatus({
@@ -145,7 +151,10 @@ export function SyncPanel() {
     setBusy("sync");
     try {
       const result = await request("triggerSync", undefined);
-      setStatus({ text: `Pushed ${result.pushed} · pulled ${result.pulled}.`, tone: "ok" });
+      setStatus({
+        text: `Pushed ${result.pushed} · pulled ${result.pulled}.`,
+        tone: "ok",
+      });
       await reloadConfig();
     } catch (error) {
       setStatus({
@@ -188,7 +197,9 @@ export function SyncPanel() {
     if (!activeThreadId) return;
     setBusy("markdown");
     try {
-      const result = await request("exportThreadMarkdown", { threadId: activeThreadId });
+      const result = await request("exportThreadMarkdown", {
+        threadId: activeThreadId,
+      });
       setStatus(
         result.savedPath
           ? { text: `Saved to ${result.savedPath}`, tone: "ok" }
@@ -203,8 +214,8 @@ export function SyncPanel() {
     <div>
       <h2 className="text-[15px] font-semibold">Sync &amp; backup</h2>
       <p className="mt-1 max-w-[460px] text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
-        Incremental backups to S3-compatible storage or Google Drive. Metadata and transcripts
-        sync; API keys never leave this machine.
+        Incremental backups to S3-compatible storage or Google Drive. Metadata
+        and transcripts sync; API keys never leave this machine.
       </p>
 
       <div className="mt-3.5 inline-flex rounded-[9px] border hairline bg-[var(--bg-sidebar)] p-0.5">
@@ -238,7 +249,9 @@ export function SyncPanel() {
             <input
               type="checkbox"
               checked={form.enabled}
-              onChange={(event) => setForm({ ...form, enabled: event.target.checked })}
+              onChange={(event) =>
+                setForm({ ...form, enabled: event.target.checked })
+              }
               className="h-3.5 w-3.5 accent-[var(--accent-ink)]"
             />
             Enable automatic sync after a completed turn
@@ -250,7 +263,9 @@ export function SyncPanel() {
             <Field label="Endpoint">
               <input
                 value={form.endpoint}
-                onChange={(event) => setForm({ ...form, endpoint: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, endpoint: event.target.value })
+                }
                 placeholder="https://s3.us-east-1.amazonaws.com"
                 className="settings-input font-mono"
               />
@@ -258,7 +273,9 @@ export function SyncPanel() {
             <Field label="Region">
               <input
                 value={form.region}
-                onChange={(event) => setForm({ ...form, region: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, region: event.target.value })
+                }
                 placeholder="auto"
                 className="settings-input font-mono"
               />
@@ -266,22 +283,30 @@ export function SyncPanel() {
             <Field label="Bucket">
               <input
                 value={form.bucket}
-                onChange={(event) => setForm({ ...form, bucket: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, bucket: event.target.value })
+                }
                 className="settings-input font-mono"
               />
             </Field>
             <Field label="Prefix">
               <input
                 value={form.prefix}
-                onChange={(event) => setForm({ ...form, prefix: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, prefix: event.target.value })
+                }
                 className="settings-input font-mono"
               />
             </Field>
             <Field label="Access key ID">
               <input
                 value={form.accessKeyId}
-                onChange={(event) => setForm({ ...form, accessKeyId: event.target.value })}
-                placeholder={config?.hasCredentials ? "Stored — leave blank to keep" : ""}
+                onChange={(event) =>
+                  setForm({ ...form, accessKeyId: event.target.value })
+                }
+                placeholder={
+                  config?.hasCredentials ? "Stored — leave blank to keep" : ""
+                }
                 className="settings-input font-mono"
               />
             </Field>
@@ -289,8 +314,12 @@ export function SyncPanel() {
               <input
                 type="password"
                 value={form.secretAccessKey}
-                onChange={(event) => setForm({ ...form, secretAccessKey: event.target.value })}
-                placeholder={config?.hasCredentials ? "Stored — leave blank to keep" : ""}
+                onChange={(event) =>
+                  setForm({ ...form, secretAccessKey: event.target.value })
+                }
+                placeholder={
+                  config?.hasCredentials ? "Stored — leave blank to keep" : ""
+                }
                 className="settings-input font-mono"
               />
             </Field>
@@ -301,7 +330,9 @@ export function SyncPanel() {
               <Field label="OAuth Client ID (Desktop app)">
                 <input
                   value={form.googleClientId}
-                  onChange={(event) => setForm({ ...form, googleClientId: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, googleClientId: event.target.value })
+                  }
                   placeholder="1234567890-xxxx.apps.googleusercontent.com"
                   className="settings-input font-mono"
                 />
@@ -311,15 +342,21 @@ export function SyncPanel() {
               <input
                 type="password"
                 value={form.googleClientSecret}
-                onChange={(event) => setForm({ ...form, googleClientSecret: event.target.value })}
-                placeholder={config?.googleConnected ? "Stored — leave blank to keep" : ""}
+                onChange={(event) =>
+                  setForm({ ...form, googleClientSecret: event.target.value })
+                }
+                placeholder={
+                  config?.googleConnected ? "Stored — leave blank to keep" : ""
+                }
                 className="settings-input font-mono"
               />
             </Field>
             <Field label="Drive folder name">
               <input
                 value={form.googleFolderName}
-                onChange={(event) => setForm({ ...form, googleFolderName: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, googleFolderName: event.target.value })
+                }
                 placeholder="Kip Sync"
                 className="settings-input"
               />
@@ -328,14 +365,20 @@ export function SyncPanel() {
               <div className="min-w-0 text-[12px]">
                 {config?.googleConnected ? (
                   <span className="flex items-center gap-1.5 text-[var(--text-primary)]">
-                    <CheckCircle2 size={13} strokeWidth={1.6} className="shrink-0 text-[var(--status-ok)]" />
+                    <CheckCircle2
+                      size={13}
+                      strokeWidth={1.6}
+                      className="shrink-0 text-[var(--status-ok)]"
+                    />
                     <span className="truncate">
-                      Connected{config.googleEmail ? ` as ${config.googleEmail}` : ""}
+                      Connected
+                      {config.googleEmail ? ` as ${config.googleEmail}` : ""}
                     </span>
                   </span>
                 ) : (
                   <span className="text-[var(--text-secondary)]">
-                    Not signed in. Uses <span className="font-mono">drive.file</span> scope only.
+                    Not signed in. Uses{" "}
+                    <span className="font-mono">drive.file</span> scope only.
                   </span>
                 )}
               </div>
@@ -353,15 +396,23 @@ export function SyncPanel() {
                 <button
                   type="button"
                   onClick={() => void connectGoogle()}
-                  disabled={busy === "google-connect" || !form.googleClientId.trim()}
+                  disabled={
+                    busy === "google-connect" || !form.googleClientId.trim()
+                  }
                   className="btn-primary ml-3 h-7 shrink-0 rounded-[7px] px-2.5 text-[11.5px]"
                 >
                   {busy === "google-connect" ? (
-                    <Loader2 size={11} strokeWidth={1.5} className="animate-spin" />
+                    <Loader2
+                      size={11}
+                      strokeWidth={1.5}
+                      className="animate-spin"
+                    />
                   ) : (
                     <LogIn size={11} strokeWidth={1.5} />
                   )}
-                  {busy === "google-connect" ? "Signing in…" : "Sign in with Google"}
+                  {busy === "google-connect"
+                    ? "Signing in…"
+                    : "Sign in with Google"}
                 </button>
               )}
             </div>
@@ -401,7 +452,8 @@ export function SyncPanel() {
       <div className="mt-5 border-t hairline pt-4">
         <h3 className="text-[13px] font-medium">Local backup &amp; export</h3>
         <p className="mt-0.5 text-[12px] text-[var(--text-muted)]">
-          Portable JSON archive for moving machines, or Markdown for the current thread.
+          Portable JSON archive for moving machines, or Markdown for the current
+          thread.
         </p>
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
           <button

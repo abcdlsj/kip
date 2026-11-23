@@ -4,13 +4,21 @@
  */
 import type { Model } from "@earendil-works/pi-ai/compat";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import type { ModelOption, ProviderModel, ProviderProtocol, ProviderRecord } from "../../shared/types";
+import type {
+  ModelOption,
+  ProviderModel,
+  ProviderProtocol,
+  ProviderRecord,
+} from "../../shared/types";
 import type { KipDatabase } from "../storage/db";
 import { getApiKey } from "../storage/keychain";
 
 const ZERO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
-export function normalizeBaseUrl(baseUrl: string, protocol: ProviderProtocol): string {
+export function normalizeBaseUrl(
+  baseUrl: string,
+  protocol: ProviderProtocol,
+): string {
   const trimmed = baseUrl.replace(/\/+$/g, "");
   if (protocol === "anthropic-messages" && trimmed.endsWith("/v1")) {
     return trimmed.slice(0, -3);
@@ -81,7 +89,9 @@ interface RawModelsResponse {
 
 function asStringList(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
-  const items = value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  const items = value.filter(
+    (item): item is string => typeof item === "string" && item.length > 0,
+  );
   return items.length > 0 ? items : null;
 }
 
@@ -109,8 +119,13 @@ function inferRemoteVision(entry: RawModelEntry): boolean {
     });
   }
 
-  if (typeof entry.architecture?.modality === "string" && entry.architecture.modality.trim()) {
-    const inputSide = (entry.architecture.modality.split("->")[0] ?? "").toLowerCase();
+  if (
+    typeof entry.architecture?.modality === "string" &&
+    entry.architecture.modality.trim()
+  ) {
+    const inputSide = (
+      entry.architecture.modality.split("->")[0] ?? ""
+    ).toLowerCase();
     return inputSide.includes("image") || inputSide.includes("vision");
   }
 
@@ -168,7 +183,10 @@ export class ModelRegistry {
   }
 
   /** A key is optional: local gateways such as Ollama and gemini2api may run without one. */
-  private async register(provider: ProviderRecord, apiKey?: string): Promise<void> {
+  private async register(
+    provider: ProviderRecord,
+    apiKey?: string,
+  ): Promise<void> {
     try {
       this.runtime.registerProvider(provider.id, {
         name: provider.displayName,
@@ -206,7 +224,10 @@ export class ModelRegistry {
     }
   }
 
-  async addOrUpdateProvider(provider: ProviderRecord, apiKey?: string): Promise<void> {
+  async addOrUpdateProvider(
+    provider: ProviderRecord,
+    apiKey?: string,
+  ): Promise<void> {
     const key = apiKey ?? (await getApiKey(provider.id)) ?? undefined;
     if (this.registered.has(provider.id)) {
       this.runtime.unregisterProvider(provider.id);
@@ -248,7 +269,8 @@ export class ModelRegistry {
     const storedProvider = this.database.getSetting("defaultProvider", "");
     const storedModel = this.database.getSetting("defaultModelId", "");
     const exact = available.find(
-      (option) => option.provider === storedProvider && option.modelId === storedModel,
+      (option) =>
+        option.provider === storedProvider && option.modelId === storedModel,
     );
     if (exact) return { provider: exact.provider, modelId: exact.modelId };
     const first = available[0];
@@ -271,9 +293,15 @@ export class ModelRegistry {
       const response = await probeProvider(provider, modelId, apiKey);
       if (!response.ok) {
         const detail = (await response.text()).slice(0, 180);
-        return { connected: false, error: `HTTP ${response.status} ${detail}`.trim() };
+        return {
+          connected: false,
+          error: `HTTP ${response.status} ${detail}`.trim(),
+        };
       }
-      return { connected: true, latencyMs: Math.round(performance.now() - started) };
+      return {
+        connected: true,
+        latencyMs: Math.round(performance.now() - started),
+      };
     } catch (error) {
       return {
         connected: false,
@@ -283,7 +311,10 @@ export class ModelRegistry {
   }
 }
 
-function protocolHeaders(protocol: ProviderProtocol, baseUrl: string): Record<string, string> | undefined {
+function protocolHeaders(
+  protocol: ProviderProtocol,
+  baseUrl: string,
+): Record<string, string> | undefined {
   if (protocol === "anthropic-messages" && !baseUrl.includes("anthropic.com")) {
     return { "anthropic-version": "2023-06-01" };
   }
@@ -297,7 +328,9 @@ export async function probeProvider(
   fetcher: typeof fetch = fetch,
 ): Promise<Response> {
   const base = normalizeBaseUrl(provider.baseUrl, provider.protocol);
-  const jsonHeaders: Record<string, string> = { "content-type": "application/json" };
+  const jsonHeaders: Record<string, string> = {
+    "content-type": "application/json",
+  };
   if (apiKey) jsonHeaders.authorization = `Bearer ${apiKey}`;
   if (provider.protocol === "anthropic-messages") {
     return fetcher(`${base}/v1/messages`, {
@@ -319,23 +352,32 @@ export async function probeProvider(
     return fetcher(`${base}/responses`, {
       method: "POST",
       headers: jsonHeaders,
-      body: JSON.stringify({ model: modelId, input: "ping", max_output_tokens: 16 }),
+      body: JSON.stringify({
+        model: modelId,
+        input: "ping",
+        max_output_tokens: 16,
+      }),
       signal: AbortSignal.timeout(15_000),
     });
   }
   if (provider.protocol === "google-generative-ai") {
     const cleanModel = modelId.replace(/^models\//, "");
-    const headers: Record<string, string> = { "content-type": "application/json" };
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+    };
     if (apiKey) headers["x-goog-api-key"] = apiKey;
-    return fetcher(`${base}/models/${encodeURIComponent(cleanModel)}:generateContent`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: "ping" }] }],
-        generationConfig: { maxOutputTokens: 1 },
-      }),
-      signal: AbortSignal.timeout(15_000),
-    });
+    return fetcher(
+      `${base}/models/${encodeURIComponent(cleanModel)}:generateContent`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "ping" }] }],
+          generationConfig: { maxOutputTokens: 1 },
+        }),
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
   }
   return fetcher(`${base}/chat/completions`, {
     method: "POST",
@@ -358,7 +400,10 @@ export async function fetchRemoteModels(
   try {
     const trimmed = baseUrl.replace(/\/+$/g, "");
     const isAnthropic = trimmed.includes("anthropic.com");
-    const url = isAnthropic && !trimmed.endsWith("/v1") ? `${trimmed}/v1/models` : `${trimmed}/models`;
+    const url =
+      isAnthropic && !trimmed.endsWith("/v1")
+        ? `${trimmed}/v1/models`
+        : `${trimmed}/models`;
     const headers: Record<string, string> = {};
     if (apiKey) {
       if (isAnthropic) {
@@ -378,8 +423,9 @@ export async function fetchRemoteModels(
     const body = (await response.json()) as RawModelsResponse;
     const entries = body.data ?? body.models ?? [];
     const models: ProviderModel[] = entries
-      .filter((entry): entry is RawModelEntry & { id: string } =>
-        typeof entry.id === "string" && entry.id.length > 0,
+      .filter(
+        (entry): entry is RawModelEntry & { id: string } =>
+          typeof entry.id === "string" && entry.id.length > 0,
       )
       .map((entry) => ({
         id: entry.id,
@@ -392,6 +438,9 @@ export async function fetchRemoteModels(
     if (models.length === 0) return { models, error: "No models returned" };
     return { models };
   } catch (error) {
-    return { models: [], error: error instanceof Error ? error.message : "Unable to fetch models" };
+    return {
+      models: [],
+      error: error instanceof Error ? error.message : "Unable to fetch models",
+    };
   }
 }

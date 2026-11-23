@@ -5,7 +5,10 @@ import { copyText } from "../../lib/clipboard";
 
 export function TurnActions({ blocks }: { blocks: TextBlock[] }) {
   const [copied, setCopied] = useState(false);
-  const text = blocks.map((block) => block.text).join("\n\n").trim();
+  const text = blocks
+    .map((block) => block.text)
+    .join("\n\n")
+    .trim();
   if (!text) return null;
 
   const copy = async () => {
@@ -24,7 +27,11 @@ export function TurnActions({ blocks }: { blocks: TextBlock[] }) {
         aria-label="Copy response"
       >
         {copied ? (
-          <Check size={11} strokeWidth={1.7} className="text-[var(--status-ok)]" />
+          <Check
+            size={11}
+            strokeWidth={1.7}
+            className="text-[var(--status-ok)]"
+          />
         ) : (
           <Copy size={11} strokeWidth={1.5} />
         )}

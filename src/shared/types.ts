@@ -268,7 +268,12 @@ export type AgentStreamEvent =
   | { kind: "turn_start"; turn: ChatTurn }
   | { kind: "text_delta"; turnId: string; blockId: string; delta: string }
   | { kind: "thinking_delta"; turnId: string; blockId: string; delta: string }
-  | { kind: "thinking_done"; turnId: string; blockId: string; durationMs: number }
+  | {
+      kind: "thinking_done";
+      turnId: string;
+      blockId: string;
+      durationMs: number;
+    }
   | { kind: "tool_start"; turnId: string; block: ToolCallBlock }
   | {
       kind: "tool_approval_required";

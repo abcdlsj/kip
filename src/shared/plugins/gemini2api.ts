@@ -20,7 +20,9 @@ export function geminiModelName(raw: string, temporary?: boolean): string {
   const words = name
     .split(/[-_\s]+/)
     .filter(Boolean)
-    .map((word) => (/^\d/.test(word) ? word : `${word[0]!.toUpperCase()}${word.slice(1)}`));
+    .map((word) =>
+      /^\d/.test(word) ? word : `${word[0]!.toUpperCase()}${word.slice(1)}`,
+    );
   const pretty = words.join(" ") || name;
   return isTemporary ? `${pretty} (Temporary)` : pretty;
 }
@@ -63,11 +65,6 @@ export interface GeminiPageState {
 }
 
 export type GeminiAction =
-  | "install"
-  | "uninstall"
-  | "start"
-  | "stop"
-  | "import-cookies"
-  | "refresh";
+  "install" | "uninstall" | "start" | "stop" | "import-cookies" | "refresh";
 
 export const GEMINI_HOMEPAGE = "https://github.com/abcdlsj/gemini2api";

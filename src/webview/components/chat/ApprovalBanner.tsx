@@ -15,7 +15,12 @@ interface ApprovalBannerProps {
 /** Diffs at or under this many changed lines open without a click. */
 const AUTO_PREVIEW_LINES = 40;
 
-const spring = { type: "spring", stiffness: 420, damping: 34, mass: 0.8 } as const;
+const spring = {
+  type: "spring",
+  stiffness: 420,
+  damping: 34,
+  mass: 0.8,
+} as const;
 
 function changedLines(diff: ToolApprovalPayload["previewDiff"]): number {
   if (!diff) return 0;
@@ -27,7 +32,8 @@ function changedLines(diff: ToolApprovalPayload["previewDiff"]): number {
 }
 
 function rememberLabel(approval: ToolApprovalPayload): string {
-  if (approval.toolName === "bash") return "Remember this command for the session";
+  if (approval.toolName === "bash")
+    return "Remember this command for the session";
   if (approval.toolName === "write" || approval.toolName === "edit") {
     return "Allow changes to this file for the session";
   }
@@ -37,16 +43,27 @@ function rememberLabel(approval: ToolApprovalPayload): string {
 export function ApprovalBanner({ approval, threadId }: ApprovalBannerProps) {
   const resolveApproval = useChatStore((state) => state.resolveApproval);
   const highRisk = approval.risk === "high-risk";
-  const changes = useMemo(() => changedLines(approval.previewDiff), [approval.previewDiff]);
+  const changes = useMemo(
+    () => changedLines(approval.previewDiff),
+    [approval.previewDiff],
+  );
   const [remember, setRemember] = useState(false);
-  const [preview, setPreview] = useState(changes > 0 && changes <= AUTO_PREVIEW_LINES);
+  const [preview, setPreview] = useState(
+    changes > 0 && changes <= AUTO_PREVIEW_LINES,
+  );
   const [denying, setDenying] = useState(false);
   const [reason, setReason] = useState("");
   const canRemember = !highRisk && !approval.outsideWorkspace;
 
-  const deny = () => void resolveApproval(threadId, approval.toolCallId, false, false, reason);
+  const deny = () =>
+    void resolveApproval(threadId, approval.toolCallId, false, false, reason);
   const allow = () =>
-    void resolveApproval(threadId, approval.toolCallId, true, canRemember && remember);
+    void resolveApproval(
+      threadId,
+      approval.toolCallId,
+      true,
+      canRemember && remember,
+    );
 
   return (
     <motion.div
@@ -56,9 +73,15 @@ export function ApprovalBanner({ approval, threadId }: ApprovalBannerProps) {
       className="my-3 rounded-[14px] border hairline bg-[var(--bg-elevated)] px-4 py-3.5 shadow-[var(--shadow-composer)]"
       style={
         highRisk
-          ? { borderColor: "color-mix(in srgb, var(--status-err) 55%, transparent)" }
+          ? {
+              borderColor:
+                "color-mix(in srgb, var(--status-err) 55%, transparent)",
+            }
           : approval.outsideWorkspace
-            ? { borderColor: "color-mix(in srgb, var(--status-warn) 45%, transparent)" }
+            ? {
+                borderColor:
+                  "color-mix(in srgb, var(--status-warn) 45%, transparent)",
+              }
             : undefined
       }
     >
@@ -75,7 +98,9 @@ export function ApprovalBanner({ approval, threadId }: ApprovalBannerProps) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[13px] font-medium leading-[1.4] text-[var(--text-primary)]">
-              {highRisk ? "High-risk command requires confirmation" : "Approval required"}
+              {highRisk
+                ? "High-risk command requires confirmation"
+                : "Approval required"}
             </p>
             <span className="rounded-[5px] bg-[var(--bg-subtle)] px-1.5 py-0.5 font-mono text-[10.5px] text-[var(--text-secondary)]">
               {approval.toolName}
@@ -195,7 +220,9 @@ export function ApprovalBanner({ approval, threadId }: ApprovalBannerProps) {
                   className={`${highRisk ? "btn-danger" : "btn-primary"} h-7 rounded-[8px] px-3 text-[12px]`}
                 >
                   <span>Allow</span>
-                  {!highRisk && <span className="text-[11px] opacity-70">{modEnter}</span>}
+                  {!highRisk && (
+                    <span className="text-[11px] opacity-70">{modEnter}</span>
+                  )}
                 </button>
               )}
             </div>

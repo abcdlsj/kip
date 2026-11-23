@@ -38,10 +38,17 @@ interface WorkspaceState {
     },
   ) => void;
   setThreadRunning: (threadId: string, running: boolean) => void;
-  updateThreadModel: (threadId: string, provider: string, modelId: string) => Promise<void>;
+  updateThreadModel: (
+    threadId: string,
+    provider: string,
+    modelId: string,
+  ) => Promise<void>;
   setThreadThinking: (threadId: string, level: ThinkingLevel) => Promise<void>;
   setThreadMode: (threadId: string, mode: ThreadMode) => Promise<void>;
-  setThreadApprovalPolicy: (threadId: string, policy: ApprovalPolicy | null) => Promise<void>;
+  setThreadApprovalPolicy: (
+    threadId: string,
+    policy: ApprovalPolicy | null,
+  ) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -61,7 +68,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return;
     }
     for (const workspace of get().workspaces) {
-      const threads = await request("listThreads", { workspaceId: workspace.id });
+      const threads = await request("listThreads", {
+        workspaceId: workspace.id,
+      });
       if (!threads.some((thread) => thread.id === threadId)) continue;
       set({ activeWorkspaceId: workspace.id, threads });
       get().selectThread(threadId);
@@ -104,7 +113,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     await request("removeWorkspace", { workspaceId });
     const workspaces = await request("listWorkspaces", undefined);
     const wasActive = get().activeWorkspaceId === workspaceId;
-    const nextId = wasActive ? (workspaces[0]?.id ?? null) : get().activeWorkspaceId;
+    const nextId = wasActive
+      ? (workspaces[0]?.id ?? null)
+      : get().activeWorkspaceId;
     set({ workspaces, activeWorkspaceId: nextId });
     if (wasActive) {
       if (nextId) {
@@ -136,7 +147,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   selectThread: (threadId) =>
     set((state) => {
-      if (!threadId || !state.unread[threadId]) return { activeThreadId: threadId };
+      if (!threadId || !state.unread[threadId])
+        return { activeThreadId: threadId };
       const unread = { ...state.unread };
       delete unread[threadId];
       return { activeThreadId: threadId, unread };
@@ -149,7 +161,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return {
         threads,
         activeThreadId:
-          state.activeThreadId === threadId ? (threads[0]?.id ?? null) : state.activeThreadId,
+          state.activeThreadId === threadId
+            ? (threads[0]?.id ?? null)
+            : state.activeThreadId,
       };
     });
   },
@@ -167,7 +181,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (event.kind === "thread_title_updated" && event.title) {
       set((state) => ({
         threads: state.threads.map((thread) =>
-          thread.id === threadId ? { ...thread, title: event.title ?? thread.title } : thread,
+          thread.id === threadId
+            ? { ...thread, title: event.title ?? thread.title }
+            : thread,
         ),
       }));
     }
@@ -185,7 +201,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     await request("setThreadModel", { threadId, provider, modelId });
     set((state) => ({
       threads: state.threads.map((thread) =>
-        thread.id === threadId ? { ...thread, modelProvider: provider, modelId } : thread,
+        thread.id === threadId
+          ? { ...thread, modelProvider: provider, modelId }
+          : thread,
       ),
     }));
   },

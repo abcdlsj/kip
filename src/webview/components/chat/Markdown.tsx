@@ -1,4 +1,9 @@
-import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import {
+  Children,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock } from "./CodeBlock";
@@ -17,11 +22,23 @@ export function Markdown({ children, streaming = false }: MarkdownProps) {
           pre: ({ children: preChildren }) => {
             const child = Children.toArray(preChildren)[0];
             if (!isValidElement(child)) return <pre>{preChildren}</pre>;
-            const element = child as ReactElement<{ className?: string; children?: ReactNode }>;
+            const element = child as ReactElement<{
+              className?: string;
+              children?: ReactNode;
+            }>;
             const className = element.props.className ?? "";
             const language = /language-([\w-]+)/.exec(className)?.[1];
-            const code = String(element.props.children ?? "").replace(/\n$/, "");
-            return <CodeBlock code={code} language={language} streaming={streaming} />;
+            const code = String(element.props.children ?? "").replace(
+              /\n$/,
+              "",
+            );
+            return (
+              <CodeBlock
+                code={code}
+                language={language}
+                streaming={streaming}
+              />
+            );
           },
           code: ({ className, children: codeChildren }) => {
             if (className?.includes("language-")) {

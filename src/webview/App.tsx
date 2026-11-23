@@ -4,7 +4,13 @@ import { Logo } from "./components/layout/Logo";
 import { CommandPalette } from "./components/modals/CommandPalette";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { stopThread } from "./lib/send";
-import { onAgentStream, onFocusThread, onSyncStatus, onUpdateStatus, onWindowState } from "./rpc-client";
+import {
+  onAgentStream,
+  onFocusThread,
+  onSyncStatus,
+  onUpdateStatus,
+  onWindowState,
+} from "./rpc-client";
 import { useChatStore } from "./stores/chat-store";
 import { useUiStore } from "./stores/ui-store";
 import { useWorkspaceStore } from "./stores/workspace-store";
@@ -30,7 +36,10 @@ export default function App() {
 
   useEffect(() => {
     if (!booted || !activeThreadId) return;
-    void useChatStore.getState().load(activeThreadId).catch(() => undefined);
+    void useChatStore
+      .getState()
+      .load(activeThreadId)
+      .catch(() => undefined);
   }, [activeThreadId, booted]);
 
   useEffect(() => {
@@ -42,7 +51,10 @@ export default function App() {
       });
       if (event.kind === "turn_start") {
         useWorkspaceStore.getState().setThreadRunning(threadId, true);
-      } else if (event.kind === "turn_complete" || event.kind === "turn_error") {
+      } else if (
+        event.kind === "turn_complete" ||
+        event.kind === "turn_error"
+      ) {
         const workspace = useWorkspaceStore.getState();
         workspace.setThreadRunning(threadId, false);
         if (threadId !== workspace.activeThreadId || !document.hasFocus()) {
@@ -56,7 +68,8 @@ export default function App() {
 
   useEffect(() => {
     const clearActive = () => {
-      const { activeThreadId: active, selectThread } = useWorkspaceStore.getState();
+      const { activeThreadId: active, selectThread } =
+        useWorkspaceStore.getState();
       if (active) selectThread(active);
     };
     window.addEventListener("focus", clearActive);
@@ -102,7 +115,9 @@ export default function App() {
           return;
         }
         const threadId = workspace.activeThreadId;
-        const view = threadId ? useChatStore.getState().threads[threadId] : undefined;
+        const view = threadId
+          ? useChatStore.getState().threads[threadId]
+          : undefined;
         if (threadId && view?.running) {
           void stopThread(threadId);
         }
@@ -126,7 +141,8 @@ export default function App() {
         if (!threadId) return;
         // Typing fields own ⌘↵; high-risk calls need an explicit click.
         const target = event.target as HTMLElement | null;
-        if (target?.closest("input, textarea, [contenteditable='true']")) return;
+        if (target?.closest("input, textarea, [contenteditable='true']"))
+          return;
         const view = useChatStore.getState().threads[threadId];
         const pending = view?.approvals[0];
         if (!pending || pending.risk === "high-risk") return;

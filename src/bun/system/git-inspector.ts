@@ -48,7 +48,10 @@ async function run(command: string[]): Promise<string> {
     stderr: "pipe",
     env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" },
   });
-  const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    proc.exited,
+  ]);
   if (code !== 0) throw new Error("git command failed");
   return stdout;
 }

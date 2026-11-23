@@ -7,7 +7,10 @@ import type { KipRPCSchema } from "../shared/rpc-schema";
 import type { AgentStreamEnvelope, UpdateStatus } from "../shared/types";
 
 type StreamListener = (payload: AgentStreamEnvelope) => void;
-type SyncListener = (payload: { state: "idle" | "running" | "error"; message?: string }) => void;
+type SyncListener = (payload: {
+  state: "idle" | "running" | "error";
+  message?: string;
+}) => void;
 
 type FocusListener = (payload: { threadId: string }) => void;
 

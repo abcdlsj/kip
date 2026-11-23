@@ -13,7 +13,9 @@ export interface SubmitPromptOptions {
   delivery?: PromptDelivery;
 }
 
-export async function submitPrompt(options: SubmitPromptOptions): Promise<void> {
+export async function submitPrompt(
+  options: SubmitPromptOptions,
+): Promise<void> {
   const attachments: ChatTurn["attachments"] = [
     ...(options.referencedFiles ?? []).map((path) => ({
       name: path.split("/").pop() ?? path,
@@ -30,14 +32,21 @@ export async function submitPrompt(options: SubmitPromptOptions): Promise<void> 
   if (!options.delivery) {
     useChatStore
       .getState()
-      .appendUserTurn(options.threadId, options.text, attachments.length ? attachments : undefined);
+      .appendUserTurn(
+        options.threadId,
+        options.text,
+        attachments.length ? attachments : undefined,
+      );
   }
   try {
     await request("sendPrompt", {
       threadId: options.threadId,
       text: options.text,
       referencedFiles: options.referencedFiles,
-      images: options.images?.map(({ mimeType, base64Data }) => ({ mimeType, base64Data })),
+      images: options.images?.map(({ mimeType, base64Data }) => ({
+        mimeType,
+        base64Data,
+      })),
       delivery: options.delivery,
     });
   } catch (error) {
@@ -56,5 +65,8 @@ export async function stopThread(threadId: string): Promise<void> {
   if (!restored.length) return;
   const ui = useUiStore.getState();
   const current = ui.drafts[threadId] ?? "";
-  ui.setDraft(threadId, [current, ...restored].filter((text) => text.trim()).join("\n\n"));
+  ui.setDraft(
+    threadId,
+    [current, ...restored].filter((text) => text.trim()).join("\n\n"),
+  );
 }

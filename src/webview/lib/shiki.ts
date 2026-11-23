@@ -32,7 +32,9 @@ export function getHighlighter(): Promise<Highlighter> {
 
 /** Code blocks follow the app theme instead of staying dark in light mode. */
 export function currentShikiTheme(): "vitesse-light" | "vitesse-dark" {
-  return document.documentElement.dataset.theme === "dark" ? "vitesse-dark" : "vitesse-light";
+  return document.documentElement.dataset.theme === "dark"
+    ? "vitesse-dark"
+    : "vitesse-light";
 }
 
 /** Short fence names models often use. */

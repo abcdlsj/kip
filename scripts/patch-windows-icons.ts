@@ -46,14 +46,19 @@ function embedIcon(exePath: string): void {
     encoding: "utf8",
   });
   const after = statSync(exePath).size;
-  const detail = [result.stdout, result.stderr].map((part) => part?.trim()).filter(Boolean).join(" ");
+  const detail = [result.stdout, result.stderr]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ");
   if (result.status !== 0 || after === before) {
     throw new Error(
       `rcedit did not embed the icon into ${basename(exePath)} ` +
         `(status ${result.status}, ${before} -> ${after} bytes)${detail ? `: ${detail}` : ""}`,
     );
   }
-  console.log(`Windows icon: embedded into ${basename(exePath)} (${before} -> ${after} bytes).`);
+  console.log(
+    `Windows icon: embedded into ${basename(exePath)} (${before} -> ${after} bytes).`,
+  );
 }
 
 // Electrobun's own embed only runs on Windows hosts, and rcedit.exe is a Windows
@@ -63,10 +68,18 @@ if (targetOS !== "win" || process.platform !== "win32") {
 } else if (!existsSync(iconPath)) {
   console.warn(`Windows icon: ${iconPath} is missing, skipping.`);
 } else if (!buildDir || !appName) {
-  console.warn("Windows icon: ELECTROBUN_BUILD_DIR/APP_NAME not set, skipping.");
+  console.warn(
+    "Windows icon: ELECTROBUN_BUILD_DIR/APP_NAME not set, skipping.",
+  );
 } else {
   embedIcon(join(buildDir, appName, "bin", "launcher.exe"));
   embedIcon(
-    join(root, "node_modules", "electrobun", `dist-win-${targetArch}`, "extractor.exe"),
+    join(
+      root,
+      "node_modules",
+      "electrobun",
+      `dist-win-${targetArch}`,
+      "extractor.exe",
+    ),
   );
 }

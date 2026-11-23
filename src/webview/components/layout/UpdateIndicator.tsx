@@ -69,7 +69,11 @@ export function UpdateIndicator() {
     return (
       <button
         disabled
-        title={downloading ? `Downloading Kip ${version}… ${update.progress}%` : label}
+        title={
+          downloading
+            ? `Downloading Kip ${version}… ${update.progress}%`
+            : label
+        }
         aria-label={downloading ? `Downloading Kip ${version}` : label}
         className={`${ICON_BUTTON} cursor-default hover:bg-transparent`}
       >
@@ -87,7 +91,11 @@ export function UpdateIndicator() {
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button title={promptLabel} aria-label={promptLabel} className={ICON_BUTTON}>
+        <button
+          title={promptLabel}
+          aria-label={promptLabel}
+          className={ICON_BUTTON}
+        >
           {icon}
         </button>
       </Popover.Trigger>
@@ -100,7 +108,9 @@ export function UpdateIndicator() {
         >
           {update.installSource === "homebrew" ? (
             <>
-              <p className="text-[12.5px] font-medium">Kip {version} is available</p>
+              <p className="text-[12.5px] font-medium">
+                Kip {version} is available
+              </p>
               <p className="mt-0.5 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
                 Installed with Homebrew. Update from the terminal:
               </p>
@@ -113,11 +123,21 @@ export function UpdateIndicator() {
                 title="Copy command"
                 className="mt-2 flex h-7 w-full items-center gap-2 rounded-[6px] bg-[var(--bg-subtle)] px-2 text-left transition-colors hover:bg-[var(--bg-active)]"
               >
-                <span className="min-w-0 flex-1 truncate font-mono text-[11.5px]">{BREW_COMMAND}</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-[11.5px]">
+                  {BREW_COMMAND}
+                </span>
                 {copied ? (
-                  <Check size={12} strokeWidth={1.5} className="shrink-0 text-[var(--status-ok)]" />
+                  <Check
+                    size={12}
+                    strokeWidth={1.5}
+                    className="shrink-0 text-[var(--status-ok)]"
+                  />
                 ) : (
-                  <Copy size={12} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+                  <Copy
+                    size={12}
+                    strokeWidth={1.5}
+                    className="shrink-0 text-[var(--text-muted)]"
+                  />
                 )}
               </button>
               {update.releaseUrl && (
@@ -134,7 +154,9 @@ export function UpdateIndicator() {
             </>
           ) : (
             <>
-              <p className="text-[12.5px] font-medium">Kip {version} is ready</p>
+              <p className="text-[12.5px] font-medium">
+                Kip {version} is ready
+              </p>
               <p className="mt-0.5 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
                 {running > 0
                   ? `Restarting stops ${running} running ${running === 1 ? "agent" : "agents"}.`

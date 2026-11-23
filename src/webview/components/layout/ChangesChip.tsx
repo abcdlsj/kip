@@ -25,7 +25,9 @@ export function ChangesChip({
   running: boolean;
 }) {
   const undo = useChatStore((state) => state.undoChanges);
-  const refreshWorkspaces = useWorkspaceStore((state) => state.refreshWorkspaces);
+  const refreshWorkspaces = useWorkspaceStore(
+    (state) => state.refreshWorkspaces,
+  );
   const [open, setOpen] = useState(false);
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -74,8 +76,12 @@ export function ChangesChip({
           <span className="text-meta">
             {count} {count === 1 ? "file" : "files"}
           </span>
-          <span className="text-meta text-[var(--status-ok)]">+{changes.added}</span>
-          <span className="text-meta text-[var(--status-err)]">−{changes.removed}</span>
+          <span className="text-meta text-[var(--status-ok)]">
+            +{changes.added}
+          </span>
+          <span className="text-meta text-[var(--status-err)]">
+            −{changes.removed}
+          </span>
         </button>
       </Popover.Trigger>
       <Popover.Portal>

@@ -19,7 +19,11 @@ interface GitHubRelease {
   html_url?: unknown;
   draft?: unknown;
   prerelease?: unknown;
-  assets?: Array<{ name?: unknown; browser_download_url?: unknown; size?: unknown }>;
+  assets?: Array<{
+    name?: unknown;
+    browser_download_url?: unknown;
+    size?: unknown;
+  }>;
 }
 
 export interface ReleaseAsset {
@@ -62,7 +66,11 @@ export function parseVersion(raw: string): Version | null {
   const major = Number(match[1]);
   const minor = Number(match[2]);
   const patch = Number(match[3]);
-  if (!Number.isSafeInteger(major) || !Number.isSafeInteger(minor) || !Number.isSafeInteger(patch)) {
+  if (
+    !Number.isSafeInteger(major) ||
+    !Number.isSafeInteger(minor) ||
+    !Number.isSafeInteger(patch)
+  ) {
     return null;
   }
   return [major, minor, patch];
@@ -81,7 +89,11 @@ function readAssets(raw: GitHubRelease["assets"]): ReleaseAsset[] {
   if (!Array.isArray(raw)) return [];
   const assets: ReleaseAsset[] = [];
   for (const asset of raw) {
-    if (typeof asset?.name !== "string" || typeof asset.browser_download_url !== "string") continue;
+    if (
+      typeof asset?.name !== "string" ||
+      typeof asset.browser_download_url !== "string"
+    )
+      continue;
     assets.push({
       name: asset.name,
       url: asset.browser_download_url,
@@ -171,7 +183,8 @@ export class UpdateChecker {
 
   private async runCheck(): Promise<UpdateStatus> {
     if (!this.current) return this.statusSnapshot();
-    const busy = this.status.state === "downloading" || this.status.state === "ready";
+    const busy =
+      this.status.state === "downloading" || this.status.state === "ready";
     if (!busy) this.publish({ state: "checking" });
 
     try {
@@ -199,7 +212,8 @@ export class UpdateChecker {
 
       const tag = typeof release.tag_name === "string" ? release.tag_name : "";
       const latest = parseVersion(tag);
-      const releaseUrl = typeof release.html_url === "string" ? release.html_url : null;
+      const releaseUrl =
+        typeof release.html_url === "string" ? release.html_url : null;
       if (!latest || release.draft === true || release.prerelease === true) {
         this.publish({
           state: "idle",
@@ -255,7 +269,11 @@ export class UpdateChecker {
     this.publish({ state: "downloading", progress: 0 });
     try {
       await installer.prepare(assets, version, (percent) => {
-        if (this.status.latest !== version || this.status.state !== "downloading") return;
+        if (
+          this.status.latest !== version ||
+          this.status.state !== "downloading"
+        )
+          return;
         this.publish({ progress: percent });
       });
       if (this.status.latest !== version) return;
@@ -267,7 +285,11 @@ export class UpdateChecker {
       this.preparedFor = null;
       // No usable asset: leave the arrow pointing at the release page instead
       // of spinning forever on a download that cannot succeed.
-      this.publish({ state: "available", progress: 0, installSource: "manual" });
+      this.publish({
+        state: "available",
+        progress: 0,
+        installSource: "manual",
+      });
     }
   }
 

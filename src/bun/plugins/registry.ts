@@ -7,7 +7,11 @@ import type { KipDatabase } from "../storage/db";
 import { getDataDir } from "../storage/db";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { MarketplaceEntry, PluginSummary, ThreadMode } from "../../shared/types";
+import type {
+  MarketplaceEntry,
+  PluginSummary,
+  ThreadMode,
+} from "../../shared/types";
 import { findMarketplaceEntry } from "../../shared/marketplace";
 import { gemini2apiPlugin } from "./gemini2api";
 import type {
@@ -65,7 +69,10 @@ export function marketEntryFor(plugin: KipPlugin): MarketplaceEntry {
  * A plugin that declares permissions must be accepted before it is started,
  * probed, or opened. A plugin that declares none (a pure form) needs no gate.
  */
-export function isPluginAccepted(database: KipDatabase, plugin: KipPlugin): boolean {
+export function isPluginAccepted(
+  database: KipDatabase,
+  plugin: KipPlugin,
+): boolean {
   if (marketEntryFor(plugin).permissions.length === 0) return true;
   const accepted = database.getSetting<string>(acceptedKey(plugin), "");
   return typeof accepted === "string" && accepted.length > 0;
@@ -143,8 +150,14 @@ function gatewayPluginsOfferingChat(): GatewayPlugin[] {
     );
 }
 
-function readDefaultThreadMode(database: KipDatabase, plugin: GatewayPlugin): ThreadMode {
-  const stored = database.getSetting<string>(settingKey(plugin, PLUGIN_THREAD_MODE_FIELD), "");
+function readDefaultThreadMode(
+  database: KipDatabase,
+  plugin: GatewayPlugin,
+): ThreadMode {
+  const stored = database.getSetting<string>(
+    settingKey(plugin, PLUGIN_THREAD_MODE_FIELD),
+    "",
+  );
   return stored === "agent" ? "agent" : "chat";
 }
 
@@ -165,15 +178,25 @@ export function resolveNewThreadMode(
   providerId: string,
   requested?: ThreadMode,
 ): ThreadMode {
-  const support = chatModeSupport(database).find((item) => item.providerId === providerId);
+  const support = chatModeSupport(database).find(
+    (item) => item.providerId === providerId,
+  );
   if (!support) return "agent";
   if (requested === "agent" || requested === "chat") return requested;
   return support.defaultMode;
 }
 
-export function isPluginEnabled(database: KipDatabase, plugin: KipPlugin): boolean {
+export function isPluginEnabled(
+  database: KipDatabase,
+  plugin: KipPlugin,
+): boolean {
   if (plugin.kind !== "title") return true;
-  return database.getSetting<boolean>(enabledKey(plugin), plugin.defaultEnabled ?? false) === true;
+  return (
+    database.getSetting<boolean>(
+      enabledKey(plugin),
+      plugin.defaultEnabled ?? false,
+    ) === true
+  );
 }
 
 export function setPluginEnabled(
@@ -184,7 +207,10 @@ export function setPluginEnabled(
   database.setSetting(enabledKey(plugin), enabled);
 }
 
-export function getOrCreatePluginDeviceId(database: KipDatabase, plugin: KipPlugin): string {
+export function getOrCreatePluginDeviceId(
+  database: KipDatabase,
+  plugin: KipPlugin,
+): string {
   const existing = database.getSetting<string>(deviceIdKey(plugin), "");
   if (typeof existing === "string" && existing.trim().length >= 8) {
     return existing.trim();
@@ -202,7 +228,10 @@ export function readPluginValues(
   const values: Record<string, string> = {};
   for (const field of plugin.fields) {
     if (field.kind === "secret") continue;
-    const stored = database.getSetting<string>(settingKey(plugin, field.name), "");
+    const stored = database.getSetting<string>(
+      settingKey(plugin, field.name),
+      "",
+    );
     if (typeof stored === "string" && stored) values[field.name] = stored;
   }
   return values;
@@ -216,11 +245,17 @@ export function savePluginValues(
   for (const field of plugin.fields) {
     if (field.kind === "secret") continue;
     if (!(field.name in values)) continue;
-    database.setSetting(settingKey(plugin, field.name), (values[field.name] ?? "").trim());
+    database.setSetting(
+      settingKey(plugin, field.name),
+      (values[field.name] ?? "").trim(),
+    );
   }
 }
 
-export function toPluginSummary(database: KipDatabase, plugin: KipPlugin): PluginSummary {
+export function toPluginSummary(
+  database: KipDatabase,
+  plugin: KipPlugin,
+): PluginSummary {
   const market = marketEntryFor(plugin);
   return {
     id: plugin.id,
@@ -233,7 +268,10 @@ export function toPluginSummary(database: KipDatabase, plugin: KipPlugin): Plugi
     values: readPluginValues(database, plugin),
     market,
     accepted: isPluginAccepted(database, plugin),
-    hasWindow: plugin.kind === "gateway" && plugin.window !== undefined && plugin.page !== undefined,
+    hasWindow:
+      plugin.kind === "gateway" &&
+      plugin.window !== undefined &&
+      plugin.page !== undefined,
   };
 }
 
@@ -254,7 +292,11 @@ export async function generateTitleWithPlugins(
     .list()
     .filter((plugin): plugin is TitlePlugin => plugin.kind === "title");
   for (const plugin of titlePlugins) {
-    if (!isPluginEnabled(database, plugin) || !isPluginAccepted(database, plugin)) continue;
+    if (
+      !isPluginEnabled(database, plugin) ||
+      !isPluginAccepted(database, plugin)
+    )
+      continue;
     const values = readPluginValues(database, plugin);
     const deviceId = getOrCreatePluginDeviceId(database, plugin);
     try {
@@ -303,7 +345,10 @@ export async function beforeGatewayRequest(
 }
 
 /** The run ended, so the gateway may count itself idle from now on. */
-export function afterGatewayRequest(database: KipDatabase, providerId: string): void {
+export function afterGatewayRequest(
+  database: KipDatabase,
+  providerId: string,
+): void {
   const plugin = gatewayFor(providerId);
   if (!plugin?.afterRequest) return;
   try {
@@ -314,7 +359,10 @@ export function afterGatewayRequest(database: KipDatabase, providerId: string): 
 }
 
 /** The user saved this plugin's form; let it re-read what it copied out. */
-export function notifyGatewaySettings(database: KipDatabase, plugin: KipPlugin): void {
+export function notifyGatewaySettings(
+  database: KipDatabase,
+  plugin: KipPlugin,
+): void {
   if (plugin.kind !== "gateway" || !plugin.settingsChanged) return;
   try {
     plugin.settingsChanged(pluginRuntime(plugin, database));

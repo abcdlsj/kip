@@ -1,9 +1,25 @@
 import * as Popover from "@radix-ui/react-popover";
-import { Check, FileDown, GitBranch, Minimize2, MoreHorizontal, PanelLeftOpen } from "lucide-react";
+import {
+  Check,
+  FileDown,
+  GitBranch,
+  Minimize2,
+  MoreHorizontal,
+  PanelLeftOpen,
+} from "lucide-react";
 import { useState } from "react";
-import type { ContextUsage, ThreadSummary, Workspace } from "../../../shared/types";
+import type {
+  ContextUsage,
+  ThreadSummary,
+  Workspace,
+} from "../../../shared/types";
 import { compactHomePath, formatTokens } from "../../lib/format";
-import { isMac, modShortcut, needsWindowControls, platform } from "../../lib/platform";
+import {
+  isMac,
+  modShortcut,
+  needsWindowControls,
+  platform,
+} from "../../lib/platform";
 import { request } from "../../rpc-client";
 import { useChatStore } from "../../stores/chat-store";
 import { useUiStore } from "../../stores/ui-store";
@@ -21,8 +37,12 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
   const setUsage = useChatStore((state) => state.setUsage);
-  const changes = useChatStore((state) => (thread ? state.threads[thread.id]?.changes : null));
-  const running = useChatStore((state) => (thread ? state.threads[thread.id]?.running : false));
+  const changes = useChatStore((state) =>
+    thread ? state.threads[thread.id]?.changes : null,
+  );
+  const running = useChatStore((state) =>
+    thread ? state.threads[thread.id]?.running : false,
+  );
   const [compacting, setCompacting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -40,7 +60,9 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
     setExporting(true);
     setMenuOpen(false);
     try {
-      const { savedPath } = await request("exportThreadMarkdown", { threadId: thread.id });
+      const { savedPath } = await request("exportThreadMarkdown", {
+        threadId: thread.id,
+      });
       if (savedPath) {
         setExported(true);
         setTimeout(() => setExported(false), 2000);
@@ -71,7 +93,8 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
         // The window is frameless off macOS, so nothing else handles the
         // double-click-to-maximize gesture the system title bar would.
         if (platform === "mac") return;
-        if ((event.target as HTMLElement).closest("button, a, input, textarea")) return;
+        if ((event.target as HTMLElement).closest("button, a, input, textarea"))
+          return;
         void request("windowControl", { action: "maximize" });
       }}
       className={`drag-region absolute inset-x-0 top-0 z-10 flex h-11 items-center gap-2 pr-3 transition-colors ${
@@ -117,7 +140,11 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
       </div>
       <div className="no-drag ml-auto flex items-center gap-1">
         {thread && changes && (
-          <ChangesChip threadId={thread.id} changes={changes} running={running ?? false} />
+          <ChangesChip
+            threadId={thread.id}
+            changes={changes}
+            running={running ?? false}
+          />
         )}
         {workspace?.gitBranch && (
           <span
@@ -128,7 +155,11 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
                 : `Git branch: ${workspace.gitBranch}`
             }
           >
-            <GitBranch size={11} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+            <GitBranch
+              size={11}
+              strokeWidth={1.5}
+              className="shrink-0 text-[var(--text-muted)]"
+            />
             <span className="max-w-[140px] truncate font-mono text-[11px]">
               {workspace.gitBranch}
             </span>
@@ -151,7 +182,12 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
             }
             className="btn-ghost group h-6 gap-1.5 rounded-[7px] px-1.5"
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" className="rotate-[-90deg]">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              className="rotate-[-90deg]"
+            >
               <circle
                 cx="7"
                 cy="7"
@@ -169,7 +205,10 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
                 strokeWidth="1.6"
                 strokeLinecap="round"
                 strokeDasharray={`${Math.max(0.6, usage.ratio * 34.56)} 34.56`}
-                style={{ transition: "stroke-dasharray 260ms var(--spring), stroke 200ms ease" }}
+                style={{
+                  transition:
+                    "stroke-dasharray 260ms var(--spring), stroke 200ms ease",
+                }}
                 className={compacting ? "pulse-dot" : ""}
               />
             </svg>
@@ -188,7 +227,11 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
                 title="Thread options"
               >
                 {exported ? (
-                  <Check size={13} strokeWidth={1.7} className="text-[var(--status-ok)]" />
+                  <Check
+                    size={13}
+                    strokeWidth={1.7}
+                    className="text-[var(--status-ok)]"
+                  />
                 ) : (
                   <MoreHorizontal size={14} strokeWidth={1.5} />
                 )}
@@ -207,7 +250,11 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
                   disabled={compacting || running}
                   className="btn-ghost h-7 w-full justify-start gap-2 rounded-[6px] px-2 text-left text-[12px]"
                 >
-                  <Minimize2 size={13} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+                  <Minimize2
+                    size={13}
+                    strokeWidth={1.5}
+                    className="shrink-0 text-[var(--text-muted)]"
+                  />
                   <span>{compacting ? "Compacting…" : "Compact context"}</span>
                 </button>
                 <button
@@ -216,7 +263,11 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
                   disabled={exporting}
                   className="btn-ghost h-7 w-full justify-start gap-2 rounded-[6px] px-2 text-left text-[12px]"
                 >
-                  <FileDown size={13} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+                  <FileDown
+                    size={13}
+                    strokeWidth={1.5}
+                    className="shrink-0 text-[var(--text-muted)]"
+                  />
                   <span>{exporting ? "Exporting…" : "Export Markdown"}</span>
                 </button>
               </Popover.Content>
@@ -226,7 +277,10 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
       </div>
       {needsWindowControls && (
         <>
-          <span className="ml-1 h-3.5 w-px shrink-0 bg-[var(--border-hairline)]" aria-hidden="true" />
+          <span
+            className="ml-1 h-3.5 w-px shrink-0 bg-[var(--border-hairline)]"
+            aria-hidden="true"
+          />
           <WindowControls />
         </>
       )}

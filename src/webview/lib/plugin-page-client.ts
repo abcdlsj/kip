@@ -4,7 +4,10 @@
  * names its `page()` controller answers in the main process.
  */
 import { Electroview } from "electrobun/view";
-import type { PluginPageRPC, PluginPageSnapshot } from "../../shared/plugin-page";
+import type {
+  PluginPageRPC,
+  PluginPageSnapshot,
+} from "../../shared/plugin-page";
 import { applyPlatform } from "./platform";
 import { applyTheme, watchSystemTheme } from "./theme";
 

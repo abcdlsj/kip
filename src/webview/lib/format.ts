@@ -18,7 +18,11 @@ export function groupThreads<T extends { updatedAt: number }>(
   threads: T[],
 ): Array<{ label: string; items: T[] }> {
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
   const weekAgo = startOfToday - 7 * 24 * 60 * 60 * 1000;
   const today: T[] = [];
   const week: T[] = [];

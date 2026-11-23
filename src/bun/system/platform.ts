@@ -36,7 +36,9 @@ export function pathStartsWith(target: string, prefix: string): boolean {
   const normalizedTarget = normalizeForCompare(target);
   const normalizedPrefix = normalizeForCompare(prefix);
   if (normalizedTarget === normalizedPrefix) return true;
-  const withSep = normalizedPrefix.endsWith(sep) ? normalizedPrefix : `${normalizedPrefix}${sep}`;
+  const withSep = normalizedPrefix.endsWith(sep)
+    ? normalizedPrefix
+    : `${normalizedPrefix}${sep}`;
   return normalizedTarget.startsWith(withSep);
 }
 
@@ -70,7 +72,13 @@ export function nonInteractiveEnv(
 
 /** Short human-readable runtime description for agent system context. */
 export function describeRuntimeEnv(): string {
-  const osName = IS_MAC ? "macOS" : IS_WINDOWS ? "Windows" : IS_LINUX ? "Linux" : platform();
+  const osName = IS_MAC
+    ? "macOS"
+    : IS_WINDOWS
+      ? "Windows"
+      : IS_LINUX
+        ? "Linux"
+        : platform();
   const shellHint = IS_WINDOWS
     ? "Windows shell (prefer cross-platform commands; avoid assuming POSIX-only utilities)"
     : "POSIX shell";

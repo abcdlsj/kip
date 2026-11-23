@@ -21,7 +21,10 @@ export interface PluginPageRPC {
       /** The current snapshot, fetched when the page opens. */
       pageState: { params: void; response: PluginPageSnapshot };
       /** Run one action the plugin declared in its page controller. */
-      pageAction: { params: { action: string; input?: unknown }; response: unknown };
+      pageAction: {
+        params: { action: string; input?: unknown };
+        response: unknown;
+      };
     };
     messages: {};
   };

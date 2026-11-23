@@ -19,11 +19,15 @@ function clip(value: string, max: number): string {
 }
 
 /** Present progressive, for the live action line: "Writing src/a.ts". */
-export function activeLabel(block: Pick<ToolCallBlock, "toolName" | "args">): string {
-  const path = typeof block.args.path === "string" ? shortPath(block.args.path) : "";
+export function activeLabel(
+  block: Pick<ToolCallBlock, "toolName" | "args">,
+): string {
+  const path =
+    typeof block.args.path === "string" ? shortPath(block.args.path) : "";
   switch (block.toolName) {
     case "bash": {
-      const command = typeof block.args.command === "string" ? block.args.command : "";
+      const command =
+        typeof block.args.command === "string" ? block.args.command : "";
       return command ? `Running ${clip(command, 40)}` : "Running a command";
     }
     case "read":
@@ -44,11 +48,15 @@ export function activeLabel(block: Pick<ToolCallBlock, "toolName" | "args">): st
 }
 
 /** Imperative, for steps that have not happened: "Write src/a.ts". */
-export function intentLabel(block: Pick<ToolCallBlock, "toolName" | "args">): string {
-  const path = typeof block.args.path === "string" ? shortPath(block.args.path) : "";
+export function intentLabel(
+  block: Pick<ToolCallBlock, "toolName" | "args">,
+): string {
+  const path =
+    typeof block.args.path === "string" ? shortPath(block.args.path) : "";
   switch (block.toolName) {
     case "bash": {
-      const command = typeof block.args.command === "string" ? block.args.command : "";
+      const command =
+        typeof block.args.command === "string" ? block.args.command : "";
       return command ? `Run ${clip(command, 64)}` : "Run a command";
     }
     case "read":
@@ -71,6 +79,7 @@ export function intentLabel(block: Pick<ToolCallBlock, "toolName" | "args">): st
 /** The label a step shows in the work log for its current status. */
 export function stepLabel(block: ToolCallBlock): string {
   if (block.status === "running") return activeLabel(block);
-  if (block.status === "awaiting_approval" || block.status === "denied") return intentLabel(block);
+  if (block.status === "awaiting_approval" || block.status === "denied")
+    return intentLabel(block);
   return block.summaryLabel;
 }

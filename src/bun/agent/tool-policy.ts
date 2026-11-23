@@ -3,7 +3,15 @@
  * I/O lets the policy be unit-tested and reused by both the interceptor and UI.
  */
 import { realpathSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { diffLines } from "diff";
 import type { ApprovalPolicy } from "../../shared/types";
 import { pathStartsWith, toPosixPath, userHome } from "../system/platform";
@@ -29,24 +37,50 @@ const SAFE_COMMANDS = new Set([
   "type",
 ]);
 
-const SAFE_GIT_SUBCOMMANDS = new Set(["status", "diff", "log", "branch", "show", "rev-parse"]);
+const SAFE_GIT_SUBCOMMANDS = new Set([
+  "status",
+  "diff",
+  "log",
+  "branch",
+  "show",
+  "rev-parse",
+]);
 
 const HIGH_RISK_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
-  { pattern: /\brm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)+/, label: "recursive delete" },
+  {
+    pattern: /\brm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)+/,
+    label: "recursive delete",
+  },
   { pattern: /\bsudo\b/, label: "privilege escalation" },
   { pattern: /\bchmod\s+777\b/, label: "world-writable permissions" },
   { pattern: /\bmkfs(\.[a-z0-9]+)?\b/, label: "filesystem format" },
   { pattern: /\bdd\s+if=/, label: "raw disk write" },
   { pattern: /\bgit\s+reset\s+--hard\b/, label: "discards local changes" },
   { pattern: /\bgit\s+push\s+.*--force\b/, label: "force push" },
-  { pattern: /\bcurl\b[^|]*\|\s*(sh|bash|zsh)\b/, label: "pipes network input to a shell" },
-  { pattern: /\bwget\b[^|]*\|\s*(sh|bash|zsh)\b/, label: "pipes network input to a shell" },
+  {
+    pattern: /\bcurl\b[^|]*\|\s*(sh|bash|zsh)\b/,
+    label: "pipes network input to a shell",
+  },
+  {
+    pattern: /\bwget\b[^|]*\|\s*(sh|bash|zsh)\b/,
+    label: "pipes network input to a shell",
+  },
   { pattern: />\s*\/dev\/sd[a-z]/, label: "writes a raw device" },
   // Windows / PowerShell destructive equivalents
-  { pattern: /\b(?:remove-item|ri|del|erase)\b[^\n]*(?:-recurse|-r\b|\/s\b)/i, label: "recursive delete" },
-  { pattern: /\b(?:rmdir|rd)\b[^\n]*\/s\b/i, label: "recursive directory delete" },
+  {
+    pattern: /\b(?:remove-item|ri|del|erase)\b[^\n]*(?:-recurse|-r\b|\/s\b)/i,
+    label: "recursive delete",
+  },
+  {
+    pattern: /\b(?:rmdir|rd)\b[^\n]*\/s\b/i,
+    label: "recursive directory delete",
+  },
   { pattern: /\bformat(?:\.com)?\s+[a-z]:/i, label: "disk format" },
-  { pattern: /\b(?:irm|invoke-restmethod|iwr|invoke-webrequest)\b[^|]*\|\s*(?:iex|invoke-expression)\b/i, label: "pipes network input to PowerShell" },
+  {
+    pattern:
+      /\b(?:irm|invoke-restmethod|iwr|invoke-webrequest)\b[^|]*\|\s*(?:iex|invoke-expression)\b/i,
+    label: "pipes network input to PowerShell",
+  },
 ];
 
 const RESTRICTED_ROOTS = [".ssh", ".aws", ".gnupg"];
@@ -83,14 +117,26 @@ export function isWithinRoot(root: string, target: string): boolean {
   );
   const rel = relative(resolvedRoot, resolvedTarget);
   // On Windows, paths on different drives produce an absolute `rel` (e.g. "D:\\...").
-  return rel === "" || (!isAbsolute(rel) && !rel.startsWith("..") && !rel.startsWith(`..${sep}`));
+  return (
+    rel === "" ||
+    (!isAbsolute(rel) && !rel.startsWith("..") && !rel.startsWith(`..${sep}`))
+  );
 }
 
-export function resolveToolPath(workspaceRoot: string, targetPath: string): string {
-  if (targetPath === "~" || targetPath.startsWith("~/") || targetPath.startsWith("~\\")) {
+export function resolveToolPath(
+  workspaceRoot: string,
+  targetPath: string,
+): string {
+  if (
+    targetPath === "~" ||
+    targetPath.startsWith("~/") ||
+    targetPath.startsWith("~\\")
+  ) {
     return expandHome(targetPath);
   }
-  return isAbsolute(targetPath) ? resolve(targetPath) : resolve(workspaceRoot, targetPath);
+  return isAbsolute(targetPath)
+    ? resolve(targetPath)
+    : resolve(workspaceRoot, targetPath);
 }
 
 export function isSensitivePath(targetPath: string): boolean {
@@ -98,7 +144,11 @@ export function isSensitivePath(targetPath: string): boolean {
   const home = userHome();
   const credentials = resolve(home, ".kip", "credentials.enc");
   const machineKey = resolve(home, ".kip", ".machine");
-  if (pathStartsWith(expanded, credentials) || pathStartsWith(expanded, machineKey)) return true;
+  if (
+    pathStartsWith(expanded, credentials) ||
+    pathStartsWith(expanded, machineKey)
+  )
+    return true;
   for (const root of RESTRICTED_ROOTS) {
     const restricted = resolve(home, root);
     if (pathStartsWith(expanded, restricted)) return true;
@@ -137,7 +187,11 @@ function classifySegment(raw: string): CommandRisk {
   if (first === "git") {
     const sub = words[1] ?? "";
     if (!SAFE_GIT_SUBCOMMANDS.has(sub)) return "standard";
-    if (sub === "branch" && !segment.includes("--show-current") && words.length > 2) {
+    if (
+      sub === "branch" &&
+      !segment.includes("--show-current") &&
+      words.length > 2
+    ) {
       return "standard";
     }
     return "safe";
@@ -145,9 +199,13 @@ function classifySegment(raw: string): CommandRisk {
   return "safe";
 }
 
-export function classifyCommand(command: string): { risk: CommandRisk; reason: string } {
+export function classifyCommand(command: string): {
+  risk: CommandRisk;
+  reason: string;
+} {
   for (const rule of HIGH_RISK_PATTERNS) {
-    if (rule.pattern.test(command)) return { risk: "high-risk", reason: rule.label };
+    if (rule.pattern.test(command))
+      return { risk: "high-risk", reason: rule.label };
   }
   const segments = splitShellSegments(command);
   let highest: CommandRisk = "safe";
@@ -158,7 +216,8 @@ export function classifyCommand(command: string): { risk: CommandRisk; reason: s
   }
   return {
     risk: highest,
-    reason: highest === "safe" ? "read-only command" : "may modify the workspace",
+    reason:
+      highest === "safe" ? "read-only command" : "may modify the workspace",
   };
 }
 
@@ -178,7 +237,8 @@ export function commandTouchesSensitivePath(command: string): boolean {
     toPosixPath(join(home, ".kip", ".machine")),
   ];
   const lower = trimmed.toLowerCase();
-  if (markers.some((marker) => lower.includes(marker.toLowerCase()))) return true;
+  if (markers.some((marker) => lower.includes(marker.toLowerCase())))
+    return true;
   return /(^|[\s/\\])(?:~|\$HOME|\$\{HOME\}|%USERPROFILE%|\$env:USERPROFILE)?[\\/]\.(?:ssh|aws|gnupg)\b|(^|[\s/\\])\.kip[\\/](?:credentials\.enc|\.machine)\b/i.test(
     trimmed,
   );
@@ -186,8 +246,27 @@ export function commandTouchesSensitivePath(command: string): boolean {
 
 /** Programs whose second word picks the action (`git push`, `npm install`). */
 const SUBCOMMAND_PROGRAMS = new Set([
-  "git", "npm", "pnpm", "yarn", "bun", "bunx", "npx", "cargo", "go", "pip", "pip3", "uv",
-  "docker", "kubectl", "make", "brew", "gh", "deno", "python", "python3", "node",
+  "git",
+  "npm",
+  "pnpm",
+  "yarn",
+  "bun",
+  "bunx",
+  "npx",
+  "cargo",
+  "go",
+  "pip",
+  "pip3",
+  "uv",
+  "docker",
+  "kubectl",
+  "make",
+  "brew",
+  "gh",
+  "deno",
+  "python",
+  "python3",
+  "node",
 ]);
 
 /**
@@ -198,31 +277,53 @@ const SUBCOMMAND_PROGRAMS = new Set([
 export function commandApprovalKey(segment: string): string {
   const words = segment.trim().match(/[^\s]+/g) ?? [];
   let index = 0;
-  while (index < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index] ?? "")) index++;
+  while (
+    index < words.length &&
+    /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index] ?? "")
+  )
+    index++;
   const program = (words[index] ?? "").replace(/^\(/, "");
   if (!program) return "";
   const sub = words[index + 1];
-  if (SUBCOMMAND_PROGRAMS.has(program) && sub && !sub.startsWith("-")) return `${program} ${sub}`;
+  if (SUBCOMMAND_PROGRAMS.has(program) && sub && !sub.startsWith("-"))
+    return `${program} ${sub}`;
   return program;
 }
 
 export function commandApprovalKeys(command: string): string[] {
-  return [...new Set(splitShellSegments(command).map(commandApprovalKey).filter(Boolean))];
+  return [
+    ...new Set(
+      splitShellSegments(command).map(commandApprovalKey).filter(Boolean),
+    ),
+  ];
 }
 
-const DEVICE_PATHS = new Set(["/dev/null", "/dev/stdout", "/dev/stderr", "/dev/stdin", "/dev/tty", "NUL", "nul"]);
+const DEVICE_PATHS = new Set([
+  "/dev/null",
+  "/dev/stdout",
+  "/dev/stderr",
+  "/dev/stdin",
+  "/dev/tty",
+  "NUL",
+  "nul",
+]);
 
 /**
  * Path-like arguments in a shell command that resolve outside the workspace.
  * The program word itself is skipped: running `/usr/bin/env` is not file access.
  */
-export function commandPathsOutsideRoot(command: string, workspaceRoot: string): string[] {
+export function commandPathsOutsideRoot(
+  command: string,
+  workspaceRoot: string,
+): string[] {
   const outside: string[] = [];
   for (const segment of splitShellSegments(command)) {
     const words = segment.match(/[^\s]+/g) ?? [];
     for (const [index, raw] of words.entries()) {
       if (index === 0) continue;
-      let word = raw.replace(/^[<>]+|^\d?>>?|^&>/, "").replace(/^["'(]+|["')]+$/g, "");
+      let word = raw
+        .replace(/^[<>]+|^\d?>>?|^&>/, "")
+        .replace(/^["'(]+|["')]+$/g, "");
       const eq = word.indexOf("=");
       if (word.startsWith("-") && eq > 0) word = word.slice(eq + 1);
       if (!word || word.startsWith("-") || word.includes("://")) continue;
@@ -258,7 +359,10 @@ export function needsApproval(
   return risk !== "safe";
 }
 
-export function countLineChanges(before: string, after: string): { added: number; removed: number } {
+export function countLineChanges(
+  before: string,
+  after: string,
+): { added: number; removed: number } {
   let added = 0;
   let removed = 0;
   for (const part of diffLines(before, after)) {
@@ -280,7 +384,8 @@ export function summarizeToolCall(
   workspaceRoot: string,
   change?: { added: number; removed: number },
 ): string {
-  const pathValue = typeof args.path === "string" ? shortenPath(args.path, workspaceRoot) : "";
+  const pathValue =
+    typeof args.path === "string" ? shortenPath(args.path, workspaceRoot) : "";
   switch (toolName) {
     case "read":
       return `Read ${pathValue || "file"}`;
@@ -291,7 +396,8 @@ export function summarizeToolCall(
         change ? ` (+${change.added} -${change.removed})` : ""
       }`;
     case "bash": {
-      const command = typeof args.command === "string" ? args.command : "command";
+      const command =
+        typeof args.command === "string" ? args.command : "command";
       return `Ran ${command.length > 64 ? `${command.slice(0, 61)}...` : command}`;
     }
     case "grep":

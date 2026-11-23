@@ -60,21 +60,36 @@ export interface KipRPCSchema {
         response: FileSuggestion[];
       };
 
-      listThreads: { params: { workspaceId: string }; response: ThreadSummary[] };
+      listThreads: {
+        params: { workspaceId: string };
+        response: ThreadSummary[];
+      };
       createThread: { params: CreateThreadInput; response: ThreadSummary };
       loadThreadTurns: {
         params: { threadId: string };
         response: { turns: ChatTurn[]; usage: ContextUsage };
       };
       deleteThread: { params: { threadId: string }; response: void };
-      renameThread: { params: { threadId: string; title: string }; response: void };
-      regenerateThreadTitle: { params: { threadId: string }; response: { title: string | null } };
+      renameThread: {
+        params: { threadId: string; title: string };
+        response: void;
+      };
+      regenerateThreadTitle: {
+        params: { threadId: string };
+        response: { title: string | null };
+      };
       setThreadModel: {
         params: { threadId: string; provider: string; modelId: string };
         response: void;
       };
-      setThinkingLevel: { params: { threadId: string; level: ThinkingLevel }; response: void };
-      setThreadMode: { params: { threadId: string; mode: ThreadMode }; response: void };
+      setThinkingLevel: {
+        params: { threadId: string; level: ThinkingLevel };
+        response: void;
+      };
+      setThreadMode: {
+        params: { threadId: string; mode: ThreadMode };
+        response: void;
+      };
       setThreadApprovalPolicy: {
         params: { threadId: string; policy: ApprovalPolicy | null };
         response: void;
@@ -83,7 +98,10 @@ export interface KipRPCSchema {
 
       sendPrompt: { params: SendPromptInput; response: { accepted: boolean } };
       /** Returns the text of queued messages that were dropped, so the view can restore them. */
-      abortThread: { params: { threadId: string }; response: { restored: string[] } };
+      abortThread: {
+        params: { threadId: string };
+        response: { restored: string[] };
+      };
       resolveToolApproval: {
         params: {
           threadId: string;
@@ -100,14 +118,20 @@ export interface KipRPCSchema {
         params: { threadId: string; userIndex: number; text: string };
         response: { accepted: boolean };
       };
-      getRunChanges: { params: { threadId: string }; response: RunChanges | null };
+      getRunChanges: {
+        params: { threadId: string };
+        response: RunChanges | null;
+      };
       undoRunChanges: {
         params: { threadId: string; runId: string };
         response: { ok: boolean; error?: string; next: RunChanges | null };
       };
 
       getSettings: { params: void; response: SettingsSnapshot };
-      updateSettings: { params: UpdateSettingsInput; response: SettingsSnapshot };
+      updateSettings: {
+        params: UpdateSettingsInput;
+        response: SettingsSnapshot;
+      };
       setProviderApiKey: {
         params: { provider: string; apiKey: string };
         response: { valid: boolean };
@@ -180,8 +204,14 @@ export interface KipRPCSchema {
         params: { threadId: string };
         response: { savedPath: string | null };
       };
-      exportFullBackupBundle: { params: void; response: { savedPath: string | null } };
-      importBackupBundle: { params: void; response: { importedThreads: number } };
+      exportFullBackupBundle: {
+        params: void;
+        response: { savedPath: string | null };
+      };
+      importBackupBundle: {
+        params: void;
+        response: { importedThreads: number };
+      };
 
       windowControl: { params: { action: WindowAction }; response: void };
 

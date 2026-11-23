@@ -28,7 +28,10 @@ const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
 
 process.on("unhandledRejection", (reason) => {
-  console.error("Unhandled rejection:", reason instanceof Error ? reason.message : reason);
+  console.error(
+    "Unhandled rejection:",
+    reason instanceof Error ? reason.message : reason,
+  );
 });
 process.on("uncaughtException", (error) => {
   console.error("Uncaught exception:", error.message);
@@ -37,7 +40,9 @@ process.on("uncaughtException", (error) => {
 const database = new KipDatabase();
 const registry = await ModelRegistry.create(database);
 
-const streamHolder: { send: (payload: AgentStreamEnvelope) => void } = { send: () => {} };
+const streamHolder: { send: (payload: AgentStreamEnvelope) => void } = {
+  send: () => {},
+};
 const orchestrator = new KipOrchestrator(
   database,
   registry,
@@ -57,7 +62,9 @@ const windowRef: { current: BrowserWindow | null } = { current: null };
 const updateChecker = new UpdateChecker({
   // Dev bundles carry a stale version.json, so local builds stay quiet unless
   // KIP_UPDATE_CURRENT_VERSION pins the version explicitly.
-  currentVersion: process.env.KIP_UPDATE_CURRENT_VERSION ?? (await Updater.localInfo.version()),
+  currentVersion:
+    process.env.KIP_UPDATE_CURRENT_VERSION ??
+    (await Updater.localInfo.version()),
   installer: createUpdateInstaller({
     // Restarting for an update stops any running agent; the view warns first.
     onQuit: () => {
@@ -106,7 +113,8 @@ function topThread(): { threadId: string | null; state: NotchState } {
 
 function refreshNotch(): void {
   if (!notch) return;
-  if (process.env.KIP_NOTCH_PREVIEW) return notch.set(process.env.KIP_NOTCH_PREVIEW as NotchState);
+  if (process.env.KIP_NOTCH_PREVIEW)
+    return notch.set(process.env.KIP_NOTCH_PREVIEW as NotchState);
   notch.set(attention.focused ? "idle" : topThread().state);
 }
 
@@ -115,8 +123,10 @@ function trackAttention(payload: AgentStreamEnvelope): void {
   if (event.kind === "text_delta" || event.kind === "thinking_delta") return;
   const calls = attention.awaiting.get(threadId) ?? new Set<string>();
   attention.awaiting.set(threadId, calls);
-  if (event.kind === "tool_approval_required") calls.add(event.approval.toolCallId);
-  else if (event.kind === "tool_approved" || event.kind === "tool_end") calls.delete(event.toolCallId);
+  if (event.kind === "tool_approval_required")
+    calls.add(event.approval.toolCallId);
+  else if (event.kind === "tool_approved" || event.kind === "tool_end")
+    calls.delete(event.toolCallId);
   else if (event.kind === "turn_complete" || event.kind === "turn_error") {
     calls.clear();
     if (!attention.focused) attention.done.add(threadId);
@@ -129,7 +139,10 @@ function trackAttention(payload: AgentStreamEnvelope): void {
 streamHolder.send = (payload) => {
   rpc.send.agentStreamEvent(payload);
   trackAttention(payload);
-  if (payload.event.kind === "turn_complete" && database.getSetting("sync.enabled", false)) {
+  if (
+    payload.event.kind === "turn_complete" &&
+    database.getSetting("sync.enabled", false)
+  ) {
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       rpc.send.syncStatus({ state: "running" });
@@ -138,7 +151,8 @@ streamHolder.send = (payload) => {
         .catch((error: unknown) =>
           rpc.send.syncStatus({
             state: "error",
-            message: error instanceof Error ? error.message : "Automatic sync failed",
+            message:
+              error instanceof Error ? error.message : "Automatic sync failed",
           }),
         );
     }, 10_000);

@@ -1,6 +1,13 @@
 import * as Popover from "@radix-ui/react-popover";
 import { useState } from "react";
-import { Check, ChevronDown, Flame, ShieldCheck, ShieldHalf, ShieldOff } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Flame,
+  ShieldCheck,
+  ShieldHalf,
+  ShieldOff,
+} from "lucide-react";
 import type { ApprovalPolicy } from "../../../shared/types";
 import { useUiStore } from "../../stores/ui-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
@@ -51,7 +58,9 @@ export function PermissionSelector() {
   const thread = useWorkspaceStore((state) =>
     state.threads.find((item) => item.id === state.activeThreadId),
   );
-  const setThreadApprovalPolicy = useWorkspaceStore((state) => state.setThreadApprovalPolicy);
+  const setThreadApprovalPolicy = useWorkspaceStore(
+    (state) => state.setThreadApprovalPolicy,
+  );
   const [open, setOpen] = useState(false);
 
   if (!settings) return null;
@@ -60,9 +69,11 @@ export function PermissionSelector() {
   const sessionOverride = thread?.approvalPolicy ?? null;
   const effectivePolicy: ApprovalPolicy = sessionOverride ?? globalPolicy;
   const current =
-    POLICY_OPTIONS.find((item) => item.value === effectivePolicy) ?? POLICY_OPTIONS[0]!;
+    POLICY_OPTIONS.find((item) => item.value === effectivePolicy) ??
+    POLICY_OPTIONS[0]!;
   const globalOption =
-    POLICY_OPTIONS.find((item) => item.value === globalPolicy) ?? POLICY_OPTIONS[0]!;
+    POLICY_OPTIONS.find((item) => item.value === globalPolicy) ??
+    POLICY_OPTIONS[0]!;
   const CurrentIcon = current.icon;
 
   const choose = async (policy: ApprovalPolicy) => {
@@ -105,7 +116,9 @@ export function PermissionSelector() {
           />
           <span
             className={
-              effectivePolicy === "yolo" ? "font-medium text-[var(--status-err)]" : undefined
+              effectivePolicy === "yolo"
+                ? "font-medium text-[var(--status-err)]"
+                : undefined
             }
           >
             {current.shortLabel}
@@ -113,7 +126,9 @@ export function PermissionSelector() {
           {sessionOverride && (
             <span
               className={`h-1.5 w-1.5 rounded-full ${
-                effectivePolicy === "yolo" ? "bg-[var(--status-err)]" : "bg-[var(--text-secondary)]"
+                effectivePolicy === "yolo"
+                  ? "bg-[var(--status-err)]"
+                  : "bg-[var(--text-secondary)]"
               }`}
               aria-hidden="true"
             />
@@ -122,7 +137,9 @@ export function PermissionSelector() {
             size={11}
             strokeWidth={1.5}
             className={`shrink-0 ${
-              effectivePolicy === "yolo" ? "text-[var(--status-err)]" : "text-[var(--text-muted)]"
+              effectivePolicy === "yolo"
+                ? "text-[var(--status-err)]"
+                : "text-[var(--text-muted)]"
             }`}
           />
         </button>
@@ -155,7 +172,9 @@ export function PermissionSelector() {
                   key={option.value}
                   onClick={() => void choose(option.value)}
                   className={`flex w-full items-start gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors ${
-                    selected ? "bg-[var(--bg-subtle)]" : "hover:bg-[var(--bg-subtle)]"
+                    selected
+                      ? "bg-[var(--bg-subtle)]"
+                      : "hover:bg-[var(--bg-subtle)]"
                   }`}
                 >
                   <Icon
@@ -172,7 +191,9 @@ export function PermissionSelector() {
                   <div className="min-w-0 flex-1">
                     <div
                       className={`flex items-center gap-1.5 text-[12.5px] font-medium ${
-                        isYolo ? "text-[var(--status-err)]" : "text-[var(--text-primary)]"
+                        isYolo
+                          ? "text-[var(--status-err)]"
+                          : "text-[var(--text-primary)]"
                       }`}
                     >
                       <span>{option.label}</span>
@@ -186,7 +207,9 @@ export function PermissionSelector() {
                       size={12}
                       strokeWidth={1.7}
                       className={`mt-0.5 shrink-0 ${
-                        isYolo ? "text-[var(--status-err)]" : "text-[var(--text-primary)]"
+                        isYolo
+                          ? "text-[var(--status-err)]"
+                          : "text-[var(--text-primary)]"
                       }`}
                     />
                   )}
@@ -202,7 +225,13 @@ export function PermissionSelector() {
                 className="flex h-7 w-full items-center justify-between rounded-[7px] px-2 text-[11.5px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-subtle)] hover:text-[var(--text-secondary)]"
               >
                 <span>Use global default</span>
-                <span className={globalPolicy === "yolo" ? "font-medium text-[var(--status-err)]" : undefined}>
+                <span
+                  className={
+                    globalPolicy === "yolo"
+                      ? "font-medium text-[var(--status-err)]"
+                      : undefined
+                  }
+                >
                   {globalOption.shortLabel}
                 </span>
               </button>

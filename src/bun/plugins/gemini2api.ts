@@ -6,7 +6,11 @@
  */
 import type { ProviderModel } from "../../shared/types";
 import { geminiModelName } from "../../shared/plugins/gemini2api";
-import type { GatewayPlugin, PluginProbeOutcome, PluginRuntimeContext } from "./types";
+import type {
+  GatewayPlugin,
+  PluginProbeOutcome,
+  PluginRuntimeContext,
+} from "./types";
 import { createGeminiPage } from "./gemini2api/page";
 import { IdleGuard } from "./gemini2api/idle";
 import {
@@ -84,7 +88,8 @@ function describe(error: unknown): string {
 /** The port a managed instance should use, or null when the target is not loopback. */
 function managedPort(values: Record<string, string>): number | null {
   const host = (values.host ?? "").trim() || DEFAULT_HOST;
-  if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1") return null;
+  if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1")
+    return null;
   const port = Number((values.port ?? "").trim() || DEFAULT_PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65_535) return null;
   return port;
@@ -195,7 +200,8 @@ export const gemini2apiPlugin: GatewayPlugin = {
     const port = managedPort(current);
     if (port === null) return;
     const key = (await getApiKey(PROVIDER_ID)) ?? apiKey(context.dataDir);
-    if (!(await readHealth(port, key))) await ensureRunning(context.dataDir, current);
+    if (!(await readHealth(port, key)))
+      await ensureRunning(context.dataDir, current);
     idle.touch();
   },
   dispose: () => {
@@ -303,12 +309,16 @@ export const gemini2apiPlugin: GatewayPlugin = {
     // Nothing on the configured port: start the instance Kip manages, if the
     // target is local and it is installed. A server the user runs is never duplicated.
     if (!health) {
-      const isLoopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
+      const isLoopback =
+        host === "127.0.0.1" || host === "localhost" || host === "::1";
       if (!isLoopback) {
         return { ok: false, error: `Could not reach ${root}/health.` };
       }
       if (!context.dataDir) {
-        return { ok: false, error: "Kip has no data directory for this plugin." };
+        return {
+          ok: false,
+          error: "Kip has no data directory for this plugin.",
+        };
       }
       try {
         const managed = await ensureRunning(context.dataDir, values);
@@ -389,8 +399,11 @@ export const gemini2apiPlugin: GatewayPlugin = {
     // What Kip already holds first, then the key the user just typed.
     let read: Awaited<ReturnType<typeof readModels>>;
     try {
-      read = await readModels(managedKey ?? (needsKey ? context.storedApiKey : undefined));
-      if ("rejected" in read && operatorKey) read = await readModels(operatorKey);
+      read = await readModels(
+        managedKey ?? (needsKey ? context.storedApiKey : undefined),
+      );
+      if ("rejected" in read && operatorKey)
+        read = await readModels(operatorKey);
     } catch (error) {
       return {
         ok: false,
@@ -427,7 +440,12 @@ export const gemini2apiPlugin: GatewayPlugin = {
 
     // Only mint when this turn borrowed a key: a key Kip already holds is reused as-is.
     let apiKey: string | undefined;
-    if (!managedKey && needsKey && read.key && read.key !== context.storedApiKey) {
+    if (
+      !managedKey &&
+      needsKey &&
+      read.key &&
+      read.key !== context.storedApiKey
+    ) {
       try {
         const minted = await callJson(`${root}/v1/keys`, {
           method: "POST",

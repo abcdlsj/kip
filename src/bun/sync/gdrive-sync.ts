@@ -44,7 +44,11 @@ interface DriveFile {
 }
 
 function base64Url(buffer: Buffer): string {
-  return buffer.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return buffer
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }
 
 function escapeQuery(value: string): string {
@@ -62,7 +66,10 @@ export function getGoogleDriveSettings(database: KipDatabase): {
 } {
   return {
     clientId: database.getSetting(settingKey("gdrive.clientId"), ""),
-    folderName: database.getSetting(settingKey("gdrive.folderName"), "Kip Sync"),
+    folderName: database.getSetting(
+      settingKey("gdrive.folderName"),
+      "Kip Sync",
+    ),
     email: database.getSetting<string | null>(settingKey("gdrive.email"), null),
   };
 }
@@ -83,7 +90,10 @@ export async function saveGoogleDriveSettings(
   }
   if (input.folderName !== undefined) {
     const cleaned = input.folderName.trim() || "Kip Sync";
-    const previous = database.getSetting(settingKey("gdrive.folderName"), "Kip Sync");
+    const previous = database.getSetting(
+      settingKey("gdrive.folderName"),
+      "Kip Sync",
+    );
     database.setSetting(settingKey("gdrive.folderName"), cleaned);
     if (cleaned !== previous) {
       database.setSetting(settingKey("gdrive.folderId"), "");
@@ -91,7 +101,9 @@ export async function saveGoogleDriveSettings(
   }
 }
 
-export async function disconnectGoogleDrive(database: KipDatabase): Promise<void> {
+export async function disconnectGoogleDrive(
+  database: KipDatabase,
+): Promise<void> {
   await Promise.all([
     deleteApiKey(ACCESS_TOKEN_KEY),
     deleteApiKey(REFRESH_TOKEN_KEY),
@@ -110,16 +122,19 @@ export async function connectGoogleDrive(
     return { connected: false, error: "Google OAuth Client ID is required" };
   }
   await saveGoogleDriveSettings(database, input);
-  const clientSecret = input.clientSecret?.trim() || (await getApiKey(CLIENT_SECRET_KEY)) || "";
+  const clientSecret =
+    input.clientSecret?.trim() || (await getApiKey(CLIENT_SECRET_KEY)) || "";
 
   const verifier = base64Url(randomBytes(32));
   const challenge = base64Url(createHash("sha256").update(verifier).digest());
   const state = base64Url(randomBytes(16));
 
   let resolveCode!: (result: { code?: string; error?: string }) => void;
-  const codePromise = new Promise<{ code?: string; error?: string }>((resolve) => {
-    resolveCode = resolve;
-  });
+  const codePromise = new Promise<{ code?: string; error?: string }>(
+    (resolve) => {
+      resolveCode = resolve;
+    },
+  );
 
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -134,14 +149,23 @@ export async function connectGoogleDrive(
       const code = url.searchParams.get("code");
       if (returnedState !== state) {
         resolveCode({ error: "OAuth state mismatch" });
-        return htmlResponse("Authentication failed", "State mismatch. You can close this tab.");
+        return htmlResponse(
+          "Authentication failed",
+          "State mismatch. You can close this tab.",
+        );
       }
       if (error || !code) {
         resolveCode({ error: error ?? "Authorization was cancelled" });
-        return htmlResponse("Authentication cancelled", "You can close this tab and return to Kip.");
+        return htmlResponse(
+          "Authentication cancelled",
+          "You can close this tab and return to Kip.",
+        );
       }
       resolveCode({ code });
-      return htmlResponse("Connected to Kip", "Google Drive is now linked. You can close this tab.");
+      return htmlResponse(
+        "Connected to Kip",
+        "Google Drive is now linked. You can close this tab.",
+      );
     },
   });
 
@@ -192,7 +216,10 @@ export async function connectGoogleDrive(
     if (!tokenRes.ok || !tokenJson.access_token) {
       return {
         connected: false,
-        error: tokenJson.error_description ?? tokenJson.error ?? "Token exchange failed",
+        error:
+          tokenJson.error_description ??
+          tokenJson.error ??
+          "Token exchange failed",
       };
     }
 
@@ -200,7 +227,8 @@ export async function connectGoogleDrive(
     if (tokenJson.refresh_token) {
       await setApiKey(REFRESH_TOKEN_KEY, tokenJson.refresh_token);
     }
-    const expiresAt = Date.now() + Math.max(60, (tokenJson.expires_in ?? 3600) - 60) * 1000;
+    const expiresAt =
+      Date.now() + Math.max(60, (tokenJson.expires_in ?? 3600) - 60) * 1000;
     database.setSetting(settingKey("gdrive.tokenExpiresAt"), expiresAt);
 
     let email: string | null = null;
@@ -234,11 +262,16 @@ function htmlResponse(title: string, message: string): Response {
 .card{max-width:360px;text-align:center;padding:28px;border-radius:14px;border:1px solid #e4e4e7;background:#fff}
 h1{font-size:16px;margin:0 0 8px}p{font-size:13px;color:#52525b;margin:0}</style>
 </head><body><div class="card"><h1>${title}</h1><p>${message}</p></div></body></html>`;
-  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+  return new Response(html, {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
 }
 
 async function getValidAccessToken(database: KipDatabase): Promise<string> {
-  const expiresAt = database.getSetting<number>(settingKey("gdrive.tokenExpiresAt"), 0);
+  const expiresAt = database.getSetting<number>(
+    settingKey("gdrive.tokenExpiresAt"),
+    0,
+  );
   const existing = await getApiKey(ACCESS_TOKEN_KEY);
   if (existing && Date.now() < expiresAt) return existing;
 
@@ -267,15 +300,24 @@ async function getValidAccessToken(database: KipDatabase): Promise<string> {
     error_description?: string;
   };
   if (!response.ok || !json.access_token) {
-    throw new Error(json.error_description ?? json.error ?? "Failed to refresh Google Drive token");
+    throw new Error(
+      json.error_description ??
+        json.error ??
+        "Failed to refresh Google Drive token",
+    );
   }
   await setApiKey(ACCESS_TOKEN_KEY, json.access_token);
-  const nextExpiry = Date.now() + Math.max(60, (json.expires_in ?? 3600) - 60) * 1000;
+  const nextExpiry =
+    Date.now() + Math.max(60, (json.expires_in ?? 3600) - 60) * 1000;
   database.setSetting(settingKey("gdrive.tokenExpiresAt"), nextExpiry);
   return json.access_token;
 }
 
-async function driveJson<T>(token: string, url: string, init?: RequestInit): Promise<T> {
+async function driveJson<T>(
+  token: string,
+  url: string,
+  init?: RequestInit,
+): Promise<T> {
   const response = await fetch(url, {
     ...init,
     headers: {
@@ -285,7 +327,9 @@ async function driveJson<T>(token: string, url: string, init?: RequestInit): Pro
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(`Google Drive error (${response.status}): ${text.slice(0, 200)}`);
+    throw new Error(
+      `Google Drive error (${response.status}): ${text.slice(0, 200)}`,
+    );
   }
   return (await response.json()) as T;
 }
@@ -295,27 +339,38 @@ async function findOrCreateFolder(
   name: string,
   parentId?: string,
 ): Promise<string> {
-  const parentClause = parentId ? ` and '${escapeQuery(parentId)}' in parents` : " and 'root' in parents";
+  const parentClause = parentId
+    ? ` and '${escapeQuery(parentId)}' in parents`
+    : " and 'root' in parents";
   const q = `mimeType='${FOLDER_MIME}' and name='${escapeQuery(name)}' and trashed=false${parentClause}`;
   const url = `${DRIVE_FILES_URL}?q=${encodeURIComponent(q)}&fields=files(id,name)&spaces=drive`;
   const list = await driveJson<{ files?: DriveFile[] }>(token, url);
   const found = list.files?.[0];
   if (found) return found.id;
 
-  const created = await driveJson<DriveFile>(token, `${DRIVE_FILES_URL}?fields=id,name`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name,
-      mimeType: FOLDER_MIME,
-      ...(parentId ? { parents: [parentId] } : {}),
-    }),
-  });
+  const created = await driveJson<DriveFile>(
+    token,
+    `${DRIVE_FILES_URL}?fields=id,name`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        mimeType: FOLDER_MIME,
+        ...(parentId ? { parents: [parentId] } : {}),
+      }),
+    },
+  );
   return created.id;
 }
 
-async function ensureRootFolder(database: KipDatabase, token: string): Promise<string> {
-  const folderName = database.getSetting(settingKey("gdrive.folderName"), "Kip Sync") || "Kip Sync";
+async function ensureRootFolder(
+  database: KipDatabase,
+  token: string,
+): Promise<string> {
+  const folderName =
+    database.getSetting(settingKey("gdrive.folderName"), "Kip Sync") ||
+    "Kip Sync";
   const cachedId = database.getSetting(settingKey("gdrive.folderId"), "");
   if (cachedId) {
     try {
@@ -333,7 +388,10 @@ async function ensureRootFolder(database: KipDatabase, token: string): Promise<s
   return id;
 }
 
-async function listFolderFiles(token: string, folderId: string): Promise<DriveFile[]> {
+async function listFolderFiles(
+  token: string,
+  folderId: string,
+): Promise<DriveFile[]> {
   const all: DriveFile[] = [];
   let pageToken = "";
   while (true) {
@@ -345,10 +403,10 @@ async function listFolderFiles(token: string, folderId: string): Promise<DriveFi
       spaces: "drive",
     });
     if (pageToken) params.set("pageToken", pageToken);
-    const page = await driveJson<{ files?: DriveFile[]; nextPageToken?: string }>(
-      token,
-      `${DRIVE_FILES_URL}?${params.toString()}`,
-    );
+    const page = await driveJson<{
+      files?: DriveFile[];
+      nextPageToken?: string;
+    }>(token, `${DRIVE_FILES_URL}?${params.toString()}`);
     if (page.files) all.push(...page.files);
     if (!page.nextPageToken) break;
     pageToken = page.nextPageToken;
@@ -362,7 +420,9 @@ async function downloadFile(token: string, fileId: string): Promise<Buffer> {
     { headers: { Authorization: `Bearer ${token}` } },
   );
   if (!response.ok) {
-    throw new Error(`Failed to download file from Google Drive (${response.status})`);
+    throw new Error(
+      `Failed to download file from Google Drive (${response.status})`,
+    );
   }
   return Buffer.from(await response.arrayBuffer());
 }
@@ -375,7 +435,8 @@ async function uploadFile(
   mimeType: string,
   existingFileId?: string,
 ): Promise<string> {
-  const bytes = typeof content === "string" ? Buffer.from(content, "utf8") : content;
+  const bytes =
+    typeof content === "string" ? Buffer.from(content, "utf8") : content;
   if (existingFileId) {
     const updated = await driveJson<DriveFile>(
       token,
@@ -421,12 +482,17 @@ export async function testGoogleDriveConnection(
   } catch (error) {
     return {
       connected: false,
-      error: error instanceof Error ? error.message : "Google Drive connection failed",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Google Drive connection failed",
     };
   }
 }
 
-export async function triggerGoogleDriveSync(database: KipDatabase): Promise<SyncResult> {
+export async function triggerGoogleDriveSync(
+  database: KipDatabase,
+): Promise<SyncResult> {
   const token = await getValidAccessToken(database);
   const rootFolderId = await ensureRootFolder(database, token);
   const rootFiles = await listFolderFiles(token, rootFolderId);
@@ -436,7 +502,9 @@ export async function triggerGoogleDriveSync(database: KipDatabase): Promise<Syn
   let remote: Manifest | null = null;
   if (manifestFile) {
     try {
-      const text = (await downloadFile(token, manifestFile.id)).toString("utf8");
+      const text = (await downloadFile(token, manifestFile.id)).toString(
+        "utf8",
+      );
       remote = JSON.parse(text) as Manifest;
     } catch {
       remote = null;
@@ -455,7 +523,9 @@ export async function triggerGoogleDriveSync(database: KipDatabase): Promise<Syn
       ? byName.get("sessions")!.id
       : await findOrCreateFolder(token, "sessions", rootFolderId);
   const remoteSessions = await listFolderFiles(token, sessionsFolderId);
-  const remoteSessionByName = new Map(remoteSessions.map((file) => [file.name, file]));
+  const remoteSessionByName = new Map(
+    remoteSessions.map((file) => [file.name, file]),
+  );
 
   let pushed = 0;
   const locals = localSessionFiles(database);
@@ -489,7 +559,10 @@ export async function triggerGoogleDriveSync(database: KipDatabase): Promise<Syn
       "application/json",
       snapshotFile?.id,
     );
-    manifest.files[snapshotKey] = { sha256: hash(snapshot), updatedAt: Date.now() };
+    manifest.files[snapshotKey] = {
+      sha256: hash(snapshot),
+      updatedAt: Date.now(),
+    };
     pushed += 1;
   }
 
@@ -509,7 +582,9 @@ export async function triggerGoogleDriveSync(database: KipDatabase): Promise<Syn
     const target = join(targetDir, fileName);
     const remoteEntry = manifest.files[relativeKey];
     const localExists = existsSync(target);
-    const remoteNewer = remoteEntry ? remoteEntry.updatedAt > (thread?.updatedAt ?? 0) : false;
+    const remoteNewer = remoteEntry
+      ? remoteEntry.updatedAt > (thread?.updatedAt ?? 0)
+      : false;
     if (localExists && !remoteNewer) continue;
     const body = await downloadFile(token, remoteFile.id);
     await Bun.write(target, body);

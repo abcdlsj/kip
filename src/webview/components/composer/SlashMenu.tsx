@@ -34,7 +34,12 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { id: "new", description: "Start a new thread", icon: SquarePen, group: "Thread" },
+  {
+    id: "new",
+    description: "Start a new thread",
+    icon: SquarePen,
+    group: "Thread",
+  },
   {
     id: "compact",
     description: "Summarize earlier context to free space",
@@ -65,14 +70,16 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     id: "read-only-auto",
-    description: "Auto-run workspace reads; ask for edits, commands, and outside access",
+    description:
+      "Auto-run workspace reads; ask for edits, commands, and outside access",
     icon: ShieldHalf,
     group: "Approval",
     policy: "read-only-auto",
   },
   {
     id: "full-auto",
-    description: "Auto-run inside workspace; still ask for outside-workspace access",
+    description:
+      "Auto-run inside workspace; still ask for outside-workspace access",
     icon: ShieldOff,
     group: "Approval",
     policy: "full-auto",
@@ -84,7 +91,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     group: "Approval",
     policy: "yolo",
   },
-  { id: "settings", description: "Open settings", icon: Settings, group: "App" },
+  {
+    id: "settings",
+    description: "Open settings",
+    icon: Settings,
+    group: "App",
+  },
 ];
 
 /** The partial command name while the draft is a lone `/word`, else null. */
@@ -101,14 +113,16 @@ export function matchCommands(
   // Approval commands mean nothing to a thread that cannot call a tool.
   const available = SLASH_COMMANDS.filter(
     (command) =>
-      (hasThread || !command.needsThread) && (mode === "agent" || command.group !== "Approval"),
+      (hasThread || !command.needsThread) &&
+      (mode === "agent" || command.group !== "Approval"),
   );
   if (!query) return available;
   const starts = available.filter((command) => command.id.startsWith(query));
   const contains = available.filter(
     (command) =>
       !command.id.startsWith(query) &&
-      (command.id.includes(query) || command.description.toLowerCase().includes(query)),
+      (command.id.includes(query) ||
+        command.description.toLowerCase().includes(query)),
   );
   return [...starts, ...contains];
 }
@@ -123,7 +137,14 @@ interface SlashMenuProps {
   onRun: (command: SlashCommand) => void;
 }
 
-export function SlashMenu({ commands, selected, grouped, policy, onHover, onRun }: SlashMenuProps) {
+export function SlashMenu({
+  commands,
+  selected,
+  grouped,
+  policy,
+  onHover,
+  onRun,
+}: SlashMenuProps) {
   if (commands.length === 0) {
     return (
       <div className="popover-surface absolute bottom-full left-0 mb-2 w-[360px] max-w-full rounded-[12px] border hairline bg-[var(--bg-elevated)] px-3 py-2.5 text-[12.5px] text-[var(--text-muted)] shadow-[var(--shadow-modal)]">
@@ -138,15 +159,19 @@ export function SlashMenu({ commands, selected, grouped, policy, onHover, onRun 
       className="popover-surface thin-scroll absolute bottom-full left-0 mb-2 max-h-[300px] w-[360px] max-w-full overflow-y-auto rounded-[12px] border hairline bg-[var(--bg-elevated)] p-1 shadow-[var(--shadow-modal)]"
     >
       {commands.map((command, index) => {
-        const header = grouped && command.group !== lastGroup ? command.group : null;
+        const header =
+          grouped && command.group !== lastGroup ? command.group : null;
         lastGroup = command.group;
         const Icon = command.icon;
         const active = index === selected;
-        const current = command.policy !== undefined && command.policy === policy;
+        const current =
+          command.policy !== undefined && command.policy === policy;
         return (
           <div key={command.id}>
             {header && (
-              <p className={`px-2 pb-1 text-[10.5px] font-medium uppercase tracking-[0.03em] text-[var(--text-muted)] ${index === 0 ? "pt-1" : "pt-2"}`}>
+              <p
+                className={`px-2 pb-1 text-[10.5px] font-medium uppercase tracking-[0.03em] text-[var(--text-muted)] ${index === 0 ? "pt-1" : "pt-2"}`}
+              >
                 {header}
               </p>
             )}

@@ -8,7 +8,11 @@
  * quota enforcement (50/day per device on the hosted endpoint).
  */
 import type { PluginProbeResult } from "../../shared/types";
-import type { TitleGenerationInput, TitlePlugin, TitlePluginContext } from "./types";
+import type {
+  TitleGenerationInput,
+  TitlePlugin,
+  TitlePluginContext,
+} from "./types";
 
 export const DEFAULT_TITLE_WORKER_URL = "https://title.warrenai.xyz";
 const PROBE_TIMEOUT_MS = 8_000;
@@ -29,7 +33,9 @@ interface TitleResponse {
   error?: string;
 }
 
-function resolveBaseUrl(values: Record<string, string>): { url: string } | { error: string } {
+function resolveBaseUrl(
+  values: Record<string, string>,
+): { url: string } | { error: string } {
   const raw = (values.endpoint ?? "").trim();
   const candidate = raw || DEFAULT_TITLE_WORKER_URL;
   let parsed: URL;
@@ -41,7 +47,10 @@ function resolveBaseUrl(values: Record<string, string>): { url: string } | { err
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     return { error: "Endpoint must use http:// or https://." };
   }
-  const normalized = parsed.toString().replace(/\/+$/, "").replace(/\/v1\/title$/, "");
+  const normalized = parsed
+    .toString()
+    .replace(/\/+$/, "")
+    .replace(/\/v1\/title$/, "");
   return { url: normalized };
 }
 
@@ -73,19 +82,24 @@ export const warrenTitlePlugin: TitlePlugin = {
         signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       });
       if (!response.ok) {
-        return { ok: false, error: `Health check returned HTTP ${response.status}.` };
+        return {
+          ok: false,
+          error: `Health check returned HTTP ${response.status}.`,
+        };
       }
       const body = (await response.json()) as HealthResponse;
       if (!body.ok || body.service !== "warren-title") {
         return {
           ok: false,
-          error: "This URL responded, but it is not a Warren Title Service endpoint.",
+          error:
+            "This URL responded, but it is not a Warren Title Service endpoint.",
         };
       }
       const daily = body.limits?.deviceDaily;
       const details: Array<{ label: string; value: string }> = [];
       if (body.model) details.push({ label: "Model", value: body.model });
-      if (daily) details.push({ label: "Limit", value: `${daily}/day per device` });
+      if (daily)
+        details.push({ label: "Limit", value: `${daily}/day per device` });
       return {
         ok: true,
         summary: daily
@@ -95,7 +109,10 @@ export const warrenTitlePlugin: TitlePlugin = {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return { ok: false, error: `Could not reach ${resolved.url}: ${message}` };
+      return {
+        ok: false,
+        error: `Could not reach ${resolved.url}: ${message}`,
+      };
     }
   },
 

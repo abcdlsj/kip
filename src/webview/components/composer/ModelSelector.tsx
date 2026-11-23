@@ -20,8 +20,12 @@ export function ModelSelector() {
   const thread = useWorkspaceStore((state) =>
     state.threads.find((item) => item.id === state.activeThreadId),
   );
-  const updateThreadModel = useWorkspaceStore((state) => state.updateThreadModel);
-  const setThreadThinking = useWorkspaceStore((state) => state.setThreadThinking);
+  const updateThreadModel = useWorkspaceStore(
+    (state) => state.updateThreadModel,
+  );
+  const setThreadThinking = useWorkspaceStore(
+    (state) => state.setThreadThinking,
+  );
   const providers = useUiStore((state) => state.providers);
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
@@ -65,13 +69,16 @@ export function ModelSelector() {
   const activeProvider = thread?.modelProvider || settings.defaultProvider;
   const activeModelId = thread?.modelId || settings.defaultModelId;
   const active = models.find(
-    (model) => model.provider === activeProvider && model.modelId === activeModelId,
+    (model) =>
+      model.provider === activeProvider && model.modelId === activeModelId,
   );
   const thinking = thread?.thinkingLevel ?? settings.defaultThinkingLevel;
-  const thinkingLabel = THINKING_LEVELS.find((item) => item.value === thinking)?.label ?? "Medium";
+  const thinkingLabel =
+    THINKING_LEVELS.find((item) => item.value === thinking)?.label ?? "Medium";
 
   const chooseModel = async (model: ModelOption) => {
-    if (thread) await updateThreadModel(thread.id, model.provider, model.modelId);
+    if (thread)
+      await updateThreadModel(thread.id, model.provider, model.modelId);
     else {
       await request("updateSettings", {
         defaultProvider: model.provider,
@@ -103,8 +110,14 @@ export function ModelSelector() {
             {active?.displayName ?? "Select model"}
           </span>
           <span className="text-[var(--text-muted)]">·</span>
-          <span className="shrink-0 text-[var(--text-muted)]">{thinkingLabel}</span>
-          <ChevronDown size={11} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+          <span className="shrink-0 text-[var(--text-muted)]">
+            {thinkingLabel}
+          </span>
+          <ChevronDown
+            size={11}
+            strokeWidth={1.5}
+            className="shrink-0 text-[var(--text-muted)]"
+          />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -146,7 +159,8 @@ export function ModelSelector() {
                 )}
                 {items.map((model) => {
                   const selected =
-                    model.provider === activeProvider && model.modelId === activeModelId;
+                    model.provider === activeProvider &&
+                    model.modelId === activeModelId;
                   return (
                     <button
                       type="button"
@@ -158,7 +172,9 @@ export function ModelSelector() {
                           : "text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
                       }`}
                     >
-                      <span className="min-w-0 flex-1 truncate">{model.displayName}</span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {model.displayName}
+                      </span>
                       {model.supportsReasoning && (
                         <Sparkles
                           size={11}
@@ -177,7 +193,13 @@ export function ModelSelector() {
                           {providerNames.get(model.provider) ?? model.provider}
                         </span>
                       )}
-                      {selected && <Check size={12} strokeWidth={1.7} className="shrink-0" />}
+                      {selected && (
+                        <Check
+                          size={12}
+                          strokeWidth={1.7}
+                          className="shrink-0"
+                        />
+                      )}
                     </button>
                   );
                 })}

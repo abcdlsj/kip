@@ -43,7 +43,8 @@ export function localSessionFiles(database: KipDatabase): LocalSessionFile[] {
   const files: LocalSessionFile[] = [];
   for (const workspace of database.listWorkspaces()) {
     for (const thread of database.listThreads(workspace.id)) {
-      if (!thread.sessionFilePath || !existsSync(thread.sessionFilePath)) continue;
+      if (!thread.sessionFilePath || !existsSync(thread.sessionFilePath))
+        continue;
       try {
         const content = readFileSync(thread.sessionFilePath);
         const fileName = basename(thread.sessionFilePath);
@@ -73,7 +74,10 @@ export function metadataSnapshot(database: KipDatabase): string {
       approvalPolicy: database.getSetting("approvalPolicy", "read-only-auto"),
       defaultProvider: database.getSetting("defaultProvider", ""),
       defaultModelId: database.getSetting("defaultModelId", ""),
-      defaultThinkingLevel: database.getSetting("defaultThinkingLevel", "medium"),
+      defaultThinkingLevel: database.getSetting(
+        "defaultThinkingLevel",
+        "medium",
+      ),
       sidebarCollapsed: database.getSetting("sidebarCollapsed", false),
     },
     exportedAt: Date.now(),

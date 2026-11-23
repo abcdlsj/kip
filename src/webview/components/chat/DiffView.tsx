@@ -40,12 +40,18 @@ function buildChunks(before: string, after: string): DiffChunk[] {
   while (cursor < allRows.length) {
     if (allRows[cursor]!.kind !== "context") {
       const start = cursor;
-      while (cursor < allRows.length && allRows[cursor]!.kind !== "context") cursor += 1;
-      chunks.push({ kind: "rows", id: `chg_${start}`, rows: allRows.slice(start, cursor) });
+      while (cursor < allRows.length && allRows[cursor]!.kind !== "context")
+        cursor += 1;
+      chunks.push({
+        kind: "rows",
+        id: `chg_${start}`,
+        rows: allRows.slice(start, cursor),
+      });
       continue;
     }
     const start = cursor;
-    while (cursor < allRows.length && allRows[cursor]!.kind === "context") cursor += 1;
+    while (cursor < allRows.length && allRows[cursor]!.kind === "context")
+      cursor += 1;
     const run = allRows.slice(start, cursor);
     const isLeading = start === 0;
     const isTrailing = cursor === allRows.length;
@@ -55,7 +61,11 @@ function buildChunks(before: string, after: string): DiffChunk[] {
 
     if (foldable >= MIN_FOLD_LINES) {
       if (keepTop > 0) {
-        chunks.push({ kind: "rows", id: `ctx_t_${start}`, rows: run.slice(0, keepTop) });
+        chunks.push({
+          kind: "rows",
+          id: `ctx_t_${start}`,
+          rows: run.slice(0, keepTop),
+        });
       }
       chunks.push({
         kind: "fold",
@@ -89,7 +99,9 @@ export function DiffView({ before, after }: { before: string; after: string }) {
             <button
               key={chunk.id}
               type="button"
-              onClick={() => setExpanded((state) => ({ ...state, [chunk.id]: true }))}
+              onClick={() =>
+                setExpanded((state) => ({ ...state, [chunk.id]: true }))
+              }
               className="flex w-full items-center gap-2 border-y border-[var(--code-border)] bg-[var(--bg-subtle)] px-3 py-1 text-left font-sans text-[11px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-active)] hover:text-[var(--text-secondary)]"
             >
               <span>···</span>

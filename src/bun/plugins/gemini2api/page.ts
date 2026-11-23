@@ -76,7 +76,11 @@ export function createGeminiPage(
     const host = (current.host ?? "").trim() || DEFAULT_HOST;
     const port = Number((current.port ?? "").trim() || DEFAULT_PORT);
     if (!Number.isInteger(port) || port < 1 || port > 65_535) return null;
-    return { host, port, loopback: host === "127.0.0.1" || host === "localhost" || host === "::1" };
+    return {
+      host,
+      port,
+      loopback: host === "127.0.0.1" || host === "localhost" || host === "::1",
+    };
   }
 
   function healthOf(body: service.HealthBody | null): GeminiHealth | null {
@@ -93,7 +97,11 @@ export function createGeminiPage(
   }
 
   /** The instance Kip started, if any. */
-  async function managed(): Promise<{ port: number; key: string; health: service.HealthBody } | null> {
+  async function managed(): Promise<{
+    port: number;
+    key: string;
+    health: service.HealthBody;
+  } | null> {
     const status = service.status(dataDir, values());
     if (!status.running || !status.port) return null;
     const key = service.apiKey(dataDir);
@@ -102,10 +110,15 @@ export function createGeminiPage(
   }
 
   /** A server the user runs themselves at the configured address. */
-  async function external(): Promise<{ port: number; key: string; health: service.HealthBody } | null> {
+  async function external(): Promise<{
+    port: number;
+    key: string;
+    health: service.HealthBody;
+  } | null> {
     const endpoint = configured();
     if (!endpoint?.loopback) return null;
-    const key = (await getApiKey(service.PROVIDER_ID)) ?? service.apiKey(dataDir);
+    const key =
+      (await getApiKey(service.PROVIDER_ID)) ?? service.apiKey(dataDir);
     const health = await service.health(endpoint.port, key);
     return health ? { port: endpoint.port, key, health } : null;
   }
@@ -115,13 +128,20 @@ export function createGeminiPage(
   ): Promise<GeminiModel[]> {
     if (!instance) return [];
     try {
-      const response = await fetch(`http://127.0.0.1:${instance.port}/v1/models`, {
-        headers: { authorization: `Bearer ${instance.key}` },
-        signal: AbortSignal.timeout(8_000),
-      });
+      const response = await fetch(
+        `http://127.0.0.1:${instance.port}/v1/models`,
+        {
+          headers: { authorization: `Bearer ${instance.key}` },
+          signal: AbortSignal.timeout(8_000),
+        },
+      );
       if (!response.ok) return [];
       const payload = (await response.json()) as {
-        data?: Array<{ id?: string; name?: string; gemini?: { display_name?: string } }>;
+        data?: Array<{
+          id?: string;
+          name?: string;
+          gemini?: { display_name?: string };
+        }>;
       };
       return (payload.data ?? [])
         .filter((model) => typeof model.id === "string" && model.id.length > 0)

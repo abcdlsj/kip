@@ -142,7 +142,9 @@ export class KipOrchestrator {
   }
 
   runningThreadIds(): string[] {
-    return [...this.sessions.values()].filter((item) => item.running).map((item) => item.threadId);
+    return [...this.sessions.values()]
+      .filter((item) => item.running)
+      .map((item) => item.threadId);
   }
 
   isRunning(threadId: string): boolean {
@@ -153,16 +155,22 @@ export class KipOrchestrator {
     threadId: string,
     workspaceRoot: string,
   ): Promise<string> {
-    const sessionDir = getSessionDir(this.database.getThread(threadId)?.workspaceId ?? "default");
+    const sessionDir = getSessionDir(
+      this.database.getThread(threadId)?.workspaceId ?? "default",
+    );
     mkdirSync(sessionDir, { recursive: true });
-    const manager = SessionManager.create(workspaceRoot, sessionDir, { id: threadId });
+    const manager = SessionManager.create(workspaceRoot, sessionDir, {
+      id: threadId,
+    });
     const file = manager.getSessionFile();
     if (!file) throw new Error("Unable to create session file");
     mkdirSync(dirname(file), { recursive: true });
     return file;
   }
 
-  async loadTurns(threadId: string): Promise<{ turns: ChatTurn[]; usage: ContextUsage }> {
+  async loadTurns(
+    threadId: string,
+  ): Promise<{ turns: ChatTurn[]; usage: ContextUsage }> {
     const thread = this.requireThread(threadId);
     const workspace = this.database.getWorkspace(thread.workspaceId);
     if (!workspace) return { turns: [], usage: toSharedUsage(undefined) };
@@ -172,19 +180,29 @@ export class KipOrchestrator {
     const active = this.sessions.get(threadId);
     if (active) {
       return {
-        turns: projectSessionTurns(active.session.sessionManager.getBranch(), workspace.rootPath),
+        turns: projectSessionTurns(
+          active.session.sessionManager.getBranch(),
+          workspace.rootPath,
+        ),
         usage: toSharedUsage(active.session.getContextUsage()),
       };
     }
-    const manager = SessionManager.open(thread.sessionFilePath, undefined, workspace.rootPath);
+    const manager = SessionManager.open(
+      thread.sessionFilePath,
+      undefined,
+      workspace.rootPath,
+    );
     // Only the active branch is shown; edited messages leave older branches in the file.
     const entries = manager.getBranch();
     const model = this.registry.getModel(thread.modelProvider, thread.modelId);
-    const contextWindow = (model as { contextWindow?: number } | undefined)?.contextWindow ?? 0;
+    const contextWindow =
+      (model as { contextWindow?: number } | undefined)?.contextWindow ?? 0;
     let used = 0;
     for (const entry of [...entries].reverse()) {
-      if (entry.type !== "message" || entry.message.role !== "assistant") continue;
-      const usage = (entry.message as { usage?: { totalTokens?: number } }).usage;
+      if (entry.type !== "message" || entry.message.role !== "assistant")
+        continue;
+      const usage = (entry.message as { usage?: { totalTokens?: number } })
+        .usage;
       used = usage?.totalTokens ?? 0;
       break;
     }
@@ -205,7 +223,9 @@ export class KipOrchestrator {
       : "";
     const notes = this.pendingNotes.get(input.threadId) ?? [];
     this.pendingNotes.delete(input.threadId);
-    const noteText = notes.length ? `${notes.map((note) => KIP_NOTE_PREFIX + note).join("\n")}\n\n` : "";
+    const noteText = notes.length
+      ? `${notes.map((note) => KIP_NOTE_PREFIX + note).join("\n")}\n\n`
+      : "";
     const promptText = `${noteText}${referenced}${input.text}`;
     const images: ImageContent[] = (input.images ?? []).map((image) => ({
       type: "image",
@@ -237,20 +257,25 @@ export class KipOrchestrator {
     try {
       // A gateway paused for idleness comes back here, before the first request.
       await this.providerActivity.before?.(thread.modelProvider);
-      await active.session.prompt(promptText, images.length ? { images } : undefined);
+      await active.session.prompt(
+        promptText,
+        images.length ? { images } : undefined,
+      );
     } catch (error) {
       active.running = false;
       active.buffer.clear();
       this.emit(input.threadId, {
         kind: "turn_error",
-        message: error instanceof Error ? error.message : "The agent run failed",
+        message:
+          error instanceof Error ? error.message : "The agent run failed",
       });
     } finally {
       this.providerActivity.after?.(thread.modelProvider);
       active.buffer.flush();
       active.running = false;
       // A failed run may never settle; still record what it changed.
-      if ((active.runBefore as ActiveSession["runBefore"]) !== null) void this.recordRunChanges(active).catch(() => undefined);
+      if ((active.runBefore as ActiveSession["runBefore"]) !== null)
+        void this.recordRunChanges(active).catch(() => undefined);
       this.database.touchThread(input.threadId);
     }
   }
@@ -291,7 +316,11 @@ export class KipOrchestrator {
   private emitQueue(active: ActiveSession): void {
     this.emit(active.threadId, {
       kind: "queue_update",
-      queued: active.queued.map(({ id, text, delivery }) => ({ id, text, delivery })),
+      queued: active.queued.map(({ id, text, delivery }) => ({
+        id,
+        text,
+        delivery,
+      })),
     });
   }
 
@@ -314,12 +343,19 @@ export class KipOrchestrator {
    * Moves the thread back to just before one of its user messages and sends
    * new text from there. The old branch stays in the JSONL file.
    */
-  async editPrompt(threadId: string, userIndex: number, text: string): Promise<void> {
+  async editPrompt(
+    threadId: string,
+    userIndex: number,
+    text: string,
+  ): Promise<void> {
     const active = await this.ensureSession(threadId);
-    if (active.running) throw new Error("Stop the current run before editing a message");
+    if (active.running)
+      throw new Error("Stop the current run before editing a message");
     const users = active.session.sessionManager
       .getBranch()
-      .filter((entry) => entry.type === "message" && entry.message.role === "user");
+      .filter(
+        (entry) => entry.type === "message" && entry.message.role === "user",
+      );
     const target = users[userIndex];
     if (!target) throw new Error("That message is no longer in this thread");
     await active.session.navigateTree(target.id);
@@ -336,13 +372,21 @@ export class KipOrchestrator {
     runId: string,
   ): Promise<{ ok: boolean; error?: string; next: RunChanges | null }> {
     if (this.isRunning(threadId)) {
-      return { ok: false, error: "Wait for the run to finish.", next: this.latestChanges(threadId) };
+      return {
+        ok: false,
+        error: "Wait for the run to finish.",
+        next: this.latestChanges(threadId),
+      };
     }
     const stored = this.database.getRunChanges(runId);
     const thread = this.requireThread(threadId);
     const workspace = this.database.getWorkspace(thread.workspaceId);
     if (!stored || stored.threadId !== threadId || !workspace) {
-      return { ok: false, error: "Nothing to undo.", next: this.latestChanges(threadId) };
+      return {
+        ok: false,
+        error: "Nothing to undo.",
+        next: this.latestChanges(threadId),
+      };
     }
     const result = await restoreRun(
       workspace.rootPath,
@@ -351,12 +395,18 @@ export class KipOrchestrator {
       stored.files,
     );
     if (!result.ok) {
-      return { ok: false, error: result.error, next: this.latestChanges(threadId) };
+      return {
+        ok: false,
+        error: result.error,
+        next: this.latestChanges(threadId),
+      };
     }
     this.database.markRunReverted(runId);
     const list = stored.files.map((file) => file.path).join(", ");
     const notes = this.pendingNotes.get(threadId) ?? [];
-    notes.push(`The user undid your file changes from an earlier turn (${list}). Those files are back to their previous content.`);
+    notes.push(
+      `The user undid your file changes from an earlier turn (${list}). Those files are back to their previous content.`,
+    );
     this.pendingNotes.set(threadId, notes);
     const next = this.latestChanges(threadId);
     this.emit(threadId, { kind: "changes_update", changes: next });
@@ -370,7 +420,9 @@ export class KipOrchestrator {
     const before = await pendingBefore;
     if (!before) return;
     const thread = this.database.getThread(active.threadId);
-    const workspace = thread ? this.database.getWorkspace(thread.workspaceId) : null;
+    const workspace = thread
+      ? this.database.getWorkspace(thread.workspaceId)
+      : null;
     if (!workspace) return;
     const after = await snapshotTree(workspace.rootPath);
     if (!after || after === before) return;
@@ -384,7 +436,10 @@ export class KipOrchestrator {
       files,
       createdAt: Date.now(),
     });
-    this.emit(active.threadId, { kind: "changes_update", changes: this.latestChanges(active.threadId) });
+    this.emit(active.threadId, {
+      kind: "changes_update",
+      changes: this.latestChanges(active.threadId),
+    });
   }
 
   async compact(threadId: string): Promise<ContextUsage> {
@@ -408,7 +463,12 @@ export class KipOrchestrator {
   ): void {
     const active = this.sessions.get(threadId);
     if (!active) return;
-    active.interceptor.resolveApproval(toolCallId, approved, rememberForSession, reason);
+    active.interceptor.resolveApproval(
+      toolCallId,
+      approved,
+      rememberForSession,
+      reason,
+    );
     const block = findToolBlock(active.currentTurn, toolCallId);
     if (block && block.status === "awaiting_approval") {
       block.status = approved ? "running" : "denied";
@@ -421,7 +481,11 @@ export class KipOrchestrator {
     });
   }
 
-  async updateThreadModel(threadId: string, provider: string, modelId: string): Promise<void> {
+  async updateThreadModel(
+    threadId: string,
+    provider: string,
+    modelId: string,
+  ): Promise<void> {
     const active = this.sessions.get(threadId);
     const model = this.registry.getModel(provider, modelId);
     this.database.updateThread(threadId, { modelProvider: provider, modelId });
@@ -444,7 +508,8 @@ export class KipOrchestrator {
   async setThreadMode(threadId: string, mode: ThreadMode): Promise<void> {
     const thread = this.requireThread(threadId);
     if (thread.mode === mode) return;
-    if (this.isRunning(threadId)) throw new Error("Stop the run before switching modes");
+    if (this.isRunning(threadId))
+      throw new Error("Stop the run before switching modes");
     const { turns } = await this.loadTurns(threadId);
     if (turns.length > 0) {
       throw new Error("Start a new thread to switch between Agent and Chat");
@@ -453,14 +518,19 @@ export class KipOrchestrator {
     this.database.updateThread(threadId, { mode });
   }
 
-  setThreadApprovalPolicy(threadId: string, policy: ApprovalPolicy | null): void {
+  setThreadApprovalPolicy(
+    threadId: string,
+    policy: ApprovalPolicy | null,
+  ): void {
     this.database.updateThread(threadId, { approvalPolicy: policy });
     this.reevaluateApprovals(threadId);
   }
 
   reevaluateApprovals(threadId?: string): void {
     const targets = threadId
-      ? [this.sessions.get(threadId)].filter((s): s is ActiveSession => Boolean(s))
+      ? [this.sessions.get(threadId)].filter((s): s is ActiveSession =>
+          Boolean(s),
+        )
       : [...this.sessions.values()];
     for (const active of targets) {
       const approved = active.interceptor.reevaluatePending();
@@ -544,12 +614,23 @@ export class KipOrchestrator {
     const workspace = this.database.getWorkspace(thread.workspaceId);
     if (!workspace) throw new Error("Workspace not found");
     const model = await this.resolveModel(thread);
-    if (!model) throw new Error("Add a model provider in Settings before starting a chat");
+    if (!model)
+      throw new Error(
+        "Add a model provider in Settings before starting a chat",
+      );
 
     const sessionManager =
       thread.sessionFilePath && existsSync(thread.sessionFilePath)
-        ? SessionManager.open(thread.sessionFilePath, undefined, workspace.rootPath)
-        : SessionManager.create(workspace.rootPath, getSessionDir(thread.workspaceId), { id: threadId });
+        ? SessionManager.open(
+            thread.sessionFilePath,
+            undefined,
+            workspace.rootPath,
+          )
+        : SessionManager.create(
+            workspace.rootPath,
+            getSessionDir(thread.workspaceId),
+            { id: threadId },
+          );
 
     let active: ActiveSession;
     const buffer = new FrameBuffer(this.emit, threadId);
@@ -588,8 +669,13 @@ export class KipOrchestrator {
 
     const agentDir = join(getDataDir(), "agent");
     mkdirSync(agentDir, { recursive: true, mode: 0o700 });
-    const systemPrompt = chat ? "" : (readSystemPromptOverride(agentDir) ?? KIP_SYSTEM_PROMPT);
-    const settingsManager = SettingsManager.create(workspace.rootPath, agentDir);
+    const systemPrompt = chat
+      ? ""
+      : (readSystemPromptOverride(agentDir) ?? KIP_SYSTEM_PROMPT);
+    const settingsManager = SettingsManager.create(
+      workspace.rootPath,
+      agentDir,
+    );
     const resourceLoader = new DefaultResourceLoader({
       cwd: workspace.rootPath,
       agentDir,
@@ -641,7 +727,9 @@ export class KipOrchestrator {
       runBefore: null,
     };
 
-    active.unsubscribe = session.subscribe((event) => this.onSessionEvent(active, event));
+    active.unsubscribe = session.subscribe((event) =>
+      this.onSessionEvent(active, event),
+    );
     this.sessions.set(threadId, active);
     this.evictIdleSessions(threadId);
     return active;
@@ -663,7 +751,10 @@ export class KipOrchestrator {
     return model;
   }
 
-  private requestApproval(threadId: string, payload: ToolApprovalPayload): void {
+  private requestApproval(
+    threadId: string,
+    payload: ToolApprovalPayload,
+  ): void {
     const active = this.sessions.get(threadId);
     if (!active) return;
     active.buffer.flush();
@@ -676,7 +767,10 @@ export class KipOrchestrator {
     });
   }
 
-  private onSessionEvent(active: ActiveSession, event: AgentSessionEvent): void {
+  private onSessionEvent(
+    active: ActiveSession,
+    event: AgentSessionEvent,
+  ): void {
     switch (event.type) {
       case "message_start": {
         if (event.message.role === "user") {
@@ -703,16 +797,36 @@ export class KipOrchestrator {
         const assistantEvent = event.assistantMessageEvent;
         if (assistantEvent.type === "text_delta" && active.currentTurn) {
           const blockId = this.ensureTextBlock(active);
-          active.buffer.push("text_delta", active.currentTurn.id, blockId, assistantEvent.delta);
-        } else if (assistantEvent.type === "thinking_delta" && active.currentTurn) {
+          active.buffer.push(
+            "text_delta",
+            active.currentTurn.id,
+            blockId,
+            assistantEvent.delta,
+          );
+        } else if (
+          assistantEvent.type === "thinking_delta" &&
+          active.currentTurn
+        ) {
           const blockId = this.ensureThinkingBlock(active);
-          active.buffer.push("thinking_delta", active.currentTurn.id, blockId, assistantEvent.delta);
-        } else if (assistantEvent.type === "thinking_end" && active.currentTurn) {
+          active.buffer.push(
+            "thinking_delta",
+            active.currentTurn.id,
+            blockId,
+            assistantEvent.delta,
+          );
+        } else if (
+          assistantEvent.type === "thinking_end" &&
+          active.currentTurn
+        ) {
           active.buffer.flush();
           const blockId = this.ensureThinkingBlock(active);
           const durationMs =
-            active.thinkingStartedAt === null ? 0 : Date.now() - active.thinkingStartedAt;
-          const block = active.currentTurn.blocks.find((item) => item.id === blockId);
+            active.thinkingStartedAt === null
+              ? 0
+              : Date.now() - active.thinkingStartedAt;
+          const block = active.currentTurn.blocks.find(
+            (item) => item.id === blockId,
+          );
           if (block?.type === "thinking") {
             block.isComplete = true;
             block.durationMs = durationMs;
@@ -739,7 +853,9 @@ export class KipOrchestrator {
           summaryLabel: summarizeToolCall(
             event.toolName,
             args,
-            this.database.getWorkspace(this.requireThread(active.threadId).workspaceId)?.rootPath ?? "",
+            this.database.getWorkspace(
+              this.requireThread(active.threadId).workspaceId,
+            )?.rootPath ?? "",
           ),
         };
         active.currentTurn.blocks.push(block);
@@ -755,9 +871,15 @@ export class KipOrchestrator {
         active.buffer.flush();
         const meta = active.interceptor.getMeta(event.toolCallId);
         const block = findToolBlock(active.currentTurn, event.toolCallId);
-        const denial = event.isError && /denied|blocked by Kip/i.test(textOf(event.result?.content));
+        const denial =
+          event.isError &&
+          /denied|blocked by Kip/i.test(textOf(event.result?.content));
         if (block) {
-          block.status = denial ? "denied" : event.isError ? "error" : "completed";
+          block.status = denial
+            ? "denied"
+            : event.isError
+              ? "error"
+              : "completed";
           block.durationMs = event.durationMs ?? 0;
           block.summaryLabel = meta?.summaryLabel ?? block.summaryLabel;
           block.risk = meta?.risk;
@@ -773,7 +895,8 @@ export class KipOrchestrator {
           output: textOf(event.result?.content),
           diff: meta?.diff,
           durationMs: event.durationMs ?? 0,
-          summaryLabel: meta?.summaryLabel ?? block?.summaryLabel ?? "Tool call",
+          summaryLabel:
+            meta?.summaryLabel ?? block?.summaryLabel ?? "Tool call",
         });
         return;
       }
@@ -805,7 +928,10 @@ export class KipOrchestrator {
           const fallbackTitle = titleFromPrompt(firstPrompt);
           active.firstPrompt = null;
           this.database.updateThread(active.threadId, { title: fallbackTitle });
-          this.emit(active.threadId, { kind: "thread_title_updated", title: fallbackTitle });
+          this.emit(active.threadId, {
+            kind: "thread_title_updated",
+            title: fallbackTitle,
+          });
           void this.enhanceThreadTitle(
             active.threadId,
             firstPrompt,
@@ -872,7 +998,9 @@ export class KipOrchestrator {
    * started the run. Only messages we queued mid-run split the transcript.
    */
   private onUserMessage(active: ActiveSession, text: string): void {
-    const index = active.queued.findIndex((entry) => text.startsWith(entry.promptText));
+    const index = active.queued.findIndex((entry) =>
+      text.startsWith(entry.promptText),
+    );
     if (index === -1) return;
     const [entry] = active.queued.splice(index, 1);
     this.emitQueue(active);
@@ -927,7 +1055,9 @@ export function readSystemPromptOverride(agentDir: string): string | undefined {
   const filePath = join(agentDir, "SYSTEM.md");
   if (!existsSync(filePath)) return undefined;
   try {
-    const content = readFileSync(filePath, "utf8").replace(/^\uFEFF/, "").trim();
+    const content = readFileSync(filePath, "utf8")
+      .replace(/^\uFEFF/, "")
+      .trim();
     return content || undefined;
   } catch {
     return undefined;
@@ -945,7 +1075,10 @@ function toRunChanges(stored: StoredRunChanges): RunChanges {
   };
 }
 
-function findToolBlock(turn: ChatTurn | null, toolCallId: string): ToolCallBlock | undefined {
+function findToolBlock(
+  turn: ChatTurn | null,
+  toolCallId: string,
+): ToolCallBlock | undefined {
   if (!turn) return undefined;
   for (const block of turn.blocks) {
     if (block.type === "tool_call" && block.id === toolCallId) return block;
@@ -957,4 +1090,3 @@ function findToolBlock(turn: ChatTurn | null, toolCallId: string): ToolCallBlock
 function isChatThread(thread: { mode: ThreadMode }): boolean {
   return thread.mode === "chat";
 }
-

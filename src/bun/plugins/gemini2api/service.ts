@@ -20,7 +20,8 @@ import { readFirefoxCookies, type CookieJar } from "./vendor/cookies";
 
 export const PROVIDER_ID = "gemini2api";
 const DEFAULT_PORT = 8790;
-const MANIFEST_URL = "https://github.com/abcdlsj/gemini2api/releases/latest/download/manifest.json";
+const MANIFEST_URL =
+  "https://github.com/abcdlsj/gemini2api/releases/latest/download/manifest.json";
 // Google may take tens of seconds to hand out a session on a cold start.
 const START_TIMEOUT_MS = 90_000;
 const LOG_LIMIT = 200;
@@ -66,7 +67,8 @@ interface Running {
 }
 
 let running: Running | null = null;
-let starting: Promise<{ baseUrl: string; port: number; key: string }> | null = null;
+let starting: Promise<{ baseUrl: string; port: number; key: string }> | null =
+  null;
 let lastError: string | null = null;
 let logListener: (() => void) | null = null;
 const logs: string[] = [];
@@ -94,7 +96,11 @@ export function readLogs(): string[] {
 
 export function platformKey(): string {
   const os =
-    process.platform === "darwin" ? "macos" : process.platform === "win32" ? "win" : "linux";
+    process.platform === "darwin"
+      ? "macos"
+      : process.platform === "win32"
+        ? "win"
+        : "linux";
   return `${os}-${process.arch}`;
 }
 
@@ -123,7 +129,10 @@ function readInstalledVersion(dataDir: string): string | null {
   }
 }
 
-export function status(dataDir: string, values: Record<string, string> = {}): SidecarStatus {
+export function status(
+  dataDir: string,
+  values: Record<string, string> = {},
+): SidecarStatus {
   const binary = resolveBinary(dataDir, values);
   return {
     installed: binary !== null,
@@ -139,7 +148,10 @@ export function status(dataDir: string, values: Record<string, string> = {}): Si
 
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
-    headers: { accept: "application/json", "user-agent": "kip-gemini2api-plugin" },
+    headers: {
+      accept: "application/json",
+      "user-agent": "kip-gemini2api-plugin",
+    },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`${url} answered HTTP ${response.status}`);
@@ -159,11 +171,15 @@ export async function install(
   const pinned = (values.sidecarVersion ?? "").trim();
   const manifest = await fetchJson<SidecarManifest>(MANIFEST_URL);
   if (pinned && manifest.version !== pinned) {
-    log(`manifest is ${manifest.version}, pinned ${pinned}; using the manifest version`);
+    log(
+      `manifest is ${manifest.version}, pinned ${pinned}; using the manifest version`,
+    );
   }
   const artifact = manifest.artifacts[platformKey()];
   if (!artifact) {
-    throw new Error(`gemini2api ${manifest.version} has no build for ${platformKey()}`);
+    throw new Error(
+      `gemini2api ${manifest.version} has no build for ${platformKey()}`,
+    );
   }
   if (!artifact.url.startsWith("https://")) {
     throw new Error(`Refusing non-HTTPS download URL: ${artifact.url}`);
@@ -173,11 +189,14 @@ export async function install(
     headers: { "user-agent": "kip-gemini2api-plugin" },
     signal: AbortSignal.timeout(10 * 60_000),
   });
-  if (!response.ok) throw new Error(`download answered HTTP ${response.status}`);
+  if (!response.ok)
+    throw new Error(`download answered HTTP ${response.status}`);
   const bytes = new Uint8Array(await response.arrayBuffer());
   const digest = sha256(bytes);
   if (digest !== artifact.sha256.trim().toLowerCase()) {
-    throw new Error(`checksum mismatch: expected ${artifact.sha256}, got ${digest}`);
+    throw new Error(
+      `checksum mismatch: expected ${artifact.sha256}, got ${digest}`,
+    );
   }
   // Stop a running sidecar before swapping the binary: on Windows a running
   // executable cannot be overwritten, and elsewhere the version file would drift.
@@ -203,7 +222,10 @@ export async function install(
 }
 
 /** A binary the user points at (a local build) wins over a downloaded one. */
-export function resolveBinary(dataDir: string, values: Record<string, string>): string | null {
+export function resolveBinary(
+  dataDir: string,
+  values: Record<string, string>,
+): string | null {
   const manual = (values.binaryPath ?? "").trim();
   if (manual && existsSync(manual)) return manual;
   const installed = installedBinary(dataDir);
@@ -217,7 +239,9 @@ export function resolveBinary(dataDir: string, values: Record<string, string>): 
  */
 export function preferredPort(values: Record<string, string>): number {
   const configured = Number((values.port ?? "").trim());
-  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_PORT;
+  return Number.isInteger(configured) && configured > 0
+    ? configured
+    : DEFAULT_PORT;
 }
 
 function bindPort(port: number): number | null {
@@ -256,7 +280,8 @@ async function reservePreferred(port: number): Promise<number> {
   for (let attempt = 0; attempt < PORT_ATTEMPTS; attempt++) {
     const bound = bindPort(port);
     if (bound !== null) return bound;
-    if (attempt === 0) log(`port ${port} is in use; waiting for it to be released`);
+    if (attempt === 0)
+      log(`port ${port} is in use; waiting for it to be released`);
     await Bun.sleep(PORT_RETRY_MS);
   }
   throw new Error(
@@ -337,7 +362,8 @@ export function refreshSavedCookiesFromCache(dataDir: string): boolean {
   let changed = false;
   for (const row of rows) {
     if (!row?.name || !row.value) continue;
-    if (row.name !== "__Secure-1PSIDTS" && row.name !== "__Secure-3PSIDTS") continue;
+    if (row.name !== "__Secure-1PSIDTS" && row.name !== "__Secure-3PSIDTS")
+      continue;
     if (jar.cookies[row.name] === row.value) continue;
     jar.cookies[row.name] = row.value;
     changed = true;
@@ -352,7 +378,9 @@ export function refreshSavedCookiesFromCache(dataDir: string): boolean {
 export function importFirefoxCookies(dataDir: string): CookieJar {
   const jar = readFirefoxCookies();
   saveCookies(dataDir, jar);
-  log(`imported ${Object.keys(jar.cookies).length} cookies from ${jar.profile}`);
+  log(
+    `imported ${Object.keys(jar.cookies).length} cookies from ${jar.profile}`,
+  );
   return jar;
 }
 
@@ -366,7 +394,9 @@ export function writeConfig(dataDir: string, port: number): void {
   const psid = jar?.cookies["__Secure-1PSID"] ?? "";
   const psidts = jar?.cookies["__Secure-1PSIDTS"] ?? "";
   const extra = Object.entries(jar?.cookies ?? {})
-    .filter(([name]) => name !== "__Secure-1PSID" && name !== "__Secure-1PSIDTS")
+    .filter(
+      ([name]) => name !== "__Secure-1PSID" && name !== "__Secure-1PSIDTS",
+    )
     .map(([name, value]) => `      ${yamlQuote(name)}: ${yamlQuote(value)}`)
     .join("\n");
 
@@ -394,7 +424,10 @@ export function writeConfig(dataDir: string, port: number): void {
   writeFileSync(configFile(dataDir), lines.join("\n"), { mode: 0o600 });
 }
 
-export async function health(port: number, key: string): Promise<HealthBody | null> {
+export async function health(
+  port: number,
+  key: string,
+): Promise<HealthBody | null> {
   try {
     const response = await fetch(`http://127.0.0.1:${port}/health`, {
       headers: key ? { authorization: `Bearer ${key}` } : {},
@@ -415,7 +448,11 @@ export async function ensureRunning(
 ): Promise<{ baseUrl: string; port: number; key: string }> {
   if (starting) return starting;
   if (running) {
-    return { baseUrl: `http://127.0.0.1:${running.port}/v1`, port: running.port, key: running.key };
+    return {
+      baseUrl: `http://127.0.0.1:${running.port}/v1`,
+      port: running.port,
+      key: running.key,
+    };
   }
 
   const run = startProcess(dataDir, values);
@@ -438,9 +475,13 @@ async function startProcess(
   if (storedKey) adoptStoredKey(dataDir, storedKey);
   const key = apiKey(dataDir);
   const binary = resolveBinary(dataDir, values);
-  if (!binary) throw new Error("gemini2api is not installed. Open its window and install it.");
+  if (!binary)
+    throw new Error(
+      "gemini2api is not installed. Open its window and install it.",
+    );
 
-  if (!savedCookies(dataDir)?.cookies["__Secure-1PSID"]) importFirefoxCookies(dataDir);
+  if (!savedCookies(dataDir)?.cookies["__Secure-1PSID"])
+    importFirefoxCookies(dataDir);
   refreshSavedCookiesFromCache(dataDir);
   const port = await findFreePort(preferredPort(values));
   writeConfig(dataDir, port);
@@ -502,7 +543,9 @@ async function startProcess(
   throw new Error(`${reason} ${detail}`.trim());
 }
 
-async function pump(stream: ReadableStream<Uint8Array> | undefined): Promise<void> {
+async function pump(
+  stream: ReadableStream<Uint8Array> | undefined,
+): Promise<void> {
   if (!stream) return;
   const decoder = new TextDecoder();
   let buffer = "";
@@ -564,7 +607,10 @@ export async function stop(): Promise<void> {
       }
     }
     if (exited) return;
-    await Promise.race([current.process.exited, Bun.sleep(signal === "SIGTERM" ? 3_000 : 1_000)]);
+    await Promise.race([
+      current.process.exited,
+      Bun.sleep(signal === "SIGTERM" ? 3_000 : 1_000),
+    ]);
   }
 }
 
@@ -588,4 +634,3 @@ export function uninstall(dataDir: string): void {
     }
   }
 }
-

@@ -43,9 +43,13 @@ for (const [name, size] of variants) {
 const large = render(1024);
 writeFileSync(join(root, "assets", "icon.png"), large);
 
-const iconutil = spawnSync("iconutil", ["-c", "icns", iconset, "-o", join(root, "icon.icns")], {
-  stdio: "ignore",
-});
+const iconutil = spawnSync(
+  "iconutil",
+  ["-c", "icns", iconset, "-o", join(root, "icon.icns")],
+  {
+    stdio: "ignore",
+  },
+);
 if (iconutil.status !== 0) {
   console.warn("iconutil unavailable; macOS will use icon.iconset directly.");
 }
@@ -71,7 +75,10 @@ function writeIco(path: string, sizes: number[]): void {
     entries.push(entry);
     offset += image.data.length;
   }
-  writeFileSync(path, Buffer.concat([header, ...entries, ...images.map((image) => image.data)]));
+  writeFileSync(
+    path,
+    Buffer.concat([header, ...entries, ...images.map((image) => image.data)]),
+  );
 }
 
 writeIco(join(root, "assets", "icon.ico"), [16, 32, 48, 64, 128, 256]);

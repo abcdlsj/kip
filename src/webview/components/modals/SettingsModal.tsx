@@ -1,6 +1,19 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { Boxes, Check, Cloud, Palette, Puzzle, RotateCw, ShieldCheck, X } from "lucide-react";
-import type { ApprovalPolicy, ThemeMode, ThinkingLevel } from "../../../shared/types";
+import {
+  Boxes,
+  Check,
+  Cloud,
+  Palette,
+  Puzzle,
+  RotateCw,
+  ShieldCheck,
+  X,
+} from "lucide-react";
+import type {
+  ApprovalPolicy,
+  ThemeMode,
+  ThinkingLevel,
+} from "../../../shared/types";
 import { modShortcut } from "../../lib/platform";
 import { useUiStore } from "../../stores/ui-store";
 import { PluginsPanel } from "./PluginsPanel";
@@ -30,7 +43,10 @@ export function SettingsModal() {
   const refresh = useUiStore((state) => state.refresh);
 
   return (
-    <Dialog.Root open={open} onOpenChange={(value) => (value ? openSettings() : close())}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(value) => (value ? openSettings() : close())}
+    >
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay fixed inset-0 z-40 bg-[var(--bg-scrim)] backdrop-blur-[4px]" />
         <Dialog.Content className="modal-surface fixed left-1/2 top-1/2 z-50 flex h-[590px] w-[740px] max-w-[calc(100vw-48px)] max-h-[calc(100vh-48px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[16px] border hairline bg-[var(--bg-elevated)] shadow-[var(--shadow-modal)] outline-none">
@@ -58,7 +74,11 @@ export function SettingsModal() {
                     <Icon
                       size={13}
                       strokeWidth={1.5}
-                      className={active ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]"}
+                      className={
+                        active
+                          ? "text-[var(--text-primary)]"
+                          : "text-[var(--text-muted)]"
+                      }
                     />
                     {item.label}
                   </button>
@@ -113,35 +133,41 @@ export function SettingsModal() {
                   })}
                 </div>
 
-                <h3 className="mt-6 text-[13px] font-medium">Default reasoning</h3>
+                <h3 className="mt-6 text-[13px] font-medium">
+                  Default reasoning
+                </h3>
                 <p className="mt-1 text-[12px] text-[var(--text-secondary)]">
                   Used for new threads. Existing threads keep their own level.
                 </p>
                 <div className="mt-2.5 inline-flex w-full rounded-[9px] border hairline bg-[var(--bg-sidebar)] p-0.5">
-                  {(["off", "low", "medium", "high"] as ThinkingLevel[]).map((level) => {
-                    const selected = settings?.defaultThinkingLevel === level;
-                    return (
-                      <button
-                        type="button"
-                        key={level}
-                        aria-pressed={selected}
-                        onClick={() => void setDefaultThinking(level)}
-                        className={`h-7 flex-1 rounded-[7px] text-[12px] capitalize transition-all ${
-                          selected
-                            ? "bg-[var(--bg-elevated)] font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
-                            : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                        }`}
-                      >
-                        {level}
-                      </button>
-                    );
-                  })}
+                  {(["off", "low", "medium", "high"] as ThinkingLevel[]).map(
+                    (level) => {
+                      const selected = settings?.defaultThinkingLevel === level;
+                      return (
+                        <button
+                          type="button"
+                          key={level}
+                          aria-pressed={selected}
+                          onClick={() => void setDefaultThinking(level)}
+                          className={`h-7 flex-1 rounded-[7px] text-[12px] capitalize transition-all ${
+                            selected
+                              ? "bg-[var(--bg-elevated)] font-medium text-[var(--text-primary)] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                          }`}
+                        >
+                          {level}
+                        </button>
+                      );
+                    },
+                  )}
                 </div>
 
                 <div className="mt-6 flex items-center justify-between border-t hairline pt-4">
                   <p className="text-[11.5px] leading-relaxed text-[var(--text-muted)]">
-                    Tip: <span className="kbd">{modShortcut("B")}</span> toggles the sidebar and{" "}
-                    <span className="kbd">{modShortcut("K")}</span> opens the command palette.
+                    Tip: <span className="kbd">{modShortcut("B")}</span> toggles
+                    the sidebar and{" "}
+                    <span className="kbd">{modShortcut("K")}</span> opens the
+                    command palette.
                   </p>
                   <button
                     type="button"
@@ -158,7 +184,8 @@ export function SettingsModal() {
               <div>
                 <h2 className="text-[15px] font-semibold">Safety</h2>
                 <p className="mt-1 text-[12.5px] text-[var(--text-secondary)]">
-                  Kip pauses before it changes files or runs commands. Choose how much it asks.
+                  Kip pauses before it changes files or runs commands. Choose
+                  how much it asks.
                 </p>
                 <div className="mt-4 space-y-2">
                   {POLICIES.map((policy) => {
@@ -178,7 +205,9 @@ export function SettingsModal() {
                         <div className="flex items-center justify-between gap-2">
                           <span
                             className={`text-[13px] font-medium ${
-                              policy.id === "yolo" ? "text-[var(--status-err)]" : "text-[var(--text-primary)]"
+                              policy.id === "yolo"
+                                ? "text-[var(--status-err)]"
+                                : "text-[var(--text-primary)]"
                             }`}
                           >
                             {policy.title}
@@ -198,11 +227,12 @@ export function SettingsModal() {
                   })}
                 </div>
                 <p className="mt-4 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
-                  Outside-workspace access still requires approval unless YOLO is enabled. Paths
-                  under <span className="font-mono">~/.ssh</span>,{" "}
+                  Outside-workspace access still requires approval unless YOLO
+                  is enabled. Paths under{" "}
+                  <span className="font-mono">~/.ssh</span>,{" "}
                   <span className="font-mono">~/.aws</span>,{" "}
-                  <span className="font-mono">~/.gnupg</span>, and the Kip credential store are
-                  always blocked.
+                  <span className="font-mono">~/.gnupg</span>, and the Kip
+                  credential store are always blocked.
                 </p>
               </div>
             )}
@@ -235,7 +265,9 @@ function ThemePreview({ theme }: { theme: ThemeMode }) {
     >
       <span
         className="w-3.5 rounded-[3px]"
-        style={{ background: dark ? "rgba(250,249,245,0.06)" : "rgba(31,30,29,0.06)" }}
+        style={{
+          background: dark ? "rgba(250,249,245,0.06)" : "rgba(31,30,29,0.06)",
+        }}
       />
       <span
         className="flex-1 rounded-[3px]"

@@ -48,7 +48,11 @@ export async function exportThreadMarkdown(
 
   let turns: ChatTurn[] = [];
   if (thread.sessionFilePath && existsSync(thread.sessionFilePath)) {
-    const manager = SessionManager.open(thread.sessionFilePath, undefined, workspace.rootPath);
+    const manager = SessionManager.open(
+      thread.sessionFilePath,
+      undefined,
+      workspace.rootPath,
+    );
     turns = projectSessionTurns(manager.getBranch(), workspace.rootPath);
   }
 
@@ -64,24 +68,36 @@ export async function exportThreadMarkdown(
     lines.push(turn.role === "user" ? "## You" : "## Kip", "");
     for (const block of turn.blocks) {
       if (block.type === "text") lines.push(block.text, "");
-      else if (block.type === "thinking") lines.push("<details><summary>Reasoning</summary>", "", block.thinking, "", "</details>", "");
+      else if (block.type === "thinking")
+        lines.push(
+          "<details><summary>Reasoning</summary>",
+          "",
+          block.thinking,
+          "",
+          "</details>",
+          "",
+        );
       else lines.push(`- \`${block.summaryLabel}\``, "");
     }
   }
 
-  const safeName = thread.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim() || "thread";
+  const safeName =
+    thread.title.replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim() || "thread";
   const target = join(directory, `${safeName}.md`);
   await Bun.write(target, lines.join("\n"));
   return target;
 }
 
-export async function exportBackupBundle(database: KipDatabase): Promise<string | null> {
+export async function exportBackupBundle(
+  database: KipDatabase,
+): Promise<string | null> {
   const directory = await pickDirectory();
   if (!directory) return null;
   const sessions: BackupBundle["sessions"] = [];
   for (const workspace of database.listWorkspaces()) {
     for (const thread of database.listThreads(workspace.id)) {
-      if (!thread.sessionFilePath || !existsSync(thread.sessionFilePath)) continue;
+      if (!thread.sessionFilePath || !existsSync(thread.sessionFilePath))
+        continue;
       sessions.push({
         workspaceId: workspace.id,
         fileName: basename(thread.sessionFilePath),
@@ -112,7 +128,10 @@ export async function exportBackupBundle(database: KipDatabase): Promise<string 
     },
     sessions,
   };
-  const target = join(directory, `kip-backup-${new Date().toISOString().slice(0, 10)}.json`);
+  const target = join(
+    directory,
+    `kip-backup-${new Date().toISOString().slice(0, 10)}.json`,
+  );
   await Bun.write(target, JSON.stringify(bundle, null, 2));
   return target;
 }

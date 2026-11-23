@@ -42,8 +42,14 @@ if (wrapperBundle) {
   // `electrobun dev` spawns Contents/MacOS/launcher by name, so leave dev alone.
   console.log("Launcher patch skipped for the dev build.");
   process.exit(0);
-} else if (process.env.ELECTROBUN_BUILD_DIR && process.env.ELECTROBUN_APP_NAME) {
-  const bundle = join(process.env.ELECTROBUN_BUILD_DIR, `${process.env.ELECTROBUN_APP_NAME}.app`);
+} else if (
+  process.env.ELECTROBUN_BUILD_DIR &&
+  process.env.ELECTROBUN_APP_NAME
+) {
+  const bundle = join(
+    process.env.ELECTROBUN_BUILD_DIR,
+    `${process.env.ELECTROBUN_APP_NAME}.app`,
+  );
   if (existsSync(bundle)) candidates.push(bundle);
 } else {
   // No hook environment: patch whatever build folder is lying around.
@@ -69,11 +75,23 @@ for (const bundle of new Set(candidates)) {
   if (isWrapper) {
     const temp = `${launcher}.patched`;
     const result = Bun.spawnSync(
-      ["vtool", "-set-build-version", "macos", "11.0", "14.8.5", "-replace", "-output", temp, launcher],
+      [
+        "vtool",
+        "-set-build-version",
+        "macos",
+        "11.0",
+        "14.8.5",
+        "-replace",
+        "-output",
+        temp,
+        launcher,
+      ],
       { stdout: "pipe", stderr: "pipe" },
     );
     if (result.exitCode !== 0) {
-      console.warn(`Could not patch launcher at ${launcher}; vtool is required for macOS 13 support.`);
+      console.warn(
+        `Could not patch launcher at ${launcher}; vtool is required for macOS 13 support.`,
+      );
       continue;
     }
     renameSync(temp, launcher);
@@ -85,7 +103,9 @@ for (const bundle of new Set(candidates)) {
 }
 
 if (patched === 0) {
-  console.warn(`No launcher was patched (${isWrapper ? "wrapper" : "app bundle"}).`);
+  console.warn(
+    `No launcher was patched (${isWrapper ? "wrapper" : "app bundle"}).`,
+  );
 } else {
   console.log(
     `Patched ${patched} macOS launcher(s) in the ${isWrapper ? "self-extracting wrapper" : "app bundle"}.`,
@@ -107,7 +127,9 @@ function renameExecutableToAppName(bundle: string): void {
 
   const appName = plistValue(plist, ":CFBundleName");
   if (!appName) {
-    console.warn(`No CFBundleName in ${plist}; keeping executable "${LAUNCHER_NAME}".`);
+    console.warn(
+      `No CFBundleName in ${plist}; keeping executable "${LAUNCHER_NAME}".`,
+    );
     return;
   }
   if (appName === LAUNCHER_NAME) return;
@@ -116,7 +138,12 @@ function renameExecutableToAppName(bundle: string): void {
   renameSync(launcher, renamed);
 
   const set = Bun.spawnSync(
-    ["/usr/libexec/PlistBuddy", "-c", `Set :CFBundleExecutable "${appName}"`, plist],
+    [
+      "/usr/libexec/PlistBuddy",
+      "-c",
+      `Set :CFBundleExecutable "${appName}"`,
+      plist,
+    ],
     { stdout: "pipe", stderr: "pipe" },
   );
   if (set.exitCode !== 0) {

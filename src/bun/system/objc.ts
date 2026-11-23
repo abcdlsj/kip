@@ -29,7 +29,8 @@ function msgSend(signature: Signature): MsgSend {
   const key = `${signature.args.join(",")}->${signature.returns}`;
   let sender = senders.get(key);
   if (!sender) {
-    sender = dlopen(LIBOBJC, { objc_msgSend: signature }).symbols.objc_msgSend as MsgSend;
+    sender = dlopen(LIBOBJC, { objc_msgSend: signature }).symbols
+      .objc_msgSend as MsgSend;
     senders.set(key, sender);
   }
   return sender;
@@ -60,12 +61,20 @@ function send(target: Id, selector: string, ...args: Id[]): Id {
 
 function nsString(value: string): Id {
   const sender = msgSend({ args: [U, U, FFIType.cstring], returns: U });
-  return toId(sender(cls("NSString"), sel("stringWithUTF8String:"), cstr(value)));
+  return toId(
+    sender(cls("NSString"), sel("stringWithUTF8String:"), cstr(value)),
+  );
 }
 
 function nsNumber(value: number): Id {
   const sender = msgSend({ args: [U, U, FFIType.i64], returns: U });
-  return toId(sender(cls("NSNumber"), sel("numberWithLongLong:"), BigInt(Math.trunc(value))));
+  return toId(
+    sender(
+      cls("NSNumber"),
+      sel("numberWithLongLong:"),
+      BigInt(Math.trunc(value)),
+    ),
+  );
 }
 
 /** True when the pointer is an NSWindow (or subclass) instance. */
@@ -81,7 +90,10 @@ export function isNSWindow(window: unknown): boolean {
  * Sets scalar properties on an AppKit object from the main thread and waits
  * for it, e.g. `{ level: 25, hasShadow: 0 }`. Keys must be KVC-compliant.
  */
-export function setPropertiesOnMainThread(target: unknown, values: Record<string, number>): void {
+export function setPropertiesOnMainThread(
+  target: unknown,
+  values: Record<string, number>,
+): void {
   if (!runtime || !target) return;
   const pool = runtime.objc_autoreleasePoolPush();
   try {
@@ -89,7 +101,10 @@ export function setPropertiesOnMainThread(target: unknown, values: Record<string
     for (const [key, value] of Object.entries(values)) {
       send(dictionary, "setObject:forKey:", nsNumber(value), nsString(key));
     }
-    const sender = msgSend({ args: [U, U, U, U, FFIType.bool], returns: FFIType.void });
+    const sender = msgSend({
+      args: [U, U, U, U, FFIType.bool],
+      returns: FFIType.void,
+    });
     sender(
       toId(target),
       sel("performSelectorOnMainThread:withObject:waitUntilDone:"),
@@ -140,9 +155,10 @@ function kvcDescription(target: Id, key: string): string | null {
 
 function parseRect(description: string | null): AppKitRect | null {
   if (!description) return null;
-  const match = /\{\{\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\}\s*,\s*\{\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\}\}/.exec(
-    description,
-  );
+  const match =
+    /\{\{\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\}\s*,\s*\{\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\}\}/.exec(
+      description,
+    );
   if (!match) return null;
   const x = Number(match[1]);
   const y = Number(match[2]);
@@ -178,9 +194,13 @@ export function getMacScreens(): ScreenNotchInfo[] {
       const frame = parseRect(kvcDescription(screen, "frame"));
       const visibleFrame = parseRect(kvcDescription(screen, "visibleFrame"));
       if (!frame || !visibleFrame) continue;
-      const safeAreaTop = parseEdgeTop(kvcDescription(screen, "safeAreaInsets"));
+      const safeAreaTop = parseEdgeTop(
+        kvcDescription(screen, "safeAreaInsets"),
+      );
       const auxLeft = parseRect(kvcDescription(screen, "auxiliaryTopLeftArea"));
-      const auxRight = parseRect(kvcDescription(screen, "auxiliaryTopRightArea"));
+      const auxRight = parseRect(
+        kvcDescription(screen, "auxiliaryTopRightArea"),
+      );
       result.push({ frame, visibleFrame, safeAreaTop, auxLeft, auxRight });
     }
     return result;
@@ -195,7 +215,9 @@ export function getMacScreens(): ScreenNotchInfo[] {
  * Returns the AppKit frame height of the screen Electrobun's setWindowFrame
  * will use to flip Y (`window.screen ?? NSScreen.mainScreen`).
  */
-export function getWindowReferenceScreenHeight(windowPtr: unknown): number | null {
+export function getWindowReferenceScreenHeight(
+  windowPtr: unknown,
+): number | null {
   if (!runtime) return null;
   const pool = runtime.objc_autoreleasePoolPush();
   try {

@@ -32,7 +32,9 @@ export type { SyncResult };
 const ACCESS_KEY_ID = "s3.access-key-id";
 const SECRET_ACCESS_KEY = "s3.secret-access-key";
 
-export async function getSyncConfig(database: KipDatabase): Promise<SyncConfig> {
+export async function getSyncConfig(
+  database: KipDatabase,
+): Promise<SyncConfig> {
   const gdrive = getGoogleDriveSettings(database);
   return {
     provider: database.getSetting<SyncProvider>(settingKey("provider"), "s3"),
@@ -67,7 +69,8 @@ export async function updateSyncConfig(
   },
 ): Promise<{ connected: boolean; error?: string }> {
   const provider: SyncProvider =
-    input.provider ?? database.getSetting<SyncProvider>(settingKey("provider"), "s3");
+    input.provider ??
+    database.getSetting<SyncProvider>(settingKey("provider"), "s3");
   database.setSetting(settingKey("provider"), provider);
   database.setSetting(settingKey("enabled"), input.enabled);
 
@@ -78,13 +81,18 @@ export async function updateSyncConfig(
       folderName: input.googleFolderName,
     });
     if (!(await isGoogleDriveConnected())) {
-      return { connected: false, error: "Sign in with Google to connect Google Drive" };
+      return {
+        connected: false,
+        error: "Sign in with Google to connect Google Drive",
+      };
     }
     return testGoogleDriveConnection(database);
   }
 
-  const endpoint = input.endpoint ?? database.getSetting(settingKey("endpoint"), "");
-  const region = input.region ?? database.getSetting(settingKey("region"), "auto");
+  const endpoint =
+    input.endpoint ?? database.getSetting(settingKey("endpoint"), "");
+  const region =
+    input.region ?? database.getSetting(settingKey("region"), "auto");
   const bucket = input.bucket ?? database.getSetting(settingKey("bucket"), "");
   const prefix = normalizePrefix(
     input.prefix ?? database.getSetting(settingKey("prefix"), "kip-sync/"),
@@ -94,19 +102,27 @@ export async function updateSyncConfig(
   database.setSetting(settingKey("bucket"), bucket);
   database.setSetting(settingKey("prefix"), prefix);
   if (input.accessKeyId) await setApiKey(ACCESS_KEY_ID, input.accessKeyId);
-  if (input.secretAccessKey) await setApiKey(SECRET_ACCESS_KEY, input.secretAccessKey);
-  if (!endpoint || !bucket) return { connected: false, error: "Endpoint and bucket are required" };
+  if (input.secretAccessKey)
+    await setApiKey(SECRET_ACCESS_KEY, input.secretAccessKey);
+  if (!endpoint || !bucket)
+    return { connected: false, error: "Endpoint and bucket are required" };
   try {
     const client = await createClient(database);
     await client.write(`${prefix}.kip-probe`, String(Date.now()));
     return { connected: true };
   } catch (error) {
-    return { connected: false, error: error instanceof Error ? error.message : "Connection failed" };
+    return {
+      connected: false,
+      error: error instanceof Error ? error.message : "Connection failed",
+    };
   }
 }
 
 export async function triggerSync(database: KipDatabase): Promise<SyncResult> {
-  const provider = database.getSetting<SyncProvider>(settingKey("provider"), "s3");
+  const provider = database.getSetting<SyncProvider>(
+    settingKey("provider"),
+    "s3",
+  );
   if (provider === "google-drive") {
     return triggerGoogleDriveSync(database);
   }
@@ -128,12 +144,22 @@ async function createClient(database: KipDatabase) {
   if (!endpoint || !bucket || !accessKeyId || !secretAccessKey) {
     throw new Error("Sync is not configured");
   }
-  return new Bun.S3Client({ endpoint, region, bucket, accessKeyId, secretAccessKey });
+  return new Bun.S3Client({
+    endpoint,
+    region,
+    bucket,
+    accessKeyId,
+    secretAccessKey,
+  });
 }
 
-export async function triggerS3Sync(database: KipDatabase): Promise<SyncResult> {
+export async function triggerS3Sync(
+  database: KipDatabase,
+): Promise<SyncResult> {
   const client = await createClient(database);
-  const prefix = normalizePrefix(database.getSetting(settingKey("prefix"), "kip-sync/"));
+  const prefix = normalizePrefix(
+    database.getSetting(settingKey("prefix"), "kip-sync/"),
+  );
   const manifestKey = `${prefix}manifest.json`;
   let remote: Manifest | null = null;
   try {
@@ -163,27 +189,38 @@ export async function triggerS3Sync(database: KipDatabase): Promise<SyncResult> 
   const snapshotKey = `${prefix}metadata/snapshot.json`;
   if (manifest.files[snapshotKey]?.sha256 !== hash(snapshot)) {
     await client.write(snapshotKey, snapshot);
-    manifest.files[snapshotKey] = { sha256: hash(snapshot), updatedAt: Date.now() };
+    manifest.files[snapshotKey] = {
+      sha256: hash(snapshot),
+      updatedAt: Date.now(),
+    };
     pushed += 1;
   }
 
   let pulled = 0;
   try {
-    const list = await client.list({ prefix: `${prefix}sessions/`, maxKeys: 1000 });
+    const list = await client.list({
+      prefix: `${prefix}sessions/`,
+      maxKeys: 1000,
+    });
     for (const object of list.contents ?? []) {
       if (!object.key) continue;
       const relativeKey = object.key.slice(prefix.length);
       const workspaceId = relativeKey.split("/")[1];
       if (!workspaceId) continue;
-      const thread = database.listThreads(workspaceId).find(
-        (item) => basename(item.sessionFilePath) === basename(object.key ?? ""),
-      );
+      const thread = database
+        .listThreads(workspaceId)
+        .find(
+          (item) =>
+            basename(item.sessionFilePath) === basename(object.key ?? ""),
+        );
       const targetDir = getSessionDir(workspaceId);
       mkdirSync(targetDir, { recursive: true });
       const target = join(targetDir, basename(object.key));
       const remoteEntry = manifest.files[relativeKey];
       const localExists = existsSync(target);
-      const remoteNewer = remoteEntry ? remoteEntry.updatedAt > (thread?.updatedAt ?? 0) : false;
+      const remoteNewer = remoteEntry
+        ? remoteEntry.updatedAt > (thread?.updatedAt ?? 0)
+        : false;
       if (localExists && !remoteNewer) continue;
       const body = await client.file(object.key).arrayBuffer();
       await Bun.write(target, body);

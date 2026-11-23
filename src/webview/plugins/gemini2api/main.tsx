@@ -26,7 +26,11 @@ function StatusDot({ state }: { state: GeminiPageState }) {
       : { label: "Stopped", color: "var(--status-warn)" };
   return (
     <span className="inline-flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)]">
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} aria-hidden />
+      <span
+        className="h-1.5 w-1.5 rounded-full"
+        style={{ background: color }}
+        aria-hidden
+      />
       {label}
       {state.running && state.port !== null && (
         <span className="font-mono text-[11.5px] text-[var(--text-muted)]">
@@ -41,7 +45,9 @@ function StatusDot({ state }: { state: GeminiPageState }) {
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 py-1.5">
-      <span className="shrink-0 text-[12px] text-[var(--text-muted)]">{label}</span>
+      <span className="shrink-0 text-[12px] text-[var(--text-muted)]">
+        {label}
+      </span>
       <span className="min-w-0 break-words text-right font-mono text-[11.5px] text-[var(--text-secondary)]">
         {value}
       </span>
@@ -51,7 +57,9 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 function App() {
   const [state, setState] = useState<GeminiPageState | null>(null);
-  const [action, setAction] = useState<ReturnType<typeof connectPluginPage> | null>(null);
+  const [action, setAction] = useState<ReturnType<
+    typeof connectPluginPage
+  > | null>(null);
 
   useEffect(() => {
     setAction(connectPluginPage<GeminiPageState>((next) => setState(next)));
@@ -79,16 +87,20 @@ function App() {
     <div className="thin-scroll h-full overflow-y-auto bg-[var(--bg-window)] px-7 py-6">
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-[19px] font-semibold tracking-[-0.01em]">gemini2api</h1>
+          <h1 className="text-[19px] font-semibold tracking-[-0.01em]">
+            gemini2api
+          </h1>
           <p className="mt-1 max-w-[52ch] text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
-            The Gemini web app behind an OpenAI-compatible API, running on this machine. Kip
-            installs it, points it at your Firefox session, and starts it on loopback.
+            The Gemini web app behind an OpenAI-compatible API, running on this
+            machine. Kip installs it, points it at your Firefox session, and
+            starts it on loopback.
           </p>
         </div>
         <div className="shrink-0 text-right">
           <StatusDot state={state} />
           <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-            {state.version ? `v${state.version}` : "no binary"} · {state.platform}
+            {state.version ? `v${state.version}` : "no binary"} ·{" "}
+            {state.platform}
           </p>
         </div>
       </header>
@@ -145,7 +157,11 @@ function App() {
           onClick={() => run("refresh")}
           title="Refresh this page"
         >
-          <RefreshCw size={12} strokeWidth={1.5} className={busy ? "animate-spin" : undefined} />
+          <RefreshCw
+            size={12}
+            strokeWidth={1.5}
+            className={busy ? "animate-spin" : undefined}
+          />
         </button>
         <button
           type="button"
@@ -215,16 +231,20 @@ function App() {
       </section>
 
       <p className="mt-3 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
-        Kip writes <span className="font-mono">config.yaml</span> and a random key in this
-        plugin's data directory; cookies come from the Firefox profile where you signed in to
-        gemini.google.com. The gateway keeps running until you press Stop or quit Kip.{" "}
-        <span className="font-mono">{state.homepage.replace("https://", "")}</span>
+        Kip writes <span className="font-mono">config.yaml</span> and a random
+        key in this plugin's data directory; cookies come from the Firefox
+        profile where you signed in to gemini.google.com. The gateway keeps
+        running until you press Stop or quit Kip.{" "}
+        <span className="font-mono">
+          {state.homepage.replace("https://", "")}
+        </span>
       </p>
 
       {state.logs.length > 0 && (
         <section className="mt-4 rounded-[11px] border hairline">
           <h2 className="border-b hairline px-3.5 py-2 text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--text-muted)]">
-            Log · {state.logs.length} {state.logs.length === 1 ? "line" : "lines"}
+            Log · {state.logs.length}{" "}
+            {state.logs.length === 1 ? "line" : "lines"}
           </h2>
           <pre className="thin-scroll max-h-[190px] overflow-auto px-3.5 py-2 font-mono text-[11px] leading-[1.55] text-[var(--text-secondary)]">
             {state.logs.join("\n")}

@@ -16,11 +16,20 @@ interface GitResult {
   stderr: string;
 }
 
-async function git(cwd: string, args: string[], env: Record<string, string> = {}): Promise<GitResult> {
+async function git(
+  cwd: string,
+  args: string[],
+  env: Record<string, string> = {},
+): Promise<GitResult> {
   const proc = Bun.spawn(["git", "-C", cwd, ...args], {
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0", ...env },
+    env: {
+      ...process.env,
+      GIT_OPTIONAL_LOCKS: "0",
+      GIT_TERMINAL_PROMPT: "0",
+      ...env,
+    },
   });
   const [stdout, stderr, code] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -58,11 +67,35 @@ export async function snapshotTree(root: string): Promise<string | null> {
 }
 
 /** Files that differ between two snapshots, relative to the workspace root. */
-export async function diffTrees(root: string, before: string, after: string): Promise<FileChange[]> {
+export async function diffTrees(
+  root: string,
+  before: string,
+  after: string,
+): Promise<FileChange[]> {
   if (before === after) return [];
   const [status, numstat] = await Promise.all([
-    git(root, ["diff", "--name-status", "--no-renames", "--relative", "-z", before, after, "--", "."]),
-    git(root, ["diff", "--numstat", "--no-renames", "--relative", "-z", before, after, "--", "."]),
+    git(root, [
+      "diff",
+      "--name-status",
+      "--no-renames",
+      "--relative",
+      "-z",
+      before,
+      after,
+      "--",
+      ".",
+    ]),
+    git(root, [
+      "diff",
+      "--numstat",
+      "--no-renames",
+      "--relative",
+      "-z",
+      before,
+      after,
+      "--",
+      ".",
+    ]),
   ]);
   if (status.code !== 0 || numstat.code !== 0) return [];
 
@@ -84,7 +117,11 @@ export async function diffTrees(root: string, before: string, after: string): Pr
     if (!path) continue;
     const kind: FileChange["status"] =
       code === "A" ? "added" : code === "D" ? "deleted" : "modified";
-    files.push({ path, status: kind, ...(counts.get(path) ?? { added: 0, removed: 0 }) });
+    files.push({
+      path,
+      status: kind,
+      ...(counts.get(path) ?? { added: 0, removed: 0 }),
+    });
   }
   return files;
 }
@@ -107,7 +144,10 @@ export async function restoreRun(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (files.length === 0) return { ok: true };
   if (!(await treeExists(root, before))) {
-    return { ok: false, error: "The snapshot for this turn is no longer available." };
+    return {
+      ok: false,
+      error: "The snapshot for this turn is no longer available.",
+    };
   }
   const current = await snapshotTree(root);
   if (!current) return { ok: false, error: "Could not read the working tree." };
@@ -123,7 +163,8 @@ export async function restoreRun(
     "--",
     ...paths,
   ]);
-  if (drift.code !== 0) return { ok: false, error: "Could not compare the working tree." };
+  if (drift.code !== 0)
+    return { ok: false, error: "Could not compare the working tree." };
   const changedSince = splitLines(drift.stdout).filter(Boolean);
   if (changedSince.length > 0) {
     const sample = changedSince.slice(0, 3).join(", ");
@@ -133,11 +174,22 @@ export async function restoreRun(
     };
   }
 
-  const toRestore = files.filter((file) => file.status !== "added").map((file) => file.path);
+  const toRestore = files
+    .filter((file) => file.status !== "added")
+    .map((file) => file.path);
   if (toRestore.length) {
-    const restore = await git(root, ["restore", `--source=${before}`, "--worktree", "--", ...toRestore]);
+    const restore = await git(root, [
+      "restore",
+      `--source=${before}`,
+      "--worktree",
+      "--",
+      ...toRestore,
+    ]);
     if (restore.code !== 0) {
-      return { ok: false, error: restore.stderr.trim() || "git restore failed." };
+      return {
+        ok: false,
+        error: restore.stderr.trim() || "git restore failed.",
+      };
     }
   }
   for (const file of files) {

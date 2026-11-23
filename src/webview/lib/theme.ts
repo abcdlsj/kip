@@ -3,7 +3,9 @@ import type { ThemeMode } from "../../shared/types";
 
 export function resolvedTheme(theme: ThemeMode): "light" | "dark" {
   if (theme !== "system") return theme;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
 }
 
 export function applyTheme(theme: ThemeMode): void {
@@ -14,7 +16,9 @@ export function applyTheme(theme: ThemeMode): void {
 
 /** Re-applies a `system` theme when the OS preference flips. Idempotent. */
 export function watchSystemTheme(current: () => ThemeMode): void {
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    if (current() === "system") applyTheme("system");
-  });
+  window
+    .matchMedia("(prefers-color-scheme: dark)")
+    .addEventListener("change", () => {
+      if (current() === "system") applyTheme("system");
+    });
 }

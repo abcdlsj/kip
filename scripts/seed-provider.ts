@@ -12,7 +12,8 @@ import type { ProviderProtocol } from "../src/shared/types";
 
 const id = process.env.KIP_SEED_PROVIDER_ID ?? "local";
 const baseUrl = process.env.KIP_SEED_BASE_URL ?? "http://localhost:11434/v1";
-const protocol = (process.env.KIP_SEED_PROTOCOL ?? "openai-completions") as ProviderProtocol;
+const protocol = (process.env.KIP_SEED_PROTOCOL ??
+  "openai-completions") as ProviderProtocol;
 const displayName = process.env.KIP_SEED_DISPLAY_NAME ?? id;
 const modelIds = (process.env.KIP_SEED_MODELS ?? "llama3.1")
   .split(/[\n,]+/)
@@ -34,7 +35,9 @@ if (!apiKey) {
   process.exit(1);
 }
 if (modelIds.length === 0) {
-  console.error("Set KIP_SEED_MODELS to one or more comma-separated model ids.");
+  console.error(
+    "Set KIP_SEED_MODELS to one or more comma-separated model ids.",
+  );
   process.exit(1);
 }
 

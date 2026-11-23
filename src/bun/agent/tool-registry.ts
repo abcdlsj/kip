@@ -28,7 +28,9 @@ export interface AgentToolContext {
 
 export interface ToolProvider {
   readonly id: string;
-  createTools(context: AgentToolContext): AnyToolDefinition[] | Promise<AnyToolDefinition[]>;
+  createTools(
+    context: AgentToolContext,
+  ): AnyToolDefinition[] | Promise<AnyToolDefinition[]>;
 }
 
 /** Standard cross-platform coding tools backed by Pi's built-in definitions. */

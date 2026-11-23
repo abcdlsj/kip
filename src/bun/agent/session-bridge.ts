@@ -4,8 +4,17 @@
  */
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
-import type { ChatTurn, ContentBlock, ContextUsage, ToolCallBlock } from "../../shared/types";
+import type {
+  AssistantMessage,
+  ToolResultMessage,
+  UserMessage,
+} from "@earendil-works/pi-ai";
+import type {
+  ChatTurn,
+  ContentBlock,
+  ContextUsage,
+  ToolCallBlock,
+} from "../../shared/types";
 import { summarizeToolCall } from "./tool-policy";
 
 interface ToolMeta {
@@ -121,7 +130,11 @@ function projectUser(entryId: string, message: UserMessage): ChatTurn {
   } else {
     message.content.forEach((part, index) => {
       if (part.type === "text") {
-        blocks.push({ type: "text", id: `${entryId}_${index}`, text: part.text });
+        blocks.push({
+          type: "text",
+          id: `${entryId}_${index}`,
+          text: part.text,
+        });
       }
     });
   }
@@ -178,7 +191,8 @@ export function stripKipNotes(text: string): string {
   if (!text.startsWith(KIP_NOTE_MARK)) return text;
   const lines = text.split("\n");
   let index = 0;
-  while (index < lines.length && lines[index]?.startsWith(KIP_NOTE_MARK)) index += 1;
+  while (index < lines.length && lines[index]?.startsWith(KIP_NOTE_MARK))
+    index += 1;
   while (index < lines.length && lines[index]?.trim() === "") index += 1;
   return lines.slice(index).join("\n");
 }
@@ -200,7 +214,9 @@ export function textOf(content: unknown): string {
 }
 
 export function toSharedUsage(
-  usage: { tokens: number | null; contextWindow: number; percent: number | null } | undefined,
+  usage:
+    | { tokens: number | null; contextWindow: number; percent: number | null }
+    | undefined,
 ): ContextUsage {
   if (!usage) return { usedTokens: 0, maxTokens: 0, ratio: 0 };
   const used = usage.tokens ?? 0;

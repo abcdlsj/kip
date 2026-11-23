@@ -10,7 +10,11 @@
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { inspectGit } from "../system/git-inspector";
-import { describeRuntimeEnv, normalizeForCompare, toPosixPath } from "../system/platform";
+import {
+  describeRuntimeEnv,
+  normalizeForCompare,
+  toPosixPath,
+} from "../system/platform";
 
 export interface PromptContextInput {
   threadId: string;
@@ -79,14 +83,18 @@ export function createWorkspaceInstructionsProvider(): PromptContextProvider {
           if (seenPaths.has(pathKey)) continue;
           if (!statSync(fullPath).isFile()) continue;
           seenPaths.add(pathKey);
-          const raw = readFileSync(fullPath, "utf8").replace(/^\uFEFF/, "").trim();
+          const raw = readFileSync(fullPath, "utf8")
+            .replace(/^\uFEFF/, "")
+            .trim();
           if (!raw || seenContent.has(raw)) continue;
           seenContent.add(raw);
           const clipped =
             raw.length > remaining
               ? `${raw.slice(0, remaining)}\n\n[Truncated for context budget]`
               : raw;
-          sections.push(`Workspace instructions (${toPosixPath(relativePath)}):\n${clipped}`);
+          sections.push(
+            `Workspace instructions (${toPosixPath(relativePath)}):\n${clipped}`,
+          );
           remaining -= clipped.length;
         } catch {
           // Ignore unreadable instruction files.
@@ -119,7 +127,9 @@ export class ContextBuilder {
     this.providers.delete(providerId);
   }
 
-  async buildSystemPromptSections(input: PromptContextInput): Promise<string[]> {
+  async buildSystemPromptSections(
+    input: PromptContextInput,
+  ): Promise<string[]> {
     const sections: string[] = [];
     for (const provider of this.providers.values()) {
       try {

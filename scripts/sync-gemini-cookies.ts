@@ -64,21 +64,30 @@ function check(): void {
         "Run `bun run sync:cookies` instead of editing the copy.",
     );
   }
-  console.log(`vendored cookies.ts matches ${pin.source}@${pin.ref.slice(0, 12)}`);
+  console.log(
+    `vendored cookies.ts matches ${pin.source}@${pin.ref.slice(0, 12)}`,
+  );
 }
 
-async function fetchUpstream(from: string | undefined, pin: Pin): Promise<string> {
+async function fetchUpstream(
+  from: string | undefined,
+  pin: Pin,
+): Promise<string> {
   if (from) {
     if (/^https?:\/\//.test(from)) {
-      const response = await fetch(from, { signal: AbortSignal.timeout(20_000) });
-      if (!response.ok) throw new Error(`${from} answered HTTP ${response.status}`);
+      const response = await fetch(from, {
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok)
+        throw new Error(`${from} answered HTTP ${response.status}`);
       return response.text();
     }
     return readFileSync(resolve(from), "utf8");
   }
   const repo = localCheckout();
   if (repo) return readFileSync(join(repo, UPSTREAM_PATH), "utf8");
-  if (!pin.ref) throw new Error("No local checkout and no pinned ref to download from");
+  if (!pin.ref)
+    throw new Error("No local checkout and no pinned ref to download from");
   const url = `https://raw.githubusercontent.com/abcdlsj/gemini2api/${pin.ref}/${UPSTREAM_PATH}`;
   const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
   if (!response.ok) throw new Error(`${url} answered HTTP ${response.status}`);
@@ -100,7 +109,9 @@ async function sync(from: string | undefined): Promise<void> {
   mkdirSync("src/bun/plugins/gemini2api/vendor", { recursive: true });
   writeFileSync(VENDOR_FILE, content);
   writeFileSync(PIN_FILE, `${JSON.stringify(next, null, 2)}\n`);
-  console.log(`vendored ${UPSTREAM_PATH} at ${next.ref.slice(0, 12)} (${next.sha256.slice(0, 12)})`);
+  console.log(
+    `vendored ${UPSTREAM_PATH} at ${next.ref.slice(0, 12)} (${next.sha256.slice(0, 12)})`,
+  );
 }
 
 const args = process.argv.slice(2);

@@ -26,7 +26,9 @@ const MAX_DOWNLOAD_MS = 10 * 60 * 1000;
 
 /** `Bun.Archive` and `Bun.zstdDecompressSync` are runtime APIs the types miss. */
 interface BunExtras {
-  Archive: new (bytes: Uint8Array) => { extract(directory: string): Promise<void> };
+  Archive: new (bytes: Uint8Array) => {
+    extract(directory: string): Promise<void>;
+  };
   zstdDecompressSync(data: Uint8Array): Uint8Array;
 }
 const bunExtras = Bun as unknown as BunExtras;
@@ -51,7 +53,8 @@ function cacheRoot(): string {
     return join(homedir(), "Library", "Caches", "ai.kip.desktop", "updates");
   }
   if (process.platform === "win32") {
-    const base = process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local");
+    const base =
+      process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local");
     return join(base, "ai.kip.desktop", "updates");
   }
   const base = process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache");
@@ -63,7 +66,9 @@ function cacheRoot(): string {
  * and symlinks it into /Applications, so the resolved path is what tells the
  * two install kinds apart.
  */
-export function detectInstalledBundle(execPath: string = process.execPath): BundleInfo {
+export function detectInstalledBundle(
+  execPath: string = process.execPath,
+): BundleInfo {
   const manual: BundleInfo = { appPath: "", source: "manual" };
   const resolved = safeRealpath(execPath);
 
@@ -78,20 +83,29 @@ export function detectInstalledBundle(execPath: string = process.execPath): Bund
     ) {
       return manual;
     }
-    if (bundleDir.startsWith("/Volumes/") || bundleDir.includes("AppTranslocation")) {
+    if (
+      bundleDir.startsWith("/Volumes/") ||
+      bundleDir.includes("AppTranslocation")
+    ) {
       return manual;
     }
 
     const appPath = safeRealpath(bundleDir);
     if (appPath.includes("/Caskroom/")) return { appPath, source: "homebrew" };
-    return { appPath, source: isWritableDir(dirname(appPath)) ? "direct" : "manual" };
+    return {
+      appPath,
+      source: isWritableDir(dirname(appPath)) ? "direct" : "manual",
+    };
   }
 
   // Windows and Linux run `<app>/bin/bun.exe` (or `bin/bun`) from
   // `<LOCALAPPDATA|XDG_DATA_HOME>/ai.kip.desktop/<channel>/app/`.
   const binDir = dirname(resolved);
   const appDir = dirname(binDir);
-  const launcher = join(binDir, process.platform === "win32" ? "launcher.exe" : "launcher");
+  const launcher = join(
+    binDir,
+    process.platform === "win32" ? "launcher.exe" : "launcher",
+  );
   if (basename(binDir) !== "bin" || !existsSync(launcher)) return manual;
   if (!isWritableDir(appDir)) return manual;
   return { appPath: appDir, source: "direct" };
@@ -133,7 +147,8 @@ async function downloadAsset(
     headers: { "User-Agent": "Kip/updater" },
     signal: AbortSignal.timeout(MAX_DOWNLOAD_MS),
   });
-  if (!response.ok || !response.body) throw new Error(`download returned ${response.status}`);
+  if (!response.ok || !response.body)
+    throw new Error(`download returned ${response.status}`);
 
   const total = Number(response.headers.get("content-length")) || asset.size;
   const reader = response.body.getReader();
@@ -169,17 +184,21 @@ async function downloadAsset(
  * The archive holds one top-level directory (`Kip/`) with `bin/` and
  * `Resources/` inside.
  */
-export async function extractBundleArchive(archivePath: string, destDir: string): Promise<string> {
+export async function extractBundleArchive(
+  archivePath: string,
+  destDir: string,
+): Promise<string> {
   rmSync(destDir, { recursive: true, force: true });
   mkdirSync(destDir, { recursive: true, mode: 0o700 });
   const compressed = new Uint8Array(await Bun.file(archivePath).arrayBuffer());
   const tar = bunExtras.zstdDecompressSync(compressed);
   await new bunExtras.Archive(tar).extract(destDir);
 
-  const launcher = process.platform === "win32" ? "bin/launcher.exe" : "bin/launcher";
+  const launcher =
+    process.platform === "win32" ? "bin/launcher.exe" : "bin/launcher";
   if (existsSync(join(destDir, launcher))) return destDir;
-  const bundleName = readdirSync(destDir, { withFileTypes: true }).find((entry) =>
-    entry.isDirectory(),
+  const bundleName = readdirSync(destDir, { withFileTypes: true }).find(
+    (entry) => entry.isDirectory(),
   );
   if (!bundleName) throw new Error("the archive is empty");
   const candidate = join(destDir, bundleName.name);
@@ -216,9 +235,18 @@ class MacInstaller implements UpdateInstaller {
     await downloadAsset(asset, dmgPath, onProgress);
     mkdirSync(mountPoint, { recursive: true });
     try {
-      await run(["hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", mountPoint, dmgPath]);
+      await run([
+        "hdiutil",
+        "attach",
+        "-nobrowse",
+        "-readonly",
+        "-mountpoint",
+        mountPoint,
+        dmgPath,
+      ]);
       const mountedApp = join(mountPoint, APP_BUNDLE_NAME);
-      if (!existsSync(mountedApp)) throw new Error(`the dmg does not contain ${APP_BUNDLE_NAME}`);
+      if (!existsSync(mountedApp))
+        throw new Error(`the dmg does not contain ${APP_BUNDLE_NAME}`);
       const stagedApp = join(stageDir, APP_BUNDLE_NAME);
       await run(["ditto", mountedApp, stagedApp]);
       await run(["codesign", "--verify", "--deep", "--strict", stagedApp]);
@@ -242,7 +270,14 @@ class MacInstaller implements UpdateInstaller {
     chmodSync(scriptPath, 0o700);
 
     const helper = Bun.spawn(
-      ["/bin/sh", scriptPath, String(process.pid), this.appPath, this.stagedApp, this.stageDir],
+      [
+        "/bin/sh",
+        scriptPath,
+        String(process.pid),
+        this.appPath,
+        this.stagedApp,
+        this.stageDir,
+      ],
       { detached: true, stdio: ["ignore", "ignore", "ignore"] },
     );
     helper.unref();
@@ -277,7 +312,10 @@ class ArchiveInstaller implements UpdateInstaller {
     const archivePath = join(stageDir, asset.name);
     await downloadAsset(asset, archivePath, onProgress);
     try {
-      this.stagedApp = await extractBundleArchive(archivePath, join(stageDir, "extracted"));
+      this.stagedApp = await extractBundleArchive(
+        archivePath,
+        join(stageDir, "extracted"),
+      );
       this.stageDir = stageDir;
     } finally {
       rmSync(archivePath, { force: true });
@@ -286,7 +324,9 @@ class ArchiveInstaller implements UpdateInstaller {
 
   async apply(): Promise<boolean> {
     if (!this.stagedApp || !this.stageDir) return false;
-    return process.platform === "win32" ? this.applyWindows() : this.applyLinux();
+    return process.platform === "win32"
+      ? this.applyWindows()
+      : this.applyLinux();
   }
 
   private applyWindows(): boolean {
@@ -294,13 +334,30 @@ class ArchiveInstaller implements UpdateInstaller {
     const scriptPath = join(dirname(this.appPath), "kip-update.bat");
     writeFileSync(
       scriptPath,
-      windowsApplyScript(this.stageDir as string, this.stagedApp as string, this.appPath, taskName),
+      windowsApplyScript(
+        this.stageDir as string,
+        this.stagedApp as string,
+        this.appPath,
+        taskName,
+      ),
     );
 
     // Task Scheduler runs the swap independently of this process, so it can
     // finish after Kip exits and cannot be taken down with the console.
     try {
-      runSync(["schtasks", "/create", "/tn", taskName, "/tr", scriptPath, "/sc", "once", "/st", "00:00", "/f"]);
+      runSync([
+        "schtasks",
+        "/create",
+        "/tn",
+        taskName,
+        "/tr",
+        scriptPath,
+        "/sc",
+        "once",
+        "/st",
+        "00:00",
+        "/f",
+      ]);
       runSync(["schtasks", "/run", "/tn", taskName]);
     } catch (error) {
       console.warn(
@@ -347,8 +404,10 @@ export function createUpdateInstaller(options: {
   execPath?: string;
 }): UpdateInstaller {
   const bundle = detectInstalledBundle(options.execPath);
-  if (bundle.source !== "direct") return { ...manualInstaller, source: bundle.source };
-  if (process.platform === "darwin") return new MacInstaller(bundle.appPath, options.onQuit);
+  if (bundle.source !== "direct")
+    return { ...manualInstaller, source: bundle.source };
+  if (process.platform === "darwin")
+    return new MacInstaller(bundle.appPath, options.onQuit);
   return new ArchiveInstaller(bundle.appPath, options.onQuit);
 }
 

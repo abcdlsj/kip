@@ -34,7 +34,14 @@ export function WindowControls() {
         title={maximized ? "Restore" : "Maximize"}
       >
         {maximized ? (
-          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth={1.3}>
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 11 11"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.3}
+          >
             <rect x="0.65" y="2.65" width="7.7" height="7.7" rx="0.6" />
             <path d="M2.65 2.65V0.65h7.7v7.7h-2" />
           </svg>

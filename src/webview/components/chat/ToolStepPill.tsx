@@ -24,7 +24,14 @@ interface ToolStepPillProps {
 }
 
 function iconFor(toolName: string, highRisk: boolean) {
-  if (highRisk) return <ShieldAlert size={13} strokeWidth={1.5} className="text-[var(--status-err)]" />;
+  if (highRisk)
+    return (
+      <ShieldAlert
+        size={13}
+        strokeWidth={1.5}
+        className="text-[var(--status-err)]"
+      />
+    );
   switch (toolName) {
     case "bash":
       return <Terminal size={13} strokeWidth={1.5} />;
@@ -43,13 +50,27 @@ function iconFor(toolName: string, highRisk: boolean) {
 
 function statusIcon(block: ToolCallBlock) {
   if (block.status === "running") {
-    return <Loader2 size={11} strokeWidth={1.5} className="animate-spin text-[var(--text-muted)]" />;
+    return (
+      <Loader2
+        size={11}
+        strokeWidth={1.5}
+        className="animate-spin text-[var(--text-muted)]"
+      />
+    );
   }
   if (block.status === "awaiting_approval") {
-    return <ShieldAlert size={11} strokeWidth={1.5} className="text-[var(--status-warn)]" />;
+    return (
+      <ShieldAlert
+        size={11}
+        strokeWidth={1.5}
+        className="text-[var(--status-warn)]"
+      />
+    );
   }
   if (block.status === "completed") {
-    return <Check size={11} strokeWidth={1.7} className="text-[var(--status-ok)]" />;
+    return (
+      <Check size={11} strokeWidth={1.7} className="text-[var(--status-ok)]" />
+    );
   }
   if (block.status === "denied") return null;
   return <X size={11} strokeWidth={1.7} className="text-[var(--status-err)]" />;
@@ -89,10 +110,14 @@ export function ToolStepPill({ block, compact = false }: ToolStepPillProps) {
         className={
           compact
             ? `flex h-7 w-full items-center gap-2 rounded-[6px] px-1.5 text-left text-[12px] text-[var(--text-secondary)] transition-colors ${
-                hasDetail ? "hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]" : "cursor-default"
+                hasDetail
+                  ? "hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
+                  : "cursor-default"
               }`
             : `flex h-7 max-w-full items-center gap-2 rounded-[8px] border hairline bg-[var(--bg-subtle)] px-2.5 text-[12px] text-[var(--text-secondary)] transition-colors ${
-                hasDetail ? "hover:border-[var(--border-focus)] hover:bg-[var(--bg-active)] hover:text-[var(--text-primary)]" : "cursor-default"
+                hasDetail
+                  ? "hover:border-[var(--border-focus)] hover:bg-[var(--bg-active)] hover:text-[var(--text-primary)]"
+                  : "cursor-default"
               }`
         }
       >
@@ -140,7 +165,12 @@ export function ToolStepPill({ block, compact = false }: ToolStepPillProps) {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}
+            transition={{
+              type: "spring",
+              stiffness: 420,
+              damping: 34,
+              mass: 0.8,
+            }}
             className="overflow-hidden"
           >
             <div
@@ -155,16 +185,25 @@ export function ToolStepPill({ block, compact = false }: ToolStepPillProps) {
                   aria-label="Copy output"
                   title="Copy output"
                   className={`btn-icon absolute right-2 top-2 z-10 h-6 gap-1 rounded-[6px] bg-[var(--bg-code-block)] px-1.5 text-[11px] transition-opacity ${
-                    copied ? "opacity-100 text-[var(--status-ok)]" : "opacity-0 group-hover/out:opacity-100"
+                    copied
+                      ? "opacity-100 text-[var(--status-ok)]"
+                      : "opacity-0 group-hover/out:opacity-100"
                   }`}
                 >
-                  {copied ? <Check size={11} strokeWidth={1.7} /> : <Copy size={11} strokeWidth={1.5} />}
+                  {copied ? (
+                    <Check size={11} strokeWidth={1.7} />
+                  ) : (
+                    <Copy size={11} strokeWidth={1.5} />
+                  )}
                   {copied ? "Copied" : ""}
                 </button>
               )}
               <div className="thin-scroll max-h-72 overflow-auto">
                 {block.diff ? (
-                  <DiffView before={block.diff.before} after={block.diff.after} />
+                  <DiffView
+                    before={block.diff.before}
+                    after={block.diff.after}
+                  />
                 ) : (
                   <pre className="selectable whitespace-pre-wrap p-3 font-mono text-[12px] leading-[1.6] text-[var(--text-secondary)]">
                     {cleanOutput}

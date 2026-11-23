@@ -7,7 +7,8 @@ export type Platform = "mac" | "win" | "linux";
 function detect(): Platform {
   const userAgent = navigator.userAgent;
   if (userAgent.includes("Windows")) return "win";
-  if (userAgent.includes("Macintosh") || userAgent.includes("Mac OS X")) return "mac";
+  if (userAgent.includes("Macintosh") || userAgent.includes("Mac OS X"))
+    return "mac";
   return "linux";
 }
 

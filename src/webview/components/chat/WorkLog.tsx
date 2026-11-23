@@ -41,13 +41,20 @@ function currentAction(block: WorkBlock | undefined): string {
   return activeLabel(block);
 }
 
-export function WorkLog({ blocks, running, approvals, durationMs }: WorkLogProps) {
+export function WorkLog({
+  blocks,
+  running,
+  approvals,
+  durationMs,
+}: WorkLogProps) {
   const [open, setOpen] = useState(false);
   const [, setTick] = useState(0);
   const startedAt = useRef(Date.now());
 
   const pending = approvals.filter((item) =>
-    blocks.some((block) => block.type === "tool_call" && block.id === item.toolCallId),
+    blocks.some(
+      (block) => block.type === "tool_call" && block.id === item.toolCallId,
+    ),
   );
   const hasError = blocks.some(
     (block) => block.type === "tool_call" && block.status === "error",
@@ -94,13 +101,29 @@ export function WorkLog({ blocks, running, approvals, durationMs }: WorkLogProps
       >
         <span className="flex h-4 w-4 shrink-0 items-center justify-center">
           {waiting ? (
-            <ShieldAlert size={12} strokeWidth={1.6} className="text-[var(--status-warn)]" />
+            <ShieldAlert
+              size={12}
+              strokeWidth={1.6}
+              className="text-[var(--status-warn)]"
+            />
           ) : running ? (
-            <Loader2 size={11} strokeWidth={1.6} className="animate-spin text-[var(--text-muted)]" />
+            <Loader2
+              size={11}
+              strokeWidth={1.6}
+              className="animate-spin text-[var(--text-muted)]"
+            />
           ) : hasError ? (
-            <AlertCircle size={11} strokeWidth={1.6} className="text-[var(--status-err)]" />
+            <AlertCircle
+              size={11}
+              strokeWidth={1.6}
+              className="text-[var(--status-err)]"
+            />
           ) : hasDenied ? (
-            <X size={11} strokeWidth={1.7} className="text-[var(--status-warn)]" />
+            <X
+              size={11}
+              strokeWidth={1.7}
+              className="text-[var(--status-warn)]"
+            />
           ) : (
             <Sparkles size={12} strokeWidth={1.5} />
           )}
@@ -127,10 +150,20 @@ export function WorkLog({ blocks, running, approvals, durationMs }: WorkLogProps
             · {toolCount} {toolCount === 1 ? "step" : "steps"}
           </span>
         )}
-        {hasError && <span className="shrink-0 text-[11.5px] text-[var(--status-err)]">· error</span>}
-        {hasDenied && <span className="shrink-0 text-[11.5px] text-[var(--status-warn)]">· denied</span>}
+        {hasError && (
+          <span className="shrink-0 text-[11.5px] text-[var(--status-err)]">
+            · error
+          </span>
+        )}
+        {hasDenied && (
+          <span className="shrink-0 text-[11.5px] text-[var(--status-warn)]">
+            · denied
+          </span>
+        )}
         {running && !waiting && elapsed > 3000 && (
-          <span className="text-meta shrink-0 text-[var(--text-muted)]">{durationLabel(elapsed)}</span>
+          <span className="text-meta shrink-0 text-[var(--text-muted)]">
+            {durationLabel(elapsed)}
+          </span>
         )}
         <ChevronRight
           size={12}
@@ -146,7 +179,12 @@ export function WorkLog({ blocks, running, approvals, durationMs }: WorkLogProps
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8 }}
+            transition={{
+              type: "spring",
+              stiffness: 420,
+              damping: 34,
+              mass: 0.8,
+            }}
             className="overflow-hidden"
           >
             <div className="ml-[5px] border-l border-[var(--border-hairline)] py-1 pl-3.5">
@@ -155,10 +193,16 @@ export function WorkLog({ blocks, running, approvals, durationMs }: WorkLogProps
                   key={block.id}
                   initial={{ opacity: 0, y: -2 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: Math.min(index, 8) * 0.018, duration: 0.16 }}
+                  transition={{
+                    delay: Math.min(index, 8) * 0.018,
+                    duration: 0.16,
+                  }}
                 >
                   {block.type === "thinking" ? (
-                    <ThinkingTrace block={block} streaming={running && !block.isComplete} />
+                    <ThinkingTrace
+                      block={block}
+                      streaming={running && !block.isComplete}
+                    />
                   ) : (
                     <ToolStepPill block={block} compact />
                   )}

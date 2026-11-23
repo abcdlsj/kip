@@ -135,7 +135,10 @@ function computeNotchPlacement(): NotchPlacement {
   // Fallback to Electrobun's Screen API if AppKit introspection is unavailable.
   const displays = Screen.getAllDisplays();
   const withInset = displays
-    .map((display) => ({ display, inset: display.workArea.y - display.bounds.y }))
+    .map((display) => ({
+      display,
+      inset: display.workArea.y - display.bounds.y,
+    }))
     .sort((a, b) => b.inset - a.inset);
   const notched = withInset.find((item) => item.inset >= 30);
   const chosen = notched
@@ -150,7 +153,9 @@ function computeNotchPlacement(): NotchPlacement {
       })();
   const width = (chosen.notched ? NOTCH_WIDTH : 0) + WING * 2;
   const height = Math.round(chosen.inset);
-  const x = Math.round(chosen.display.bounds.x + (chosen.display.bounds.width - width) / 2);
+  const x = Math.round(
+    chosen.display.bounds.x + (chosen.display.bounds.width - width) / 2,
+  );
   return { x, y: chosen.display.bounds.y, width, height, fromAppKit: false };
 }
 
@@ -166,7 +171,10 @@ export class NotchIndicator {
     try {
       this.create();
     } catch (error) {
-      console.warn("Notch indicator unavailable:", error instanceof Error ? error.message : error);
+      console.warn(
+        "Notch indicator unavailable:",
+        error instanceof Error ? error.message : error,
+      );
       this.window = null;
     }
   }
@@ -181,7 +189,12 @@ export class NotchIndicator {
       hidden: true,
       activate: false,
       renderer: "native",
-      frame: { x: placement.x, y: 0, width: placement.width, height: placement.height },
+      frame: {
+        x: placement.x,
+        y: 0,
+        width: placement.width,
+        height: placement.height,
+      },
       styleMask: {
         Borderless: true,
         Resizable: false,
@@ -205,8 +218,9 @@ export class NotchIndicator {
       this.render();
     });
     // Electrobun emits host-message for any webview; its type list omits it.
-    (window.webview.on as (name: string, handler: () => void) => void)("host-message", () =>
-      this.onOpen(),
+    (window.webview.on as (name: string, handler: () => void) => void)(
+      "host-message",
+      () => this.onOpen(),
     );
   }
 
@@ -229,7 +243,12 @@ export class NotchIndicator {
         electrobunY = 0;
       }
     }
-    window.setFrame(placement.x, electrobunY, placement.width, placement.height);
+    window.setFrame(
+      placement.x,
+      electrobunY,
+      placement.width,
+      placement.height,
+    );
   }
 
   set(state: NotchState): void {
@@ -242,7 +261,8 @@ export class NotchIndicator {
     const window = this.window;
     if (!window) return;
     if (this.state === "idle") {
-      if (this.ready) window.webview.executeJavascript(`window.kipSetState("idle")`);
+      if (this.ready)
+        window.webview.executeJavascript(`window.kipSetState("idle")`);
       if (this.visible && !this.hideTimer) {
         this.hideTimer = setTimeout(() => {
           this.hideTimer = null;
@@ -262,6 +282,9 @@ export class NotchIndicator {
       window.showInactive();
       this.visible = true;
     }
-    if (this.ready) window.webview.executeJavascript(`window.kipSetState(${JSON.stringify(this.state)})`);
+    if (this.ready)
+      window.webview.executeJavascript(
+        `window.kipSetState(${JSON.stringify(this.state)})`,
+      );
   }
 }

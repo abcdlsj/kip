@@ -39,9 +39,15 @@ interface ModeSelectorProps {
  * lands, because the request already recorded in the transcript cannot be
  * rebuilt with a different shape.
  */
-export function ModeSelector({ mode, onSelect, disabled, disabledReason }: ModeSelectorProps) {
+export function ModeSelector({
+  mode,
+  onSelect,
+  disabled,
+  disabledReason,
+}: ModeSelectorProps) {
   const [open, setOpen] = useState(false);
-  const current = MODE_OPTIONS.find((option) => option.value === mode) ?? MODE_OPTIONS[0]!;
+  const current =
+    MODE_OPTIONS.find((option) => option.value === mode) ?? MODE_OPTIONS[0]!;
   const CurrentIcon = current.icon;
 
   return (
@@ -51,10 +57,18 @@ export function ModeSelector({ mode, onSelect, disabled, disabledReason }: ModeS
           type="button"
           disabled={disabled}
           className="flex h-7 items-center gap-1.5 rounded-[8px] px-2 text-[12.5px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-subtle)] data-[state=open]:bg-[var(--bg-subtle)] disabled:cursor-default disabled:hover:bg-transparent"
-          title={disabled && disabledReason ? disabledReason : `Mode: ${current.label}`}
+          title={
+            disabled && disabledReason
+              ? disabledReason
+              : `Mode: ${current.label}`
+          }
           aria-label="Thread mode"
         >
-          <CurrentIcon size={13} strokeWidth={1.5} className="text-[var(--text-muted)]" />
+          <CurrentIcon
+            size={13}
+            strokeWidth={1.5}
+            className="text-[var(--text-muted)]"
+          />
           <span>{current.label}</span>
           <ChevronDown
             size={11}
@@ -86,7 +100,9 @@ export function ModeSelector({ mode, onSelect, disabled, disabledReason }: ModeS
                     setOpen(false);
                   }}
                   className={`flex w-full items-start gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors ${
-                    selected ? "bg-[var(--bg-subtle)]" : "hover:bg-[var(--bg-subtle)]"
+                    selected
+                      ? "bg-[var(--bg-subtle)]"
+                      : "hover:bg-[var(--bg-subtle)]"
                   }`}
                 >
                   <Icon

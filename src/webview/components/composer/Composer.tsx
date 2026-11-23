@@ -7,7 +7,11 @@ import {
   Square,
   X,
 } from "lucide-react";
-import type { FileSuggestion, PromptDelivery, ThreadMode } from "../../../shared/types";
+import type {
+  FileSuggestion,
+  PromptDelivery,
+  ThreadMode,
+} from "../../../shared/types";
 import { MAX_ATTACHMENT_BYTES } from "../../../shared/constants";
 import { modEnter } from "../../lib/platform";
 import { stopThread, submitPrompt } from "../../lib/send";
@@ -18,7 +22,12 @@ import { useWorkspaceStore } from "../../stores/workspace-store";
 import { ModelSelector } from "./ModelSelector";
 import { ModeSelector } from "./ModeSelector";
 import { PermissionSelector } from "./PermissionSelector";
-import { SlashMenu, matchCommands, slashQuery, type SlashCommand } from "./SlashMenu";
+import {
+  SlashMenu,
+  matchCommands,
+  slashQuery,
+  type SlashCommand,
+} from "./SlashMenu";
 
 interface PendingImage {
   name: string;
@@ -28,7 +37,9 @@ interface PendingImage {
 }
 
 export function Composer() {
-  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const activeWorkspaceId = useWorkspaceStore(
+    (state) => state.activeWorkspaceId,
+  );
   const activeThreadId = useWorkspaceStore((state) => state.activeThreadId);
   const draftKey = activeThreadId ?? NEW_THREAD_DRAFT;
   const draft = useUiStore((state) => state.drafts[draftKey] ?? "");
@@ -50,7 +61,10 @@ export function Composer() {
   const [selectedSuggestion, setSelectedSuggestion] = useState(0);
   const [selectedCommand, setSelectedCommand] = useState(0);
   const [dismissedSlash, setDismissedSlash] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [notice, setNotice] = useState<{
+    text: string;
+    error?: boolean;
+  } | null>(null);
   // The mode picked for a thread that does not exist yet; null follows the default setting.
   const [draftMode, setDraftMode] = useState<ThreadMode | null>(null);
   const settings = useUiStore((state) => state.settings);
@@ -58,29 +72,37 @@ export function Composer() {
   const activeThread = useWorkspaceStore((state) =>
     state.threads.find((item) => item.id === state.activeThreadId),
   );
-  const setThreadApprovalPolicy = useWorkspaceStore((state) => state.setThreadApprovalPolicy);
+  const setThreadApprovalPolicy = useWorkspaceStore(
+    (state) => state.setThreadApprovalPolicy,
+  );
   const setThreadMode = useWorkspaceStore((state) => state.setThreadMode);
   const openSettings = useUiStore((state) => state.openSettings);
   const setUsage = useChatStore((state) => state.setUsage);
   const undoChanges = useChatStore((state) => state.undoChanges);
-  const refreshWorkspaces = useWorkspaceStore((state) => state.refreshWorkspaces);
+  const refreshWorkspaces = useWorkspaceStore(
+    (state) => state.refreshWorkspaces,
+  );
 
   const query = slashQuery(draft);
   const slashOpen = query !== null && dismissedSlash !== draft;
   // The mode only matters before the first message; afterwards the transcript decides.
-  const threadIsEmpty = !activeThread || (view?.loaded === true && view.turns.length === 0);
+  const threadIsEmpty =
+    !activeThread || (view?.loaded === true && view.turns.length === 0);
   // Only a provider whose plugin offers chat threads shows the switch. New
   // threads for it start in the plugin's saved mode; the switch overrides it
   // until the first message fixes the transcript's shape.
   const chatMode = (settings?.chatModeProviders ?? []).find(
     (entry) =>
-      entry.providerId === (activeThread?.modelProvider ?? settings?.defaultProvider ?? ""),
+      entry.providerId ===
+      (activeThread?.modelProvider ?? settings?.defaultProvider ?? ""),
   );
   const canChooseMode = chatMode !== undefined;
   const mode: ThreadMode = activeThread
     ? activeThread.mode
     : (draftMode ?? chatMode?.defaultMode ?? "agent");
-  const commands = slashOpen ? matchCommands(query, Boolean(activeThreadId), mode) : [];
+  const commands = slashOpen
+    ? matchCommands(query, Boolean(activeThreadId), mode)
+    : [];
 
   useEffect(() => {
     setSelectedCommand(0);
@@ -113,7 +135,10 @@ export function Composer() {
     const query = match[1] ?? "";
     let cancelled = false;
     const timer = setTimeout(() => {
-      void request("listWorkspaceFiles", { workspaceId: activeWorkspaceId, query })
+      void request("listWorkspaceFiles", {
+        workspaceId: activeWorkspaceId,
+        query,
+      })
         .then((files) => {
           if (cancelled) return;
           setSuggestions(files.slice(0, 8));
@@ -146,7 +171,8 @@ export function Composer() {
   const addFiles = async (files: FileList | File[]) => {
     const next: PendingImage[] = [];
     for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/") || file.size > MAX_ATTACHMENT_BYTES) continue;
+      if (!file.type.startsWith("image/") || file.size > MAX_ATTACHMENT_BYTES)
+        continue;
       const dataUrl = await readAsDataUrl(file);
       const base64Data = dataUrl.split(",")[1] ?? "";
       next.push({
@@ -167,7 +193,11 @@ export function Composer() {
     const text = draft.trim();
     if (!activeWorkspaceId) return;
     if (!text && images.length === 0) return;
-    const delivery: PromptDelivery | undefined = running ? (steer ? "steer" : "followUp") : undefined;
+    const delivery: PromptDelivery | undefined = running
+      ? steer
+        ? "steer"
+        : "followUp"
+      : undefined;
     let threadId = activeThreadId;
     if (!threadId) {
       const thread = await newThread(draftMode ?? undefined);
@@ -188,7 +218,11 @@ export function Composer() {
       threadId,
       text,
       referencedFiles,
-      images: pending.map(({ name, mimeType, base64Data }) => ({ name, mimeType, base64Data })),
+      images: pending.map(({ name, mimeType, base64Data }) => ({
+        name,
+        mimeType,
+        base64Data,
+      })),
       delivery,
     });
     setTimeout(() => void refreshThreads(), 400);
@@ -207,7 +241,9 @@ export function Composer() {
           setNotice({ text: "Compacting context…" });
           const usage = await request("compactThread", { threadId });
           setUsage(threadId, usage);
-          setNotice({ text: `Context compacted to ${Math.round(usage.ratio * 100)}%` });
+          setNotice({
+            text: `Context compacted to ${Math.round(usage.ratio * 100)}%`,
+          });
           break;
         }
         case "undo": {
@@ -222,14 +258,21 @@ export function Composer() {
           setNotice(
             failure
               ? { text: failure, error: true }
-              : { text: `Restored ${changes.files.length} ${changes.files.length === 1 ? "file" : "files"}` },
+              : {
+                  text: `Restored ${changes.files.length} ${changes.files.length === 1 ? "file" : "files"}`,
+                },
           );
           break;
         }
         case "export": {
           if (!threadId) return;
-          const { savedPath } = await request("exportThreadMarkdown", { threadId });
-          if (savedPath) setNotice({ text: `Saved ${savedPath.split("/").pop() ?? savedPath}` });
+          const { savedPath } = await request("exportThreadMarkdown", {
+            threadId,
+          });
+          if (savedPath)
+            setNotice({
+              text: `Saved ${savedPath.split("/").pop() ?? savedPath}`,
+            });
           break;
         }
         case "settings":
@@ -237,13 +280,19 @@ export function Composer() {
           break;
         default:
           if (command.policy) {
-            if (threadId) await setThreadApprovalPolicy(threadId, command.policy);
+            if (threadId)
+              await setThreadApprovalPolicy(threadId, command.policy);
             else await setApprovalPolicy(command.policy);
-            setNotice({ text: `Approval: ${command.description.toLowerCase()}` });
+            setNotice({
+              text: `Approval: ${command.description.toLowerCase()}`,
+            });
           }
       }
     } catch (error) {
-      setNotice({ text: error instanceof Error ? error.message : "Command failed", error: true });
+      setNotice({
+        text: error instanceof Error ? error.message : "Command failed",
+        error: true,
+      });
     }
     textareaRef.current?.focus();
   };
@@ -261,7 +310,9 @@ export function Composer() {
       }
       if (event.key === "ArrowUp" && commands.length) {
         event.preventDefault();
-        setSelectedCommand((index) => (index - 1 + commands.length) % commands.length);
+        setSelectedCommand(
+          (index) => (index - 1 + commands.length) % commands.length,
+        );
         return;
       }
       if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
@@ -287,7 +338,9 @@ export function Composer() {
       }
       if (event.key === "ArrowUp") {
         event.preventDefault();
-        setSelectedSuggestion((index) => (index - 1 + suggestions.length) % suggestions.length);
+        setSelectedSuggestion(
+          (index) => (index - 1 + suggestions.length) % suggestions.length,
+        );
         return;
       }
       if (event.key === "Enter" && !event.shiftKey) {
@@ -331,7 +384,8 @@ export function Composer() {
             {suggestions.map((suggestion, index) => {
               const slash = suggestion.path.lastIndexOf("/");
               const dir = slash >= 0 ? suggestion.path.slice(0, slash + 1) : "";
-              const file = slash >= 0 ? suggestion.path.slice(slash + 1) : suggestion.path;
+              const file =
+                slash >= 0 ? suggestion.path.slice(slash + 1) : suggestion.path;
               return (
                 <button
                   type="button"
@@ -345,10 +399,20 @@ export function Composer() {
                     index === selectedSuggestion ? "bg-[var(--bg-subtle)]" : ""
                   }`}
                 >
-                  <FileText size={12} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+                  <FileText
+                    size={12}
+                    strokeWidth={1.5}
+                    className="shrink-0 text-[var(--text-muted)]"
+                  />
                   <span className="flex min-w-0 flex-1 font-mono text-[12px]">
-                    {dir && <span className="min-w-0 truncate text-[var(--text-muted)]">{dir}</span>}
-                    <span className="shrink-0 text-[var(--text-primary)]">{file}</span>
+                    {dir && (
+                      <span className="min-w-0 truncate text-[var(--text-muted)]">
+                        {dir}
+                      </span>
+                    )}
+                    <span className="shrink-0 text-[var(--text-primary)]">
+                      {file}
+                    </span>
                   </span>
                 </button>
               );
@@ -363,7 +427,9 @@ export function Composer() {
             }
           }}
           onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            if (
+              !event.currentTarget.contains(event.relatedTarget as Node | null)
+            ) {
               setDragging(false);
             }
           }}
@@ -378,13 +444,19 @@ export function Composer() {
             dragging ? "border-dashed" : ""
           }`}
           style={{
-            borderColor: dragging || focused ? "var(--border-focus)" : "var(--border-hairline)",
+            borderColor:
+              dragging || focused
+                ? "var(--border-focus)"
+                : "var(--border-hairline)",
           }}
         >
           {queued.length > 0 && (
             <div className="mb-2.5 space-y-1 border-b hairline pb-2.5">
               {queued.map((item) => (
-                <div key={item.id} className="flex items-start gap-2 text-[13px] leading-[1.45]">
+                <div
+                  key={item.id}
+                  className="flex items-start gap-2 text-[13px] leading-[1.45]"
+                >
                   <CornerDownRight
                     size={13}
                     strokeWidth={1.5}
@@ -413,7 +485,9 @@ export function Composer() {
                     onClick={() =>
                       setImages((current) => {
                         URL.revokeObjectURL(image.previewUrl);
-                        return current.filter((_, itemIndex) => itemIndex !== index);
+                        return current.filter(
+                          (_, itemIndex) => itemIndex !== index,
+                        );
                       })
                     }
                     className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-ink)] text-[var(--accent-ink-fg)]"
@@ -464,12 +538,17 @@ export function Composer() {
                     setDraftMode(next);
                     return;
                   }
-                  void setThreadMode(activeThread.id, next).catch((error: unknown) => {
-                    setNotice({
-                      text: error instanceof Error ? error.message : "Could not switch modes",
-                      error: true,
-                    });
-                  });
+                  void setThreadMode(activeThread.id, next).catch(
+                    (error: unknown) => {
+                      setNotice({
+                        text:
+                          error instanceof Error
+                            ? error.message
+                            : "Could not switch modes",
+                        error: true,
+                      });
+                    },
+                  );
                 }}
               />
             )}
@@ -498,7 +577,9 @@ export function Composer() {
               {notice && (
                 <span
                   className={`text-meta max-w-[320px] truncate ${
-                    notice.error ? "text-[var(--status-err)]" : "text-[var(--text-muted)]"
+                    notice.error
+                      ? "text-[var(--status-err)]"
+                      : "text-[var(--text-muted)]"
                   }`}
                   title={notice.text}
                 >
@@ -507,7 +588,9 @@ export function Composer() {
               )}
               {running && !notice && (
                 <span className="text-meta hidden text-[var(--text-muted)] sm:block">
-                  {hasContent ? `Enter to queue · ${modEnter} next step` : "Esc to stop"}
+                  {hasContent
+                    ? `Enter to queue · ${modEnter} next step`
+                    : "Esc to stop"}
                 </span>
               )}
               {running && (
@@ -528,7 +611,11 @@ export function Composer() {
                   disabled={!activeWorkspaceId || !hasContent}
                   className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-ink)] text-[var(--accent-ink-fg)] transition-all hover:opacity-88 active:scale-95 disabled:bg-[var(--bg-active)] disabled:text-[var(--text-muted)] disabled:opacity-100"
                   aria-label={running ? "Queue message" : "Send"}
-                  title={running ? "Queue after the current work (Enter)" : "Send (Enter)"}
+                  title={
+                    running
+                      ? "Queue after the current work (Enter)"
+                      : "Send (Enter)"
+                  }
                 >
                   <ArrowUp size={15} strokeWidth={1.8} />
                 </button>

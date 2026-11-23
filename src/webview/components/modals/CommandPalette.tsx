@@ -109,7 +109,8 @@ export function CommandPalette() {
         label: "Sync Now",
         group: "Actions",
         icon: RefreshCw,
-        run: () => void request("triggerSync", undefined).catch(() => undefined),
+        run: () =>
+          void request("triggerSync", undefined).catch(() => undefined),
       },
     ];
     if (activeThreadId) {
@@ -119,7 +120,9 @@ export function CommandPalette() {
         group: "Actions",
         icon: Minimize2,
         run: async () => {
-          const usage = await request("compactThread", { threadId: activeThreadId });
+          const usage = await request("compactThread", {
+            threadId: activeThreadId,
+          });
           setUsage(activeThreadId, usage);
         },
       });
@@ -173,7 +176,9 @@ export function CommandPalette() {
   });
 
   useEffect(() => {
-    const active = listRef.current?.querySelector<HTMLElement>(`[data-cmd-index="${selected}"]`);
+    const active = listRef.current?.querySelector<HTMLElement>(
+      `[data-cmd-index="${selected}"]`,
+    );
     active?.scrollIntoView({ block: "nearest" });
   }, [selected, open]);
 
@@ -194,7 +199,11 @@ export function CommandPalette() {
         >
           <Dialog.Title className="sr-only">Command palette</Dialog.Title>
           <div className="flex items-center gap-2.5 border-b hairline px-4">
-            <Search size={15} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+            <Search
+              size={15}
+              strokeWidth={1.5}
+              className="shrink-0 text-[var(--text-muted)]"
+            />
             <input
               autoFocus
               value={query}
@@ -205,7 +214,9 @@ export function CommandPalette() {
               onKeyDown={(event) => {
                 if (event.key === "ArrowDown") {
                   event.preventDefault();
-                  setSelected((index) => Math.min(Math.max(0, filtered.length - 1), index + 1));
+                  setSelected((index) =>
+                    Math.min(Math.max(0, filtered.length - 1), index + 1),
+                  );
                 } else if (event.key === "ArrowUp") {
                   event.preventDefault();
                   setSelected((index) => Math.max(0, index - 1));
@@ -219,10 +230,14 @@ export function CommandPalette() {
             />
             <span className="kbd shrink-0">Esc</span>
           </div>
-          <div ref={listRef} className="thin-scroll max-h-[340px] overflow-y-auto p-1.5">
+          <div
+            ref={listRef}
+            className="thin-scroll max-h-[340px] overflow-y-auto p-1.5"
+          >
             {filtered.map((command, index) => {
               const Icon = command.icon;
-              const showGroup = index === 0 || filtered[index - 1]?.group !== command.group;
+              const showGroup =
+                index === 0 || filtered[index - 1]?.group !== command.group;
               const isSelected = index === selected;
               return (
                 <div key={command.id}>
@@ -249,7 +264,11 @@ export function CommandPalette() {
                     <Icon
                       size={14}
                       strokeWidth={1.5}
-                      className={isSelected ? "shrink-0 text-[var(--text-primary)]" : "shrink-0 text-[var(--text-muted)]"}
+                      className={
+                        isSelected
+                          ? "shrink-0 text-[var(--text-primary)]"
+                          : "shrink-0 text-[var(--text-muted)]"
+                      }
                     />
                     <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
                       {command.label}
@@ -263,7 +282,11 @@ export function CommandPalette() {
                       <span className="kbd shrink-0">{command.shortcut}</span>
                     ) : (
                       isSelected && (
-                        <ArrowRight size={12} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+                        <ArrowRight
+                          size={12}
+                          strokeWidth={1.5}
+                          className="shrink-0 text-[var(--text-muted)]"
+                        />
                       )
                     )}
                   </button>

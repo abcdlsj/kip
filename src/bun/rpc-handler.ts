@@ -19,7 +19,12 @@ import type {
   ThreadSummary,
 } from "../shared/types";
 import { getSessionDir, newId, type KipDatabase } from "./storage/db";
-import { deleteApiKey, getApiKey, hasApiKey, setApiKey } from "./storage/keychain";
+import {
+  deleteApiKey,
+  getApiKey,
+  hasApiKey,
+  setApiKey,
+} from "./storage/keychain";
 import type { ModelRegistry } from "./agent/model-registry";
 import { displayModelName, fetchRemoteModels } from "./agent/model-registry";
 import {
@@ -40,7 +45,11 @@ import {
 import { MARKETPLACE, MARKETPLACE_NOTICE } from "../shared/marketplace";
 import type { KipOrchestrator } from "./agent/pi-orchestrator";
 import type { PluginWindows } from "./plugins/windows";
-import { pickWorkspaceFolder, suggestFiles, workspaceName } from "./system/fs-dialog";
+import {
+  pickWorkspaceFolder,
+  suggestFiles,
+  workspaceName,
+} from "./system/fs-dialog";
 import { inspectGit } from "./system/git-inspector";
 import {
   exportBackupBundle,
@@ -62,8 +71,10 @@ export interface RpcDeps {
 
 export function createKipRpc(deps: RpcDeps) {
   let sendStream: (payload: AgentStreamEnvelope) => void = () => {};
-  let sendSync: (payload: { state: "idle" | "running" | "error"; message?: string }) => void =
-    () => {};
+  let sendSync: (payload: {
+    state: "idle" | "running" | "error";
+    message?: string;
+  }) => void = () => {};
 
   const rpc = BrowserView.defineRPC<KipRPCSchema>({
     maxRequestTime: 180_000,
@@ -74,7 +85,11 @@ export function createKipRpc(deps: RpcDeps) {
           return Promise.all(
             workspaces.map(async (workspace) => {
               const git = await inspectGit(workspace.rootPath);
-              return { ...workspace, gitBranch: git.branch, dirtyFiles: git.dirtyFiles };
+              return {
+                ...workspace,
+                gitBranch: git.branch,
+                dirtyFiles: git.dirtyFiles,
+              };
             }),
           );
         },
@@ -85,15 +100,30 @@ export function createKipRpc(deps: RpcDeps) {
           if (existing) {
             deps.database.touchWorkspace(existing.id);
             const git = await inspectGit(folder);
-            return { ...existing, gitBranch: git.branch, dirtyFiles: git.dirtyFiles };
+            return {
+              ...existing,
+              gitBranch: git.branch,
+              dirtyFiles: git.dirtyFiles,
+            };
           }
-          const created = deps.database.createWorkspace(workspaceName(folder), folder);
+          const created = deps.database.createWorkspace(
+            workspaceName(folder),
+            folder,
+          );
           const git = await inspectGit(folder);
-          return { ...created, gitBranch: git.branch, dirtyFiles: git.dirtyFiles };
+          return {
+            ...created,
+            gitBranch: git.branch,
+            dirtyFiles: git.dirtyFiles,
+          };
         },
         removeWorkspace: async ({ workspaceId }) => {
           const threads = deps.database.listThreads(workspaceId);
-          await Promise.all(threads.map((thread) => deps.orchestrator.disposeSession(thread.id)));
+          await Promise.all(
+            threads.map((thread) =>
+              deps.orchestrator.disposeSession(thread.id),
+            ),
+          );
           deps.database.removeWorkspace(workspaceId);
           const dir = getSessionDir(workspaceId);
           if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
@@ -104,14 +134,16 @@ export function createKipRpc(deps: RpcDeps) {
           return suggestFiles(workspace.rootPath, query);
         },
         listThreads: ({ workspaceId }) =>
-          deps.database
-            .listThreads(workspaceId)
-            .map((thread) => ({ ...thread, isRunning: deps.orchestrator.isRunning(thread.id) })),
+          deps.database.listThreads(workspaceId).map((thread) => ({
+            ...thread,
+            isRunning: deps.orchestrator.isRunning(thread.id),
+          })),
         createThread: async (input: CreateThreadInput) => {
           const thread = await createThread(deps, input);
           return { ...thread, isRunning: false };
         },
-        loadThreadTurns: ({ threadId }) => deps.orchestrator.loadTurns(threadId),
+        loadThreadTurns: ({ threadId }) =>
+          deps.orchestrator.loadTurns(threadId),
         deleteThread: async ({ threadId }) => {
           const thread = deps.database.getThread(threadId);
           await deps.orchestrator.disposeSession(threadId);
@@ -121,13 +153,19 @@ export function createKipRpc(deps: RpcDeps) {
           }
         },
         renameThread: ({ threadId, title }) => {
-          deps.database.updateThread(threadId, { title: title.trim() || "New Thread" });
+          deps.database.updateThread(threadId, {
+            title: title.trim() || "New Thread",
+          });
         },
         regenerateThreadTitle: async ({ threadId }) => ({
           title: await deps.orchestrator.regenerateThreadTitle(threadId),
         }),
         setThreadModel: async ({ threadId, provider, modelId }) => {
-          await deps.orchestrator.updateThreadModel(threadId, provider, modelId);
+          await deps.orchestrator.updateThreadModel(
+            threadId,
+            provider,
+            modelId,
+          );
           rememberModelChoice(deps, provider, modelId);
         },
         setThinkingLevel: ({ threadId, level }) => {
@@ -139,14 +177,18 @@ export function createKipRpc(deps: RpcDeps) {
         setThreadApprovalPolicy: ({ threadId, policy }) => {
           deps.orchestrator.setThreadApprovalPolicy(threadId, policy);
         },
-        compactThread: async ({ threadId }) => deps.orchestrator.compact(threadId),
+        compactThread: async ({ threadId }) =>
+          deps.orchestrator.compact(threadId),
         sendPrompt: async (input: SendPromptInput) => {
           void deps.orchestrator.sendPrompt(input).catch((error: unknown) => {
             sendStream({
               threadId: input.threadId,
               event: {
                 kind: "turn_error",
-                message: error instanceof Error ? error.message : "Unable to start the run",
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : "Unable to start the run",
               },
             });
           });
@@ -155,7 +197,13 @@ export function createKipRpc(deps: RpcDeps) {
         abortThread: async ({ threadId }) => ({
           restored: await deps.orchestrator.abort(threadId),
         }),
-        resolveToolApproval: ({ threadId, toolCallId, approved, rememberForSession, reason }) => {
+        resolveToolApproval: ({
+          threadId,
+          toolCallId,
+          approved,
+          rememberForSession,
+          reason,
+        }) => {
           deps.orchestrator.resolveApproval(
             threadId,
             toolCallId,
@@ -165,19 +213,26 @@ export function createKipRpc(deps: RpcDeps) {
           );
         },
         editPrompt: async ({ threadId, userIndex, text }) => {
-          void deps.orchestrator.editPrompt(threadId, userIndex, text).catch((error: unknown) => {
-            sendStream({
-              threadId,
-              event: {
-                kind: "turn_error",
-                message: error instanceof Error ? error.message : "Unable to edit the message",
-              },
+          void deps.orchestrator
+            .editPrompt(threadId, userIndex, text)
+            .catch((error: unknown) => {
+              sendStream({
+                threadId,
+                event: {
+                  kind: "turn_error",
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : "Unable to edit the message",
+                },
+              });
             });
-          });
           return { accepted: true };
         },
-        getRunChanges: ({ threadId }) => deps.orchestrator.latestChanges(threadId),
-        undoRunChanges: ({ threadId, runId }) => deps.orchestrator.undoChanges(threadId, runId),
+        getRunChanges: ({ threadId }) =>
+          deps.orchestrator.latestChanges(threadId),
+        undoRunChanges: ({ threadId, runId }) =>
+          deps.orchestrator.undoChanges(threadId, runId),
         getSettings: () => settingsSnapshot(deps),
         updateSettings: async (patch) => {
           for (const [key, value] of Object.entries(patch)) {
@@ -192,17 +247,20 @@ export function createKipRpc(deps: RpcDeps) {
         setProviderApiKey: async ({ provider, apiKey }) => {
           await setApiKey(provider, apiKey.trim());
           const record = deps.database.getProvider(provider);
-          if (record) await deps.registry.addOrUpdateProvider(record, apiKey.trim());
+          if (record)
+            await deps.registry.addOrUpdateProvider(record, apiKey.trim());
           return { valid: apiKey.trim().length > 0 };
         },
         removeProviderApiKey: async ({ provider }) => {
           await deleteApiKey(provider);
           deps.registry.removeProvider(provider);
         },
-        listProviders: async () => withKeyFlags(deps, deps.database.listProviders()),
+        listProviders: async () =>
+          withKeyFlags(deps, deps.database.listProviders()),
         saveProvider: async (input) => {
           const record = deps.database.saveProvider(input);
-          if (input.apiKey?.trim()) await setApiKey(record.id, input.apiKey.trim());
+          if (input.apiKey?.trim())
+            await setApiKey(record.id, input.apiKey.trim());
           const withKey = { ...record, hasApiKey: await hasApiKey(record.id) };
           await deps.registry.addOrUpdateProvider(withKey);
           await ensureDefaultProvider(deps, record);
@@ -221,26 +279,38 @@ export function createKipRpc(deps: RpcDeps) {
         fetchProviderModels: ({ baseUrl, apiKey }) =>
           fetchRemoteModels(baseUrl, apiKey ?? undefined),
         listPlugins: async () => pluginSummaries(deps.database),
-        getMarketplace: () => ({ notice: MARKETPLACE_NOTICE, entries: MARKETPLACE }),
+        getMarketplace: () => ({
+          notice: MARKETPLACE_NOTICE,
+          entries: MARKETPLACE,
+        }),
         openPluginWindow: ({ plugin: pluginId }) => {
           const plugin = findPlugin(pluginId);
           if (!plugin || plugin.kind !== "gateway") {
             throw new Error(`Plugin ${pluginId} has no window`);
           }
           if (!isPluginAccepted(deps.database, plugin)) {
-            throw new Error("Accept this plugin's permissions before opening it.");
+            throw new Error(
+              "Accept this plugin's permissions before opening it.",
+            );
           }
           if (!deps.pluginWindows.openPlugin(plugin)) {
             throw new Error(`Plugin ${pluginId} has no window`);
           }
         },
-        updatePlugin: async ({ plugin: pluginId, enabled, accepted, values }) => {
+        updatePlugin: async ({
+          plugin: pluginId,
+          enabled,
+          accepted,
+          values,
+        }) => {
           const plugin = findPlugin(pluginId);
           if (!plugin) throw new Error(`Unknown plugin: ${pluginId}`);
           if (accepted === true) acceptPlugin(deps.database, plugin);
           if (enabled !== undefined && plugin.kind === "title") {
             if (enabled && !isPluginAccepted(deps.database, plugin)) {
-              throw new Error("Accept this plugin's permissions before enabling it.");
+              throw new Error(
+                "Accept this plugin's permissions before enabling it.",
+              );
             }
             setPluginEnabled(deps.database, plugin, enabled);
           }
@@ -267,7 +337,8 @@ export function createKipRpc(deps: RpcDeps) {
             }
             return result;
           }
-          const storedApiKey = (await getApiKey(plugin.providerId)) ?? undefined;
+          const storedApiKey =
+            (await getApiKey(plugin.providerId)) ?? undefined;
           const outcome = await plugin.probe(values, {
             storedApiKey,
             dataDir: pluginDataDir(plugin.id),
@@ -287,7 +358,10 @@ export function createKipRpc(deps: RpcDeps) {
           });
           const apiKey = proposal.apiKey ?? storedApiKey;
           if (apiKey) await setApiKey(record.id, apiKey);
-          const withKey: ProviderRecord = { ...record, hasApiKey: apiKey !== undefined };
+          const withKey: ProviderRecord = {
+            ...record,
+            hasApiKey: apiKey !== undefined,
+          };
           await deps.registry.addOrUpdateProvider(withKey, apiKey);
           await ensureDefaultProvider(deps, record);
           savePluginValues(deps.database, plugin, values);
@@ -337,12 +411,16 @@ export function createKipRpc(deps: RpcDeps) {
         getUpdateStatus: () => deps.updateChecker.statusSnapshot(),
         openUpdatePage: () => {
           const { releaseUrl } = deps.updateChecker.statusSnapshot();
-          if (!releaseUrl || !/^https?:\/\//i.test(releaseUrl)) return { opened: false };
+          if (!releaseUrl || !/^https?:\/\//i.test(releaseUrl))
+            return { opened: false };
           Utils.openExternal(releaseUrl);
           return { opened: true };
         },
-        getRunningThreadCount: () => deps.orchestrator.runningThreadIds().length,
-        restartForUpdate: async () => ({ started: await deps.updateChecker.applyUpdate() }),
+        getRunningThreadCount: () =>
+          deps.orchestrator.runningThreadIds().length,
+        restartForUpdate: async () => ({
+          started: await deps.updateChecker.applyUpdate(),
+        }),
       },
       messages: {},
     },
@@ -353,24 +431,39 @@ export function createKipRpc(deps: RpcDeps) {
   return rpc;
 }
 
-async function createThread(deps: RpcDeps, input: CreateThreadInput): Promise<ThreadSummary> {
+async function createThread(
+  deps: RpcDeps,
+  input: CreateThreadInput,
+): Promise<ThreadSummary> {
   const workspace = deps.database.getWorkspace(input.workspaceId);
   if (!workspace) throw new Error("Workspace not found");
   const defaults = await deps.registry.ensureDefault();
-  const provider = input.modelProvider ?? deps.database.getSetting("defaultProvider", "") ?? "";
-  const modelId = input.modelId ?? deps.database.getSetting("defaultModelId", "") ?? "";
+  const provider =
+    input.modelProvider ??
+    deps.database.getSetting("defaultProvider", "") ??
+    "";
+  const modelId =
+    input.modelId ?? deps.database.getSetting("defaultModelId", "") ?? "";
   const thinkingLevel =
     input.thinkingLevel ??
-    (deps.database.getSetting("defaultThinkingLevel", "medium") as ThinkingLevel);
+    (deps.database.getSetting(
+      "defaultThinkingLevel",
+      "medium",
+    ) as ThinkingLevel);
   const chosenProvider = provider || defaults?.provider || "";
   const chosenModel = modelId || defaults?.modelId || "";
   // Only a provider whose plugin offers chat threads has a choice; the plugin's
   // saved default applies unless this thread asked for something else.
-  const mode: ThreadMode = resolveNewThreadMode(deps.database, chosenProvider, input.mode);
+  const mode: ThreadMode = resolveNewThreadMode(
+    deps.database,
+    chosenProvider,
+    input.mode,
+  );
   const id = newId("th");
   const sessionDir = getSessionDir(workspace.id);
   const manager = SessionManager.create(workspace.rootPath, sessionDir, { id });
-  const sessionFilePath = manager.getSessionFile() ?? join(sessionDir, `${id}.jsonl`);
+  const sessionFilePath =
+    manager.getSessionFile() ?? join(sessionDir, `${id}.jsonl`);
   deps.database.touchWorkspace(workspace.id);
   const thread = deps.database.createThread({
     id,
@@ -391,7 +484,11 @@ async function createThread(deps: RpcDeps, input: CreateThreadInput): Promise<Th
  * thread starts where the last choice left off. Only models the registry still
  * exposes are remembered; a deleted provider must not poison the default.
  */
-function rememberModelChoice(deps: RpcDeps, provider: string, modelId: string): void {
+function rememberModelChoice(
+  deps: RpcDeps,
+  provider: string,
+  modelId: string,
+): void {
   if (!deps.registry.getModel(provider, modelId)) return;
   deps.database.setSetting("defaultProvider", provider);
   deps.database.setSetting("defaultModelId", modelId);
@@ -402,13 +499,21 @@ async function settingsSnapshot(deps: RpcDeps): Promise<SettingsSnapshot> {
   const providers = await withKeyFlags(deps, deps.database.listProviders());
   return {
     theme: deps.database.getSetting("theme", "system"),
-    approvalPolicy: deps.database.getSetting("approvalPolicy", "read-only-auto"),
+    approvalPolicy: deps.database.getSetting(
+      "approvalPolicy",
+      "read-only-auto",
+    ),
     defaultProvider: deps.database.getSetting("defaultProvider", ""),
     defaultModelId: deps.database.getSetting("defaultModelId", ""),
-    defaultThinkingLevel: deps.database.getSetting("defaultThinkingLevel", "medium"),
+    defaultThinkingLevel: deps.database.getSetting(
+      "defaultThinkingLevel",
+      "medium",
+    ),
     chatModeProviders: chatModeSupport(deps.database),
     sidebarCollapsed: deps.database.getSetting("sidebarCollapsed", false),
-    configuredProviders: providers.filter((provider) => provider.hasApiKey).map((p) => p.id),
+    configuredProviders: providers
+      .filter((provider) => provider.hasApiKey)
+      .map((p) => p.id),
     availableModels: deps.registry.listAvailable(),
   };
 }
@@ -430,7 +535,10 @@ async function withKeyFlags(
   );
 }
 
-async function ensureDefaultProvider(deps: RpcDeps, record: ProviderRecord): Promise<void> {
+async function ensureDefaultProvider(
+  deps: RpcDeps,
+  record: ProviderRecord,
+): Promise<void> {
   const current = deps.database.getSetting("defaultProvider", "") as string;
   if (current && deps.database.getProvider(current)) return;
   const first = record.models[0];

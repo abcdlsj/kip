@@ -190,18 +190,24 @@ export class KipDatabase {
       .all()
       .map((col) => col.name);
     if (!columns.includes("approval_policy")) {
-      this.db.exec("ALTER TABLE threads ADD COLUMN approval_policy TEXT DEFAULT NULL");
+      this.db.exec(
+        "ALTER TABLE threads ADD COLUMN approval_policy TEXT DEFAULT NULL",
+      );
     }
     // Threads predate Chat mode; every existing one is an agent thread.
     if (!columns.includes("mode")) {
-      this.db.exec("ALTER TABLE threads ADD COLUMN mode TEXT NOT NULL DEFAULT 'agent'");
+      this.db.exec(
+        "ALTER TABLE threads ADD COLUMN mode TEXT NOT NULL DEFAULT 'agent'",
+      );
     }
 
     // Earlier builds hardcoded supportsVision: false everywhere with no UI toggle.
     // Backfill existing provider models once so vision works out of the box while
     // respecting any explicit false saved afterwards.
     const migratedVision = this.db
-      .query<{ value_json: string }, [string]>("SELECT value_json FROM kv_settings WHERE key = ?")
+      .query<{ value_json: string }, [string]>(
+        "SELECT value_json FROM kv_settings WHERE key = ?",
+      )
       .get("migration.defaultVisionV1");
     if (!migratedVision) {
       const rows = this.db
@@ -258,7 +264,9 @@ export class KipDatabase {
 
   getSetting<T>(key: string, fallback: T): T {
     const row = this.db
-      .query<{ value_json: string }, [string]>("SELECT value_json FROM kv_settings WHERE key = ?")
+      .query<{ value_json: string }, [string]>(
+        "SELECT value_json FROM kv_settings WHERE key = ?",
+      )
       .get(key);
     if (!row) return fallback;
     try {
@@ -279,7 +287,9 @@ export class KipDatabase {
 
   listWorkspaces(): Workspace[] {
     const rows = this.db
-      .query<WorkspaceRow, []>("SELECT * FROM workspaces ORDER BY last_opened_at DESC")
+      .query<WorkspaceRow, []>(
+        "SELECT * FROM workspaces ORDER BY last_opened_at DESC",
+      )
       .all();
     return rows.map((row) => ({
       id: row.id,
@@ -308,7 +318,9 @@ export class KipDatabase {
 
   findWorkspaceByPath(rootPath: string): Workspace | null {
     const row = this.db
-      .query<WorkspaceRow, [string]>("SELECT * FROM workspaces WHERE root_path = ?")
+      .query<WorkspaceRow, [string]>(
+        "SELECT * FROM workspaces WHERE root_path = ?",
+      )
       .get(rootPath);
     if (!row) return null;
     return {
@@ -354,11 +366,20 @@ export class KipDatabase {
         "INSERT INTO workspaces (id, name, root_path, last_opened_at, created_at) VALUES (?, ?, ?, ?, ?)",
       )
       .run(id, name, rootPath, now, now);
-    return { id, name, rootPath, gitBranch: null, dirtyFiles: 0, lastOpenedAt: now };
+    return {
+      id,
+      name,
+      rootPath,
+      gitBranch: null,
+      dirtyFiles: 0,
+      lastOpenedAt: now,
+    };
   }
 
   touchWorkspace(id: string): void {
-    this.db.prepare("UPDATE workspaces SET last_opened_at = ? WHERE id = ?").run(Date.now(), id);
+    this.db
+      .prepare("UPDATE workspaces SET last_opened_at = ? WHERE id = ?")
+      .run(Date.now(), id);
   }
 
   removeWorkspace(id: string): void {
@@ -375,7 +396,9 @@ export class KipDatabase {
   }
 
   getThread(id: string): ThreadSummary | null {
-    const row = this.db.query<ThreadRow, [string]>("SELECT * FROM threads WHERE id = ?").get(id);
+    const row = this.db
+      .query<ThreadRow, [string]>("SELECT * FROM threads WHERE id = ?")
+      .get(id);
     return row ? this.toThreadSummary(row) : null;
   }
 
@@ -460,11 +483,15 @@ export class KipDatabase {
     sets.push("updated_at = ?");
     values.push(Date.now());
     values.push(id);
-    this.db.prepare(`UPDATE threads SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+    this.db
+      .prepare(`UPDATE threads SET ${sets.join(", ")} WHERE id = ?`)
+      .run(...values);
   }
 
   touchThread(id: string): void {
-    this.db.prepare("UPDATE threads SET updated_at = ? WHERE id = ?").run(Date.now(), id);
+    this.db
+      .prepare("UPDATE threads SET updated_at = ? WHERE id = ?")
+      .run(Date.now(), id);
   }
 
   deleteThread(id: string): void {
@@ -511,7 +538,9 @@ export class KipDatabase {
 
   listProviders(): ProviderRecord[] {
     const rows = this.db
-      .query<ProviderRow, []>("SELECT * FROM custom_providers ORDER BY created_at ASC")
+      .query<ProviderRow, []>(
+        "SELECT * FROM custom_providers ORDER BY created_at ASC",
+      )
       .all();
     return rows.map((row) => ({
       id: row.id,
@@ -525,7 +554,9 @@ export class KipDatabase {
 
   getProvider(id: string): ProviderRecord | null {
     const row = this.db
-      .query<ProviderRow, [string]>("SELECT * FROM custom_providers WHERE id = ?")
+      .query<ProviderRow, [string]>(
+        "SELECT * FROM custom_providers WHERE id = ?",
+      )
       .get(id);
     if (!row) return null;
     return {

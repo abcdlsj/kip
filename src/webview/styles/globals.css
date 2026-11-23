@@ -102,7 +102,9 @@ body {
     background: var(--accent-ink);
     color: var(--accent-ink-fg);
     font-weight: 500;
-    transition: opacity 140ms var(--spring), transform 120ms var(--spring);
+    transition:
+      opacity 140ms var(--spring),
+      transform 120ms var(--spring);
   }
   .btn-primary:hover:not(:disabled) {
     opacity: 0.88;
@@ -123,8 +125,11 @@ body {
     background: transparent;
     color: var(--text-secondary);
     font-weight: 500;
-    transition: background-color 140ms var(--spring), border-color 140ms var(--spring),
-      color 140ms var(--spring), transform 120ms var(--spring);
+    transition:
+      background-color 140ms var(--spring),
+      border-color 140ms var(--spring),
+      color 140ms var(--spring),
+      transform 120ms var(--spring);
   }
   .btn-secondary:hover:not(:disabled) {
     background: var(--bg-subtle);
@@ -144,7 +149,9 @@ body {
     justify-content: center;
     gap: 6px;
     color: var(--text-secondary);
-    transition: background-color 140ms var(--spring), color 140ms var(--spring),
+    transition:
+      background-color 140ms var(--spring),
+      color 140ms var(--spring),
       transform 120ms var(--spring);
   }
   .btn-ghost:hover:not(:disabled) {
@@ -163,7 +170,9 @@ body {
     align-items: center;
     justify-content: center;
     color: var(--text-muted);
-    transition: background-color 140ms var(--spring), color 140ms var(--spring),
+    transition:
+      background-color 140ms var(--spring),
+      color 140ms var(--spring),
       transform 120ms var(--spring);
   }
   .btn-icon:hover:not(:disabled) {
@@ -185,7 +194,9 @@ body {
     background: var(--status-err);
     color: #ffffff;
     font-weight: 500;
-    transition: opacity 140ms var(--spring), transform 120ms var(--spring);
+    transition:
+      opacity 140ms var(--spring),
+      transform 120ms var(--spring);
   }
   .btn-danger:hover:not(:disabled) {
     opacity: 0.9;
@@ -420,9 +431,15 @@ body {
 .markdown-body a {
   color: var(--accent-brand);
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--accent-brand) 45%, transparent);
+  text-decoration-color: color-mix(
+    in srgb,
+    var(--accent-brand) 45%,
+    transparent
+  );
   text-underline-offset: 3px;
-  transition: text-decoration-color 140ms ease, opacity 140ms ease;
+  transition:
+    text-decoration-color 140ms ease,
+    opacity 140ms ease;
 }
 
 .markdown-body a:hover {

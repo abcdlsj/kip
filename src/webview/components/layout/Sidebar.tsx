@@ -28,7 +28,9 @@ export function Sidebar() {
   const openSettings = useUiStore((state) => state.openSettings);
   const setCommandOpen = useUiStore((state) => state.setCommandOpen);
   const workspaces = useWorkspaceStore((state) => state.workspaces);
-  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const activeWorkspaceId = useWorkspaceStore(
+    (state) => state.activeWorkspaceId,
+  );
   const threads = useWorkspaceStore((state) => state.threads);
   const activeThreadId = useWorkspaceStore((state) => state.activeThreadId);
   const selectWorkspace = useWorkspaceStore((state) => state.selectWorkspace);
@@ -41,12 +43,11 @@ export function Sidebar() {
   const load = useChatStore((state) => state.load);
   const unread = useWorkspaceStore((state) => state.unread);
   // Only the ids are needed; avoid re-rendering on every streamed token.
-  const awaiting = useChatStore(
-    (state) =>
-      Object.entries(state.threads)
-        .filter(([, view]) => view.approvals.length > 0)
-        .map(([id]) => id)
-        .join(","),
+  const awaiting = useChatStore((state) =>
+    Object.entries(state.threads)
+      .filter(([, view]) => view.approvals.length > 0)
+      .map(([id]) => id)
+      .join(","),
   );
   const awaitingIds = new Set(awaiting ? awaiting.split(",") : []);
 
@@ -55,7 +56,9 @@ export function Sidebar() {
   const [draftTitle, setDraftTitle] = useState("");
   // Deleting removes the transcript from disk, so the first click only arms it.
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [confirmRemoveWsId, setConfirmRemoveWsId] = useState<string | null>(null);
+  const [confirmRemoveWsId, setConfirmRemoveWsId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!confirmDeleteId) return;
@@ -73,7 +76,8 @@ export function Sidebar() {
     if (!workspaceOpen) setConfirmRemoveWsId(null);
   }, [workspaceOpen]);
 
-  const workspace = workspaces.find((item) => item.id === activeWorkspaceId) ?? null;
+  const workspace =
+    workspaces.find((item) => item.id === activeWorkspaceId) ?? null;
   const groups = groupThreads(threads);
 
   const openThread = (threadId: string) => {
@@ -132,14 +136,26 @@ export function Sidebar() {
               <Popover.Trigger asChild>
                 <button
                   type="button"
-                  title={workspace ? compactHomePath(workspace.rootPath) : "Switch workspace"}
+                  title={
+                    workspace
+                      ? compactHomePath(workspace.rootPath)
+                      : "Switch workspace"
+                  }
                   className="btn-ghost h-8 w-full justify-start gap-2 rounded-[8px] px-2 text-left text-[var(--text-primary)]"
                 >
-                  <FolderClosed size={14} strokeWidth={1.5} className="shrink-0 text-[var(--text-secondary)]" />
+                  <FolderClosed
+                    size={14}
+                    strokeWidth={1.5}
+                    className="shrink-0 text-[var(--text-secondary)]"
+                  />
                   <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">
                     {workspace?.name ?? "Workspace"}
                   </span>
-                  <ChevronsUpDown size={13} strokeWidth={1.5} className="shrink-0 text-[var(--text-muted)]" />
+                  <ChevronsUpDown
+                    size={13}
+                    strokeWidth={1.5}
+                    className="shrink-0 text-[var(--text-muted)]"
+                  />
                 </button>
               </Popover.Trigger>
               <Popover.Portal>
@@ -160,7 +176,9 @@ export function Sidebar() {
                         <div
                           key={item.id}
                           className={`group/ws flex items-center gap-1 rounded-[7px] px-2 py-1.5 transition-colors ${
-                            isActive ? "bg-[var(--bg-subtle)]" : "hover:bg-[var(--bg-subtle)]"
+                            isActive
+                              ? "bg-[var(--bg-subtle)]"
+                              : "hover:bg-[var(--bg-subtle)]"
                           }`}
                         >
                           <button
@@ -177,7 +195,9 @@ export function Sidebar() {
                               {item.gitBranch && (
                                 <span className="inline-flex shrink-0 items-center gap-0.5 font-mono text-[10.5px] font-normal text-[var(--text-muted)]">
                                   <GitBranch size={10} strokeWidth={1.5} />
-                                  <span className="max-w-[72px] truncate">{item.gitBranch}</span>
+                                  <span className="max-w-[72px] truncate">
+                                    {item.gitBranch}
+                                  </span>
                                 </span>
                               )}
                             </span>
@@ -186,7 +206,11 @@ export function Sidebar() {
                             </span>
                           </button>
                           {isActive && !armed && (
-                            <Check size={12} strokeWidth={1.7} className="shrink-0 text-[var(--text-secondary)]" />
+                            <Check
+                              size={12}
+                              strokeWidth={1.7}
+                              className="shrink-0 text-[var(--text-secondary)]"
+                            />
                           )}
                           {workspaces.length > 1 && (
                             <button
@@ -200,14 +224,22 @@ export function Sidebar() {
                                   setConfirmRemoveWsId(item.id);
                                 }
                               }}
-                              aria-label={armed ? "Confirm remove workspace" : "Remove workspace"}
+                              aria-label={
+                                armed
+                                  ? "Confirm remove workspace"
+                                  : "Remove workspace"
+                              }
                               className={`flex h-5 shrink-0 items-center justify-center rounded-[5px] transition-opacity ${
                                 armed
                                   ? "bg-[color-mix(in_srgb,var(--status-err)_12%,transparent)] px-1.5 text-[11px] font-medium text-[var(--status-err)] opacity-100"
                                   : "w-5 text-[var(--text-muted)] opacity-0 hover:bg-[var(--bg-active)] hover:text-[var(--status-err)] group-hover/ws:opacity-100"
                               }`}
                             >
-                              {armed ? "Remove?" : <Trash2 size={11} strokeWidth={1.5} />}
+                              {armed ? (
+                                "Remove?"
+                              ) : (
+                                <Trash2 size={11} strokeWidth={1.5} />
+                              )}
                             </button>
                           )}
                         </div>
@@ -256,14 +288,18 @@ export function Sidebar() {
                       <div
                         key={thread.id}
                         className={`group flex h-8 items-center gap-1.5 rounded-[8px] px-2 transition-colors ${
-                          active ? "bg-[var(--bg-active)]" : "hover:bg-[var(--bg-subtle)]"
+                          active
+                            ? "bg-[var(--bg-active)]"
+                            : "hover:bg-[var(--bg-subtle)]"
                         }`}
                       >
                         {editingId === thread.id ? (
                           <input
                             autoFocus
                             value={draftTitle}
-                            onChange={(event) => setDraftTitle(event.target.value)}
+                            onChange={(event) =>
+                              setDraftTitle(event.target.value)
+                            }
                             onBlur={() => void commitRename()}
                             onKeyDown={(event) => {
                               if (event.key === "Enter") void commitRename();
@@ -275,7 +311,9 @@ export function Sidebar() {
                           <button
                             type="button"
                             onClick={() => openThread(thread.id)}
-                            onDoubleClick={() => beginRename(thread.id, thread.title)}
+                            onDoubleClick={() =>
+                              beginRename(thread.id, thread.title)
+                            }
                             title={thread.title}
                             className={`min-w-0 flex-1 truncate text-left text-[13px] ${
                               active
@@ -293,7 +331,9 @@ export function Sidebar() {
                             className="shrink-0 text-[var(--text-muted)]"
                             aria-label="Chat thread"
                           >
-                            <title>Chat thread: no tools, no system prompt</title>
+                            <title>
+                              Chat thread: no tools, no system prompt
+                            </title>
                           </MessageCircle>
                         )}
                         <ThreadStatus
@@ -324,10 +364,18 @@ export function Sidebar() {
                                 ? "bg-[color-mix(in_srgb,var(--status-err)_12%,transparent)] px-1.5 text-[11px] font-medium text-[var(--status-err)] opacity-100"
                                 : "w-5 text-[var(--text-muted)] opacity-0 hover:bg-[var(--bg-active)] hover:text-[var(--status-err)] focus-visible:opacity-100 group-hover:opacity-100"
                             }`}
-                            aria-label={armed ? "Confirm delete thread" : "Delete thread"}
-                            title={armed ? "Click again to delete" : "Delete thread"}
+                            aria-label={
+                              armed ? "Confirm delete thread" : "Delete thread"
+                            }
+                            title={
+                              armed ? "Click again to delete" : "Delete thread"
+                            }
                           >
-                            {armed ? "Delete?" : <Trash2 size={12} strokeWidth={1.5} />}
+                            {armed ? (
+                              "Delete?"
+                            ) : (
+                              <Trash2 size={12} strokeWidth={1.5} />
+                            )}
                           </button>
                         )}
                       </div>
@@ -363,7 +411,11 @@ export function Sidebar() {
   );
 }
 
-function ThreadStatus({ state }: { state: "working" | "attention" | "done" | null }) {
+function ThreadStatus({
+  state,
+}: {
+  state: "working" | "attention" | "done" | null;
+}) {
   if (!state) return null;
   if (state === "working") {
     return (
@@ -378,7 +430,10 @@ function ThreadStatus({ state }: { state: "working" | "attention" | "done" | nul
     <span
       className="h-[7px] w-[7px] shrink-0 rounded-full"
       style={{
-        background: state === "attention" ? "var(--signal-attention)" : "var(--signal-done)",
+        background:
+          state === "attention"
+            ? "var(--signal-attention)"
+            : "var(--signal-done)",
       }}
       aria-label={state === "attention" ? "Waiting for approval" : "Finished"}
       title={state === "attention" ? "Waiting for approval" : "Finished"}

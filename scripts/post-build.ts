@@ -9,7 +9,10 @@
 import { join } from "node:path";
 
 const root = join(import.meta.dir, "..");
-const steps = ["scripts/patch-macos-launcher.ts", "scripts/patch-windows-icons.ts"];
+const steps = [
+  "scripts/patch-macos-launcher.ts",
+  "scripts/patch-windows-icons.ts",
+];
 
 for (const step of steps) {
   const result = Bun.spawnSync([process.execPath, step], {

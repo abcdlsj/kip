@@ -8,7 +8,14 @@
  * Plaintext secrets never touch SQLite, logs, or sync payloads.
  */
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { IS_LINUX, IS_MAC, safeChmod } from "../system/platform";
 import { ensureDataDir, getDataDir } from "./db";
@@ -42,7 +49,11 @@ function machineKeyPath(): string {
   return join(ensureDataDir(), ".machine");
 }
 
-function atomicWrite(path: string, content: Buffer | string, mode = 0o600): void {
+function atomicWrite(
+  path: string,
+  content: Buffer | string,
+  mode = 0o600,
+): void {
   const tempPath = `${path}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
   try {
     writeFileSync(tempPath, content, { mode });
@@ -73,7 +84,10 @@ function readVault(): Record<string, EncryptedEntry> {
   const path = credentialsPath();
   if (!existsSync(path)) return {};
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as Record<string, EncryptedEntry>;
+    return JSON.parse(readFileSync(path, "utf8")) as Record<
+      string,
+      EncryptedEntry
+    >;
   } catch {
     return {};
   }
@@ -87,10 +101,21 @@ function writeVault(vault: Record<string, EncryptedEntry>): void {
 
 async function keychainGet(provider: string): Promise<string | null> {
   const proc = Bun.spawn(
-    ["security", "find-generic-password", "-a", ACCOUNT, "-s", `${SERVICE}.${provider}`, "-w"],
+    [
+      "security",
+      "find-generic-password",
+      "-a",
+      ACCOUNT,
+      "-s",
+      `${SERVICE}.${provider}`,
+      "-w",
+    ],
     { stdout: "pipe", stderr: "pipe" },
   );
-  const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    proc.exited,
+  ]);
   if (code !== 0) return null;
   const value = stdout.trim();
   return value.length > 0 ? value : null;
@@ -117,7 +142,14 @@ async function keychainSet(provider: string, apiKey: string): Promise<void> {
 
 async function keychainDelete(provider: string): Promise<void> {
   const proc = Bun.spawn(
-    ["security", "delete-generic-password", "-a", ACCOUNT, "-s", `${SERVICE}.${provider}`],
+    [
+      "security",
+      "delete-generic-password",
+      "-a",
+      ACCOUNT,
+      "-s",
+      `${SERVICE}.${provider}`,
+    ],
     { stdout: "pipe", stderr: "pipe" },
   );
   await proc.exited;
@@ -125,10 +157,20 @@ async function keychainDelete(provider: string): Promise<void> {
 
 async function secretToolGet(provider: string): Promise<string | null> {
   const proc = Bun.spawn(
-    ["secret-tool", "lookup", "service", `${SERVICE}.${provider}`, "account", ACCOUNT],
+    [
+      "secret-tool",
+      "lookup",
+      "service",
+      `${SERVICE}.${provider}`,
+      "account",
+      ACCOUNT,
+    ],
     { stdout: "pipe", stderr: "pipe" },
   );
-  const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  const [stdout, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    proc.exited,
+  ]);
   if (code !== 0) return null;
   const value = stdout.trim();
   return value.length > 0 ? value : null;
@@ -153,13 +195,23 @@ async function secretToolSet(provider: string, apiKey: string): Promise<void> {
 
 async function secretToolDelete(provider: string): Promise<void> {
   const proc = Bun.spawn(
-    ["secret-tool", "clear", "service", `${SERVICE}.${provider}`, "account", ACCOUNT],
+    [
+      "secret-tool",
+      "clear",
+      "service",
+      `${SERVICE}.${provider}`,
+      "account",
+      ACCOUNT,
+    ],
     { stdout: "pipe", stderr: "pipe" },
   );
   await proc.exited;
 }
 
-export async function setApiKey(provider: string, apiKey: string): Promise<void> {
+export async function setApiKey(
+  provider: string,
+  apiKey: string,
+): Promise<void> {
   if (useMacKeychain()) {
     try {
       await keychainSet(provider, apiKey);
@@ -178,7 +230,10 @@ export async function setApiKey(provider: string, apiKey: string): Promise<void>
   const key = loadMachineKey();
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
-  const encrypted = Buffer.concat([cipher.update(apiKey, "utf8"), cipher.final()]);
+  const encrypted = Buffer.concat([
+    cipher.update(apiKey, "utf8"),
+    cipher.final(),
+  ]);
   const vault = readVault();
   vault[provider] = {
     iv: iv.toString("base64"),
@@ -200,7 +255,11 @@ export async function getApiKey(provider: string): Promise<string | null> {
   if (!entry) return null;
   try {
     const key = loadMachineKey();
-    const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(entry.iv, "base64"));
+    const decipher = createDecipheriv(
+      "aes-256-gcm",
+      key,
+      Buffer.from(entry.iv, "base64"),
+    );
     decipher.setAuthTag(Buffer.from(entry.tag, "base64"));
     return Buffer.concat([
       decipher.update(Buffer.from(entry.data, "base64")),

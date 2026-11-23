@@ -94,7 +94,11 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   refresh: async () => {
     const settings = await request("getSettings", undefined);
-    set({ settings, theme: settings.theme, sidebarCollapsed: settings.sidebarCollapsed });
+    set({
+      settings,
+      theme: settings.theme,
+      sidebarCollapsed: settings.sidebarCollapsed,
+    });
     applyTheme(settings.theme);
   },
 
@@ -137,7 +141,8 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   setCommandOpen: (open) => set({ commandOpen: open }),
 
-  setSyncState: (syncState, syncMessage) => set({ syncState, syncMessage: syncMessage ?? null }),
+  setSyncState: (syncState, syncMessage) =>
+    set({ syncState, syncMessage: syncMessage ?? null }),
 
   setWindowMaximized: (windowMaximized) => set({ windowMaximized }),
 

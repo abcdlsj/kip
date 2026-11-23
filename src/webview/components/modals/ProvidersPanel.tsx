@@ -1,6 +1,19 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, CloudDownload, Eye, Loader2, Plus, Sparkles, Trash2, Zap } from "lucide-react";
-import type { ProviderModel, ProviderProtocol, ProviderRecord } from "../../../shared/types";
+import {
+  Check,
+  CloudDownload,
+  Eye,
+  Loader2,
+  Plus,
+  Sparkles,
+  Trash2,
+  Zap,
+} from "lucide-react";
+import type {
+  ProviderModel,
+  ProviderProtocol,
+  ProviderRecord,
+} from "../../../shared/types";
 import { displayModelName } from "../../lib/model-name";
 import { request } from "../../rpc-client";
 import { useUiStore } from "../../stores/ui-store";
@@ -45,7 +58,9 @@ const EMPTY: FormState = {
 };
 
 function isLocalEndpoint(baseUrl: string): boolean {
-  return /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(baseUrl);
+  return /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(
+    baseUrl,
+  );
 }
 
 export function ProvidersPanel({ providers }: ProvidersPanelProps) {
@@ -79,7 +94,10 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
 
   const save = async () => {
     if (!form) return;
-    const id = (form.id || form.displayName).trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
+    const id = (form.id || form.displayName)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-");
     const models = resolveFormModels(form.modelIds, form.models);
     if (!id || !form.baseUrl.trim() || models.length === 0) {
       setStatus({
@@ -105,7 +123,8 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
       setStatus({ text: "Provider saved.", tone: "ok" });
     } catch (error) {
       setStatus({
-        text: error instanceof Error ? error.message : "Could not save provider.",
+        text:
+          error instanceof Error ? error.message : "Could not save provider.",
         tone: "error",
       });
     } finally {
@@ -150,7 +169,10 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
           tone: "ok",
         });
       } else {
-        setStatus({ text: result.error || "No models returned.", tone: "error" });
+        setStatus({
+          text: result.error || "No models returned.",
+          tone: "error",
+        });
       }
     } finally {
       setBusy(null);
@@ -180,7 +202,10 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
       const result = await request("testProvider", { provider: provider.id });
       setStatus(
         result.connected
-          ? { text: `${provider.displayName} connected · ${result.latencyMs}ms`, tone: "ok" }
+          ? {
+              text: `${provider.displayName} connected · ${result.latencyMs}ms`,
+              tone: "ok",
+            }
           : {
               text: `${provider.displayName}: ${result.error ?? "Connection failed"}`,
               tone: "error",
@@ -197,7 +222,8 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
         <div className="min-w-0">
           <h2 className="text-[15px] font-semibold">Model providers</h2>
           <p className="mt-1 text-[12.5px] text-[var(--text-secondary)]">
-            Any endpoint that speaks the OpenAI, Anthropic, or Google wire format.
+            Any endpoint that speaks the OpenAI, Anthropic, or Google wire
+            format.
           </p>
         </div>
         <button
@@ -237,7 +263,9 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                   ) : (
                     <span
                       className={`text-[11px] ${
-                        local ? "text-[var(--text-muted)]" : "text-[var(--status-warn)]"
+                        local
+                          ? "text-[var(--text-muted)]"
+                          : "text-[var(--status-warn)]"
                       }`}
                     >
                       {local ? "keyless" : "no key"}
@@ -256,7 +284,11 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                 className="btn-secondary h-7 shrink-0 rounded-[7px] px-2.5 text-[12px]"
               >
                 {busy === provider.id ? (
-                  <Loader2 size={11} strokeWidth={1.5} className="animate-spin" />
+                  <Loader2
+                    size={11}
+                    strokeWidth={1.5}
+                    className="animate-spin"
+                  />
                 ) : (
                   <Zap size={11} strokeWidth={1.5} />
                 )}
@@ -277,7 +309,9 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                     ? "bg-[color-mix(in_srgb,var(--status-err)_12%,transparent)] px-2 text-[11.5px] font-medium text-[var(--status-err)]"
                     : "btn-icon w-7 rounded-full hover:text-[var(--status-err)]"
                 }`}
-                aria-label={armed ? "Confirm delete provider" : "Delete provider"}
+                aria-label={
+                  armed ? "Confirm delete provider" : "Delete provider"
+                }
                 title={armed ? "Click again to delete" : "Delete provider"}
               >
                 {armed ? "Delete?" : <Trash2 size={13} strokeWidth={1.5} />}
@@ -298,7 +332,9 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
             <Field label="Name">
               <input
                 value={form.displayName}
-                onChange={(event) => setForm({ ...form, displayName: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, displayName: event.target.value })
+                }
                 placeholder="OpenRouter"
                 className="settings-input"
               />
@@ -306,7 +342,9 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
             <Field label="Identifier">
               <input
                 value={form.id}
-                onChange={(event) => setForm({ ...form, id: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, id: event.target.value })
+                }
                 placeholder="openrouter"
                 className="settings-input font-mono"
               />
@@ -315,20 +353,29 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
               <select
                 value={form.protocol}
                 onChange={(event) =>
-                  setForm({ ...form, protocol: event.target.value as ProviderProtocol })
+                  setForm({
+                    ...form,
+                    protocol: event.target.value as ProviderProtocol,
+                  })
                 }
                 className="settings-input"
               >
-                <option value="openai-completions">OpenAI Chat Completions</option>
+                <option value="openai-completions">
+                  OpenAI Chat Completions
+                </option>
                 <option value="openai-responses">OpenAI Responses</option>
                 <option value="anthropic-messages">Anthropic Messages</option>
-                <option value="google-generative-ai">Google Generative AI</option>
+                <option value="google-generative-ai">
+                  Google Generative AI
+                </option>
               </select>
             </Field>
             <Field label="Base URL">
               <input
                 value={form.baseUrl}
-                onChange={(event) => setForm({ ...form, baseUrl: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, baseUrl: event.target.value })
+                }
                 placeholder="https://api.openai.com/v1"
                 className="settings-input font-mono"
               />
@@ -338,7 +385,9 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                 <input
                   type="password"
                   value={form.apiKey}
-                  onChange={(event) => setForm({ ...form, apiKey: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, apiKey: event.target.value })
+                  }
                   placeholder={
                     form.key
                       ? "Leave blank to keep the existing key"
@@ -352,7 +401,9 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
               <Field label="Model IDs (one per line)">
                 <textarea
                   value={form.modelIds}
-                  onChange={(event) => setForm({ ...form, modelIds: event.target.value })}
+                  onChange={(event) =>
+                    setForm({ ...form, modelIds: event.target.value })
+                  }
                   rows={3}
                   placeholder={"gpt-4.1\nclaude-sonnet-4-5"}
                   className="settings-input resize-none font-mono"
@@ -360,7 +411,10 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
               </Field>
             </div>
             {(() => {
-              const resolvedModels = resolveFormModels(form.modelIds, form.models);
+              const resolvedModels = resolveFormModels(
+                form.modelIds,
+                form.models,
+              );
               if (resolvedModels.length === 0) return null;
               return (
                 <div className="col-span-2">
@@ -380,7 +434,9 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                           <button
                             type="button"
                             aria-pressed={model.supportsVision}
-                            onClick={() => toggleCapability(model.id, "supportsVision")}
+                            onClick={() =>
+                              toggleCapability(model.id, "supportsVision")
+                            }
                             className={`flex h-6 items-center gap-1 rounded-[6px] border px-2 text-[11px] transition-colors ${
                               model.supportsVision
                                 ? "border-[var(--border-focus)] bg-[var(--bg-subtle)] font-medium text-[var(--text-primary)]"
@@ -393,7 +449,9 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
                           <button
                             type="button"
                             aria-pressed={model.supportsReasoning}
-                            onClick={() => toggleCapability(model.id, "supportsReasoning")}
+                            onClick={() =>
+                              toggleCapability(model.id, "supportsReasoning")
+                            }
                             className={`flex h-6 items-center gap-1 rounded-[6px] border px-2 text-[11px] transition-colors ${
                               model.supportsReasoning
                                 ? "border-[var(--border-focus)] bg-[var(--bg-subtle)] font-medium text-[var(--text-primary)]"
@@ -461,7 +519,10 @@ export function ProvidersPanel({ providers }: ProvidersPanelProps) {
   );
 }
 
-function resolveFormModels(modelIdsText: string, existingModels: ProviderModel[]): ProviderModel[] {
+function resolveFormModels(
+  modelIdsText: string,
+  existingModels: ProviderModel[],
+): ProviderModel[] {
   const existing = new Map(existingModels.map((model) => [model.id, model]));
   return splitIds(modelIdsText).map((modelId) => {
     const current = existing.get(modelId);

@@ -7,7 +7,10 @@
  * meaning, so a new plugin page needs no code here.
  */
 import { BrowserView, BrowserWindow } from "electrobun/bun";
-import type { PluginPageRPC, PluginPageSnapshot } from "../../shared/plugin-page";
+import type {
+  PluginPageRPC,
+  PluginPageSnapshot,
+} from "../../shared/plugin-page";
 import type { ThemeMode } from "../../shared/types";
 import type { KipDatabase } from "../storage/db";
 import { pluginDataDir, readPluginValues } from "./registry";
@@ -64,9 +67,11 @@ export class PluginWindows {
     const disposeOnce = (): Promise<void> => {
       closed = true;
       if (!disposePromise) {
-        disposePromise = Promise.resolve(controller.dispose?.()).catch((error: unknown) => {
-          console.error(`Plugin ${plugin.id}: dispose failed`, error);
-        });
+        disposePromise = Promise.resolve(controller.dispose?.()).catch(
+          (error: unknown) => {
+            console.error(`Plugin ${plugin.id}: dispose failed`, error);
+          },
+        );
       }
       return disposePromise;
     };
@@ -76,7 +81,8 @@ export class PluginWindows {
       handlers: {
         requests: {
           pageState: () => snapshot(),
-          pageAction: async ({ action, input }) => controller.act(action, input),
+          pageAction: async ({ action, input }) =>
+            controller.act(action, input),
         },
         messages: {},
       },
@@ -111,11 +117,17 @@ export class PluginWindows {
           rpc.send.pageSnapshot(next);
         })
         .catch((error: unknown) => {
-          if (!closed) console.error(`Plugin ${plugin.id}: state failed`, error);
+          if (!closed)
+            console.error(`Plugin ${plugin.id}: state failed`, error);
         });
     };
 
-    const entry: OpenWindow = { pluginId: plugin.id, window, push, dispose: disposeOnce };
+    const entry: OpenWindow = {
+      pluginId: plugin.id,
+      window,
+      push,
+      dispose: disposeOnce,
+    };
     this.open.set(plugin.id, entry);
     window.on("close", () => {
       if (this.open.get(plugin.id) === entry) this.open.delete(plugin.id);

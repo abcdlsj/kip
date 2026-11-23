@@ -38,7 +38,11 @@ const emptyView = (): ThreadView => ({
 interface ChatState {
   threads: Record<string, ThreadView>;
   load: (threadId: string) => Promise<void>;
-  appendUserTurn: (threadId: string, text: string, attachments?: ChatTurn["attachments"]) => void;
+  appendUserTurn: (
+    threadId: string,
+    text: string,
+    attachments?: ChatTurn["attachments"],
+  ) => void;
   applyEvent: (threadId: string, event: AgentStreamEvent) => void;
   removeApproval: (threadId: string, toolCallId: string) => void;
   /** Stops the run and returns the text of queued messages that were dropped. */
@@ -52,7 +56,11 @@ interface ChatState {
     reason?: string,
   ) => Promise<void>;
   /** Replaces a user message and everything after it, then reruns from there. */
-  editUserTurn: (threadId: string, turnId: string, text: string) => Promise<void>;
+  editUserTurn: (
+    threadId: string,
+    turnId: string,
+    text: string,
+  ) => Promise<void>;
   undoChanges: (threadId: string) => Promise<string | null>;
   clear: (threadId: string) => void;
   setUsage: (threadId: string, usage: ContextUsage) => void;
@@ -63,7 +71,8 @@ export const useChatStore = create<ChatState>()(
   immer((set, get) => ({
     threads: {},
 
-    view: (threadId) => (threadId ? get().threads[threadId] ?? emptyView() : emptyView()),
+    view: (threadId) =>
+      threadId ? (get().threads[threadId] ?? emptyView()) : emptyView(),
 
     load: async (threadId) => {
       const [result, changes] = await Promise.all([
@@ -92,7 +101,9 @@ export const useChatStore = create<ChatState>()(
         view.turns.push({
           id: `user_${crypto.randomUUID()}`,
           role: "user",
-          blocks: [{ type: "text", id: `user_txt_${crypto.randomUUID()}`, text }],
+          blocks: [
+            { type: "text", id: `user_txt_${crypto.randomUUID()}`, text },
+          ],
           attachments,
           createdAt: Date.now(),
         });
@@ -145,7 +156,9 @@ export const useChatStore = create<ChatState>()(
           }
           case "thinking_done": {
             const turn = view.turns.find((item) => item.id === event.turnId);
-            const block = turn?.blocks.find((item) => item.id === event.blockId);
+            const block = turn?.blocks.find(
+              (item) => item.id === event.blockId,
+            );
             if (block?.type === "thinking") {
               block.isComplete = true;
               block.durationMs = event.durationMs;
@@ -163,10 +176,16 @@ export const useChatStore = create<ChatState>()(
           case "tool_approval_required": {
             const turn = view.turns.find((item) => item.id === event.turnId);
             const block = turn?.blocks.find(
-              (item) => item.type === "tool_call" && item.id === event.approval.toolCallId,
+              (item) =>
+                item.type === "tool_call" &&
+                item.id === event.approval.toolCallId,
             );
             if (block?.type === "tool_call") block.status = "awaiting_approval";
-            if (!view.approvals.some((item) => item.toolCallId === event.approval.toolCallId)) {
+            if (
+              !view.approvals.some(
+                (item) => item.toolCallId === event.approval.toolCallId,
+              )
+            ) {
               view.approvals.push(event.approval);
             }
             return;
@@ -174,9 +193,13 @@ export const useChatStore = create<ChatState>()(
           case "tool_approved": {
             const turn = view.turns.find((item) => item.id === event.turnId);
             const block = turn?.blocks.find(
-              (item) => item.type === "tool_call" && item.id === event.toolCallId,
+              (item) =>
+                item.type === "tool_call" && item.id === event.toolCallId,
             );
-            if (block?.type === "tool_call" && block.status === "awaiting_approval") {
+            if (
+              block?.type === "tool_call" &&
+              block.status === "awaiting_approval"
+            ) {
               block.status = event.approved === false ? "denied" : "running";
             }
             view.approvals = view.approvals.filter(
@@ -187,7 +210,8 @@ export const useChatStore = create<ChatState>()(
           case "tool_end": {
             const turn = view.turns.find((item) => item.id === event.turnId);
             const block = turn?.blocks.find(
-              (item) => item.type === "tool_call" && item.id === event.toolCallId,
+              (item) =>
+                item.type === "tool_call" && item.id === event.toolCallId,
             );
             if (block?.type === "tool_call") {
               block.status = event.status;
@@ -212,7 +236,9 @@ export const useChatStore = create<ChatState>()(
             for (const block of lastTurn?.blocks ?? []) {
               if (block.type === "thinking") block.isComplete = true;
             }
-            const lastUser = [...view.turns].reverse().find((turn) => turn.role === "user");
+            const lastUser = [...view.turns]
+              .reverse()
+              .find((turn) => turn.role === "user");
             if (lastTurn?.role === "assistant" && lastUser) {
               lastTurn.durationMs = Date.now() - lastUser.createdAt;
             }
@@ -277,7 +303,9 @@ export const useChatStore = create<ChatState>()(
       set((state) => {
         const view = state.threads[threadId];
         if (view) {
-          view.approvals = view.approvals.filter((item) => item.toolCallId !== toolCallId);
+          view.approvals = view.approvals.filter(
+            (item) => item.toolCallId !== toolCallId,
+          );
         }
       });
     },
@@ -295,7 +323,13 @@ export const useChatStore = create<ChatState>()(
       return restored;
     },
 
-    resolveApproval: async (threadId, toolCallId, approved, remember, reason) => {
+    resolveApproval: async (
+      threadId,
+      toolCallId,
+      approved,
+      remember,
+      reason,
+    ) => {
       await request("resolveToolApproval", {
         threadId,
         toolCallId,
@@ -306,12 +340,17 @@ export const useChatStore = create<ChatState>()(
       set((state) => {
         const view = state.threads[threadId];
         if (!view) return;
-        view.approvals = view.approvals.filter((item) => item.toolCallId !== toolCallId);
+        view.approvals = view.approvals.filter(
+          (item) => item.toolCallId !== toolCallId,
+        );
         for (const turn of view.turns) {
           const block = turn.blocks.find(
             (item) => item.type === "tool_call" && item.id === toolCallId,
           );
-          if (block?.type === "tool_call" && block.status === "awaiting_approval") {
+          if (
+            block?.type === "tool_call" &&
+            block.status === "awaiting_approval"
+          ) {
             block.status = approved ? "running" : "denied";
           }
         }
@@ -324,7 +363,9 @@ export const useChatStore = create<ChatState>()(
       const index = view.turns.findIndex((turn) => turn.id === turnId);
       const target = view.turns[index];
       if (!target || target.role !== "user") return;
-      const userIndex = view.turns.slice(0, index).filter((turn) => turn.role === "user").length;
+      const userIndex = view.turns
+        .slice(0, index)
+        .filter((turn) => turn.role === "user").length;
       set((state) => {
         const current = state.threads[threadId];
         if (!current) return;
@@ -332,7 +373,9 @@ export const useChatStore = create<ChatState>()(
         current.turns.push({
           id: `user_${crypto.randomUUID()}`,
           role: "user",
-          blocks: [{ type: "text", id: `user_txt_${crypto.randomUUID()}`, text }],
+          blocks: [
+            { type: "text", id: `user_txt_${crypto.randomUUID()}`, text },
+          ],
           attachments: target.attachments,
           createdAt: Date.now(),
         });
@@ -342,7 +385,10 @@ export const useChatStore = create<ChatState>()(
       try {
         await request("editPrompt", { threadId, userIndex, text });
       } catch (error) {
-        get().setError(threadId, error instanceof Error ? error.message : "Could not edit the message");
+        get().setError(
+          threadId,
+          error instanceof Error ? error.message : "Could not edit the message",
+        );
       }
     },
 

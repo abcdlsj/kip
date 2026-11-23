@@ -1,0 +1,3 @@
+# Vendored code is owned by another repository and pinned by sha256, so
+# `bun run check:cookies` and tests/vendor.test.ts compare bytes.
+src/bun/plugins/gemini2api/vendor/
