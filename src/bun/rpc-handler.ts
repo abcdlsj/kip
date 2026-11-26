@@ -121,6 +121,10 @@ export function createKipRpc(deps: RpcDeps) {
         },
         removeWorkspace: async ({ workspaceId }) => {
           const threads = deps.database.listThreads(workspaceId);
+          refuseWhileDrivenElsewhere(
+            deps,
+            threads.map((thread) => thread.id),
+          );
           await Promise.all(
             threads.map((thread) =>
               deps.orchestrator.disposeSession(thread.id),
@@ -152,6 +156,7 @@ export function createKipRpc(deps: RpcDeps) {
         loadThreadTurns: ({ threadId }) =>
           deps.orchestrator.loadTurns(threadId),
         deleteThread: async ({ threadId }) => {
+          refuseWhileDrivenElsewhere(deps, [threadId]);
           const thread = deps.database.getThread(threadId);
           await deps.orchestrator.disposeSession(threadId);
           deps.database.deleteThread(threadId);
@@ -487,6 +492,23 @@ async function createThread(
     approvalPolicy: input.approvalPolicy ?? null,
   });
   return thread;
+}
+
+/**
+ * Destructive thread operations would corrupt a run another Kip process is
+ * driving right now, so they are refused instead of racing it.
+ */
+function refuseWhileDrivenElsewhere(
+  deps: RpcDeps,
+  threadIds: string[],
+): void {
+  const busy = threadIds.find((threadId) =>
+    deps.orchestrator.isLockedElsewhere(threadId),
+  );
+  if (!busy) return;
+  throw new Error(
+    "This thread is running in another Kip process. Stop that run first.",
+  );
 }
 
 /**

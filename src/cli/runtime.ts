@@ -100,6 +100,7 @@ export class CliRuntime {
           before: (providerId) => beforeGatewayRequest(database, providerId),
           after: (providerId) => afterGatewayRequest(database, providerId),
         },
+        clientLabel: "the kip CLI",
       },
     );
 

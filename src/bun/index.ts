@@ -118,6 +118,7 @@ const orchestrator = new KipOrchestrator(
       before: (providerId) => beforeGatewayRequest(database, providerId),
       after: (providerId) => afterGatewayRequest(database, providerId),
     },
+    clientLabel: "the Kip app",
   },
 );
 

@@ -39,6 +39,7 @@ import { diffTrees, restoreRun, snapshotTree } from "../system/git-snapshot";
 import { ContextBuilder } from "./context-builder";
 import type { ModelRegistry } from "./model-registry";
 import { FrameBuffer, type StreamEmit } from "./stream-buffer";
+import { ThreadLocks } from "./thread-lock";
 import { ToolInterceptor, type ToolHook } from "./tool-interceptor";
 import { ToolRegistry, type AnyToolDefinition } from "./tool-registry";
 import {
@@ -63,6 +64,11 @@ export interface OrchestratorOptions {
   hooks?: ToolHook[];
   /** Maximum number of idle sessions retained in memory before LRU eviction. */
   maxIdleSessions?: number;
+  /**
+   * Name this process goes by in a cross-process lock message, e.g. "kip CLI".
+   * The desktop app leaves it at the default.
+   */
+  clientLabel?: string;
   /**
    * Told around every run that reaches a provider, so a plugin can start its
    * service on demand and let it idle out afterwards.
@@ -132,6 +138,9 @@ export class KipOrchestrator {
   private readonly hooks: ToolHook[];
   private readonly maxIdleSessions: number;
   private readonly providerActivity: ProviderActivityHooks;
+  private readonly clientLabel: string;
+  /** One process at a time may drive a thread; the CLI and the app share files. */
+  private readonly locks = new ThreadLocks();
 
   constructor(
     private readonly database: KipDatabase,
@@ -144,6 +153,7 @@ export class KipOrchestrator {
     this.hooks = options.hooks ?? [];
     this.maxIdleSessions = options.maxIdleSessions ?? DEFAULT_MAX_IDLE_SESSIONS;
     this.providerActivity = options.providerActivity ?? {};
+    this.clientLabel = options.clientLabel ?? "Kip";
   }
 
   runningThreadIds(): string[] {
@@ -222,6 +232,15 @@ export class KipOrchestrator {
   }
 
   async sendPrompt(input: SendPromptInput): Promise<void> {
+    const lock = this.locks.acquire(input.threadId, this.clientLabel);
+    try {
+      await this.runPrompt(input);
+    } finally {
+      lock.release();
+    }
+  }
+
+  private async runPrompt(input: SendPromptInput): Promise<void> {
     const active = await this.ensureSession(input.threadId);
     const referenced = input.referencedFiles?.length
       ? `Referenced files:\n${input.referencedFiles.map((file) => `- ${file}`).join("\n")}\n\n`
@@ -355,6 +374,19 @@ export class KipOrchestrator {
     userIndex: number,
     text: string,
   ): Promise<void> {
+    const lock = this.locks.acquire(threadId, this.clientLabel);
+    try {
+      await this.rewindAndResend(threadId, userIndex, text);
+    } finally {
+      lock.release();
+    }
+  }
+
+  private async rewindAndResend(
+    threadId: string,
+    userIndex: number,
+    text: string,
+  ): Promise<void> {
     const active = await this.ensureSession(threadId);
     if (active.running)
       throw new Error("Stop the current run before editing a message");
@@ -450,15 +482,25 @@ export class KipOrchestrator {
   }
 
   async compact(threadId: string): Promise<ContextUsage> {
-    const active = await this.ensureSession(threadId);
-    const thread = this.requireThread(threadId);
+    const lock = this.locks.acquire(threadId, this.clientLabel);
     try {
+      const active = await this.ensureSession(threadId);
+      const thread = this.requireThread(threadId);
       await this.providerActivity.before?.(thread.modelProvider);
-      await active.session.compact();
+      try {
+        await active.session.compact();
+      } finally {
+        this.providerActivity.after?.(thread.modelProvider);
+      }
+      return toSharedUsage(active.session.getContextUsage());
     } finally {
-      this.providerActivity.after?.(thread.modelProvider);
+      lock.release();
     }
-    return toSharedUsage(active.session.getContextUsage());
+  }
+
+  /** Whether another live Kip process is driving this thread. */
+  isLockedElsewhere(threadId: string): boolean {
+    return this.locks.heldByOther(threadId);
   }
 
   resolveApproval(
