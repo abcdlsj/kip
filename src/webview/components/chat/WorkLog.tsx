@@ -13,6 +13,7 @@ import type {
   ToolApprovalPayload,
   ToolCallBlock,
 } from "../../../shared/types";
+import { formatWorkDuration } from "../../../shared/duration";
 import { activeLabel } from "../../lib/tool-label";
 import { ThinkingTrace } from "./ThinkingTrace";
 import { ToolStepPill } from "./ToolStepPill";
@@ -25,14 +26,6 @@ interface WorkLogProps {
   approvals: ToolApprovalPayload[];
   /** Wall time of the whole run, when this log is the run's only work. */
   durationMs?: number;
-}
-
-function durationLabel(ms: number): string {
-  if (ms < 1000) return "<1s";
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}m ${seconds % 60}s`;
 }
 
 function currentAction(block: WorkBlock | undefined): string {
@@ -77,6 +70,7 @@ export function WorkLog({
   const elapsed = running
     ? Math.max(measured, Date.now() - startedAt.current)
     : Math.max(measured, durationMs ?? 0);
+  const elapsedLabel = formatWorkDuration(elapsed);
   const last = blocks[blocks.length - 1];
   const action = currentAction(last);
   const waiting = pending.length > 0;
@@ -141,9 +135,9 @@ export function WorkLog({
             ? "Waiting for approval"
             : running
               ? action
-              : elapsed >= 1000
-                ? `Worked for ${durationLabel(elapsed)}`
-                : `Worked`}
+              : elapsedLabel
+                ? `Worked for ${elapsedLabel}`
+                : "Worked"}
         </span>
         {toolCount > 0 && (
           <span className="shrink-0 text-[var(--text-muted)]">
@@ -160,9 +154,9 @@ export function WorkLog({
             · denied
           </span>
         )}
-        {running && !waiting && elapsed > 3000 && (
+        {running && !waiting && elapsed > 3000 && elapsedLabel && (
           <span className="text-meta shrink-0 text-[var(--text-muted)]">
-            {durationLabel(elapsed)}
+            {elapsedLabel}
           </span>
         )}
         <ChevronRight

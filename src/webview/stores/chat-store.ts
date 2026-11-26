@@ -192,7 +192,8 @@ export const useChatStore = create<ChatState>()(
             );
             if (block?.type === "thinking") {
               block.isComplete = true;
-              block.durationMs = event.durationMs;
+              block.durationMs =
+                event.durationMs > 0 ? event.durationMs : undefined;
             }
             return;
           }
@@ -248,7 +249,8 @@ export const useChatStore = create<ChatState>()(
               block.status = event.status;
               block.output = event.output;
               block.diff = event.diff;
-              block.durationMs = event.durationMs;
+              block.durationMs =
+                event.durationMs > 0 ? event.durationMs : undefined;
               block.summaryLabel = event.summaryLabel;
             }
             view.approvals = view.approvals.filter(
@@ -271,7 +273,8 @@ export const useChatStore = create<ChatState>()(
               .reverse()
               .find((turn) => turn.role === "user");
             if (lastTurn?.role === "assistant" && lastUser) {
-              lastTurn.durationMs = Date.now() - lastUser.createdAt;
+              const elapsed = Date.now() - lastUser.createdAt;
+              if (elapsed > 0) lastTurn.durationMs = elapsed;
             }
             return;
           }

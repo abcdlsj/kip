@@ -1135,7 +1135,8 @@ async function runTuiSession(
         );
         if (block?.type === "thinking") {
           block.isComplete = true;
-          block.durationMs = event.durationMs;
+          block.durationMs =
+            event.durationMs > 0 ? event.durationMs : undefined;
         }
         tui.requestRender();
         return;
@@ -1182,7 +1183,8 @@ async function runTuiSession(
         );
         if (block?.type === "tool_call") {
           block.status = event.status;
-          block.durationMs = event.durationMs;
+          block.durationMs =
+            event.durationMs > 0 ? event.durationMs : undefined;
           block.summaryLabel = event.summaryLabel;
           block.output = event.output;
           block.diff = event.diff;

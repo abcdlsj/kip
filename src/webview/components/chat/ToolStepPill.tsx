@@ -13,6 +13,7 @@ import {
   Terminal,
   X,
 } from "lucide-react";
+import { formatToolDuration } from "../../../shared/duration";
 import type { ToolCallBlock } from "../../../shared/types";
 import { copyText } from "../../lib/clipboard";
 import { stepLabel } from "../../lib/tool-label";
@@ -85,12 +86,7 @@ export function ToolStepPill({ block, compact = false }: ToolStepPillProps) {
   const [copied, setCopied] = useState(false);
   const hasDetail = Boolean(block.output || block.diff);
   const label = stepLabel(block);
-  const seconds =
-    block.durationMs === undefined
-      ? null
-      : block.durationMs >= 1000
-        ? `${(block.durationMs / 1000).toFixed(1)}s`
-        : `${block.durationMs}ms`;
+  const duration = formatToolDuration(block.durationMs);
 
   const cleanOutput = block.output ? stripAnsi(block.output) : "";
 
@@ -148,7 +144,9 @@ export function ToolStepPill({ block, compact = false }: ToolStepPillProps) {
           </span>
         )}
         <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2 text-[var(--text-muted)]">
-          {seconds && <span className="text-meta text-[11px]">{seconds}</span>}
+          {duration && (
+            <span className="text-meta text-[11px]">{duration}</span>
+          )}
           {(!compact || block.status !== "completed") && statusIcon(block)}
           {hasDetail && (
             <ChevronDown

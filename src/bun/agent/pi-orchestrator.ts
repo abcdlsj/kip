@@ -83,6 +83,7 @@ interface ActiveSession {
   textBlockId: string | null;
   thinkingBlockId: string | null;
   thinkingStartedAt: number | null;
+  toolStartedAt: Map<string, number>;
   buffer: FrameBuffer;
   firstPrompt: string | null;
   queued: QueuedEntry[];
@@ -721,6 +722,7 @@ export class KipOrchestrator {
       textBlockId: null,
       thinkingBlockId: null,
       thinkingStartedAt: null,
+      toolStartedAt: new Map(),
       firstPrompt: null,
       buffer,
       queued: [],
@@ -804,6 +806,11 @@ export class KipOrchestrator {
             assistantEvent.delta,
           );
         } else if (
+          assistantEvent.type === "thinking_start" &&
+          active.currentTurn
+        ) {
+          this.ensureThinkingBlock(active);
+        } else if (
           assistantEvent.type === "thinking_delta" &&
           active.currentTurn
         ) {
@@ -823,14 +830,17 @@ export class KipOrchestrator {
           const durationMs =
             active.thinkingStartedAt === null
               ? 0
-              : Date.now() - active.thinkingStartedAt;
+              : Math.max(0, Date.now() - active.thinkingStartedAt);
           const block = active.currentTurn.blocks.find(
             (item) => item.id === blockId,
           );
           if (block?.type === "thinking") {
             block.isComplete = true;
-            block.durationMs = durationMs;
+            block.durationMs = durationMs > 0 ? durationMs : undefined;
           }
+          // Reset so another thinking block later in the same turn gets its own id and timer.
+          active.thinkingBlockId = null;
+          active.thinkingStartedAt = null;
           this.emit(active.threadId, {
             kind: "thinking_done",
             turnId: active.currentTurn.id,
@@ -843,6 +853,7 @@ export class KipOrchestrator {
       case "tool_execution_start": {
         if (!active.currentTurn) return;
         active.buffer.flush();
+        active.toolStartedAt.set(event.toolCallId, Date.now());
         const args = (event.args ?? {}) as Record<string, unknown>;
         const block: ToolCallBlock = {
           type: "tool_call",
@@ -869,6 +880,14 @@ export class KipOrchestrator {
       case "tool_execution_end": {
         if (!active.currentTurn) return;
         active.buffer.flush();
+        const startedAt = active.toolStartedAt.get(event.toolCallId);
+        active.toolStartedAt.delete(event.toolCallId);
+        const durationMs =
+          typeof event.durationMs === "number" && event.durationMs > 0
+            ? event.durationMs
+            : startedAt !== undefined
+              ? Math.max(0, Date.now() - startedAt)
+              : 0;
         const meta = active.interceptor.getMeta(event.toolCallId);
         const block = findToolBlock(active.currentTurn, event.toolCallId);
         const denial =
@@ -880,7 +899,7 @@ export class KipOrchestrator {
             : event.isError
               ? "error"
               : "completed";
-          block.durationMs = event.durationMs ?? 0;
+          block.durationMs = durationMs > 0 ? durationMs : undefined;
           block.summaryLabel = meta?.summaryLabel ?? block.summaryLabel;
           block.risk = meta?.risk;
           block.outsideWorkspace = meta?.outsideWorkspace;
@@ -894,7 +913,7 @@ export class KipOrchestrator {
           status: denial ? "denied" : event.isError ? "error" : "completed",
           output: textOf(event.result?.content),
           diff: meta?.diff,
-          durationMs: event.durationMs ?? 0,
+          durationMs,
           summaryLabel:
             meta?.summaryLabel ?? block?.summaryLabel ?? "Tool call",
         });
@@ -903,6 +922,7 @@ export class KipOrchestrator {
       case "agent_settled": {
         active.buffer.flush();
         active.running = false;
+        active.toolStartedAt.clear();
         if (active.queued.length) {
           active.queued = [];
           this.emitQueue(active);

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronRight, Sparkles } from "lucide-react";
+import { formatThinkingDuration } from "../../../shared/duration";
 import type { ThinkingBlock } from "../../../shared/types";
 
 interface ThinkingTraceProps {
@@ -10,12 +11,13 @@ interface ThinkingTraceProps {
 
 export function ThinkingTrace({ block, streaming }: ThinkingTraceProps) {
   const [open, setOpen] = useState(false);
-  const seconds = (block.durationMs ?? 0) / 1000;
+  if (block.isComplete && !block.thinking.trim()) return null;
+  const duration = formatThinkingDuration(block.durationMs);
   const label = !block.isComplete
     ? "Thinking"
-    : block.durationMs === undefined || block.durationMs === 0
-      ? "Thought"
-      : `Thought for ${seconds.toFixed(1)}s`;
+    : duration
+      ? `Thought for ${duration}`
+      : "Thought";
 
   return (
     <div className="my-1.5">

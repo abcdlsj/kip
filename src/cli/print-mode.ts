@@ -4,6 +4,7 @@
  * prompts quiet on stderr so pipelines (`kip -p "..." | pbcopy`) stay clean.
  */
 import { createInterface } from "node:readline/promises";
+import { formatToolDuration } from "../shared/duration";
 import type { AgentStreamEvent, ToolApprovalPayload } from "../shared/types";
 import type { CliRuntime } from "./runtime";
 
@@ -122,8 +123,8 @@ export async function runPrintMode(
         writeStatus(dim(`· ${event.block.summaryLabel}…`));
         break;
       case "tool_end": {
-        const ms =
-          event.durationMs > 0 ? dim(` (${formatMs(event.durationMs)})`) : "";
+        const formatted = formatToolDuration(event.durationMs);
+        const ms = formatted ? dim(` (${formatted})`) : "";
         if (event.status === "completed") {
           writeStatus(`${ok("✓")} ${dim(event.summaryLabel)}${ms}`);
         } else if (event.status === "denied") {
@@ -171,9 +172,4 @@ export async function runPrintMode(
     return 1;
   }
   return 0;
-}
-
-function formatMs(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
 }

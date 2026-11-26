@@ -28,16 +28,15 @@ import type {
   ToolApprovalPayload,
   ToolCallBlock,
 } from "../../shared/types";
+import {
+  formatThinkingDuration,
+  formatToolDuration,
+  formatWorkDuration,
+} from "../../shared/duration";
 import { shortPolicyLabel, shortThinkingLabel } from "../args";
 import type { KipTuiTheme } from "./theme";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-
-function formatDuration(ms: number | undefined): string {
-  if (!ms || ms <= 0) return "";
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
 
 function compactHome(path: string, home: string): string {
   if (home && path.startsWith(home)) {
@@ -375,7 +374,8 @@ export class AssistantTurnComponent implements Component {
   }
 
   private renderThinking(block: ThinkingBlock, width: number): string[] {
-    const duration = formatDuration(block.durationMs);
+    if (block.isComplete && !block.thinking.trim()) return [];
+    const duration = formatThinkingDuration(block.durationMs);
     const label = block.isComplete
       ? duration
         ? `Thought for ${duration}`
@@ -427,7 +427,7 @@ export class AssistantTurnComponent implements Component {
         break;
     }
 
-    const ms = formatDuration(block.durationMs);
+    const ms = formatToolDuration(block.durationMs);
     const timeText = ms ? ` ${this.theme.faint(ms)}` : "";
     const header = truncateToWidth(
       ` ${icon} ${this.theme.muted(block.summaryLabel)}${statusSuffix}${timeText}`,
@@ -496,13 +496,14 @@ export class WorkingLineComponent implements Component {
 
   render(width: number): string[] {
     if (!this.active) return [];
-    const elapsed = formatDuration(Date.now() - this.startedAt) || "0.0s";
+    const elapsed = formatWorkDuration(Date.now() - this.startedAt);
     const spinner = this.theme.accent(SPINNER_FRAMES[this.frame] ?? "⠋");
     const queued =
       this.queuedCount > 0
         ? ` ${this.theme.faint("·")} ${this.theme.muted(`${this.queuedCount} queued`)}`
         : "";
-    const left = ` ${spinner} ${this.theme.muted(`Working · ${elapsed}`)}${queued}`;
+    const status = elapsed ? `Working · ${elapsed}` : "Working";
+    const left = ` ${spinner} ${this.theme.muted(status)}${queued}`;
     const right = this.theme.faint("esc to stop ");
     return [composeRow(left, right, Math.max(20, width))];
   }
