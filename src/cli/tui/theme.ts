@@ -16,6 +16,7 @@ import {
   type TerminalColors,
   type TextAttributes,
 } from "@earendil-works/pi-tui";
+import { highlightCodeBlock, type SyntaxTheme } from "./highlight";
 
 export interface KipTuiTheme {
   scheme: TerminalColorScheme;
@@ -49,6 +50,12 @@ interface Palette {
   warn: Color;
   err: Color;
   code: Color;
+  syntaxKeyword: Color;
+  syntaxString: Color;
+  syntaxNumber: Color;
+  syntaxFunc: Color;
+  syntaxType: Color;
+  syntaxComment: Color;
 }
 
 const DARK_PALETTE: Palette = {
@@ -60,6 +67,12 @@ const DARK_PALETTE: Palette = {
   warn: rgbColor(209, 160, 65), // --status-warn
   err: rgbColor(238, 136, 132), // --status-err
   code: rgbColor(218, 214, 202),
+  syntaxKeyword: rgbColor(224, 132, 102),
+  syntaxString: rgbColor(142, 192, 124),
+  syntaxNumber: rgbColor(219, 175, 104),
+  syntaxFunc: rgbColor(138, 176, 214),
+  syntaxType: rgbColor(209, 168, 114),
+  syntaxComment: rgbColor(122, 120, 114),
 };
 
 const LIGHT_PALETTE: Palette = {
@@ -71,6 +84,12 @@ const LIGHT_PALETTE: Palette = {
   warn: rgbColor(154, 91, 19), // --status-warn
   err: rgbColor(167, 61, 57), // --status-err
   code: rgbColor(54, 53, 49),
+  syntaxKeyword: rgbColor(184, 78, 46),
+  syntaxString: rgbColor(45, 118, 72),
+  syntaxNumber: rgbColor(160, 98, 22),
+  syntaxFunc: rgbColor(52, 92, 140),
+  syntaxType: rgbColor(138, 92, 34),
+  syntaxComment: rgbColor(134, 130, 122),
 };
 
 export function detectSchemeFromColors(
@@ -123,21 +142,38 @@ export function createKipTheme(
     selectList,
   };
 
+  const syntax: SyntaxTheme = {
+    keyword: paint(palette.syntaxKeyword),
+    string: paint(palette.syntaxString),
+    number: paint(palette.syntaxNumber),
+    func: paint(palette.syntaxFunc),
+    type: paint(palette.syntaxType),
+    comment: paint(palette.syntaxComment, { italic: true }),
+    operator: muted,
+    addition: diffAdd,
+    deletion: diffDel,
+    plain: code,
+    bold,
+    italic,
+  };
+
   const markdown: MarkdownTheme = {
-    heading: (value) => bold(value),
+    heading: (value) => accentBold(value),
     link: (value) => paint(palette.brand, { underline: true })(value),
     linkUrl: (value) => muted(value),
     code: (value) => brand(value),
     codeBlock: (value) => code(value),
-    codeBlockBorder: (value) => faint(value),
+    codeBlockBorder: (value) => muted(value),
     quote: (value) => paint(palette.muted, { italic: true })(value),
-    quoteBorder: (value) => faint(value),
+    quoteBorder: (value) => muted(value),
     hr: (value) => faint(value),
-    listBullet: (value) => muted(value),
+    listBullet: (value) => accent(value),
     bold: (value) => bold(value),
     italic: (value) => italic(value),
     strikethrough: (value) => paint(undefined, { strikethrough: true })(value),
     underline: (value) => paint(undefined, { underline: true })(value),
+    highlightCode: (codeText, lang) =>
+      highlightCodeBlock(codeText, lang, syntax),
     codeBlockIndent: "  ",
   };
 

@@ -479,12 +479,28 @@ export class AssistantTurnComponent implements Component {
     ];
 
     if (this.verbose && block.thinking.trim()) {
-      const textLines = block.thinking.trim().split(/\r?\n/).slice(0, 24);
-      for (const raw of textLines) {
-        const wrapped = wrapTextWithAnsi(raw, Math.max(10, width - 5));
-        for (const row of wrapped) {
-          lines.push(`  ${this.theme.faint("│")} ${this.theme.muted(row)}`);
-        }
+      const innerWidth = Math.max(10, width - 4);
+      const cacheKey = `thinking:${block.id}`;
+      let md = this.markdownCache.get(cacheKey);
+      if (!md) {
+        md = new Markdown(block.thinking.trim(), 0, 0, this.theme.markdown, {
+          color: this.theme.muted,
+        });
+        this.markdownCache.set(cacheKey, md);
+      } else {
+        md.setText(block.thinking.trim());
+      }
+      const rendered = md.render(innerWidth);
+      const shown = rendered.slice(0, 32);
+      for (const row of shown) {
+        lines.push(
+          `  ${this.theme.faint("│")} ${truncateToWidth(row, innerWidth)}`,
+        );
+      }
+      if (rendered.length > shown.length) {
+        lines.push(
+          `  ${this.theme.faint("│")} ${this.theme.faint(`… ${rendered.length - shown.length} more lines`)}`,
+        );
       }
     }
     return lines;

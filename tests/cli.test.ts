@@ -267,6 +267,65 @@ describe("TUI components", () => {
     prompt.handleInput("y");
     expect(decisions).toEqual([[true, false]]);
   });
+
+  test("highlights fenced code blocks with distinct syntax colors and renders thinking markdown", () => {
+    const turn: ChatTurn = {
+      id: "turn_md",
+      role: "assistant",
+      createdAt: Date.now(),
+      blocks: [
+        {
+          type: "thinking",
+          id: "thk_md",
+          thinking: "Check **bold** and `inline()` in thinking.",
+          durationMs: 420,
+          isComplete: true,
+        },
+        {
+          type: "text",
+          id: "txt_md",
+          text: [
+            "# Title",
+            "",
+            "```ts",
+            'const msg = "a < b & c";',
+            "// comment line",
+            "```",
+            "",
+            "```",
+            "plain text fence",
+            "```",
+          ].join("\n"),
+        },
+      ],
+    };
+
+    for (const scheme of ["dark", "light"] as const) {
+      const themed = createKipTheme(scheme, "truecolor");
+      const comp = new AssistantTurnComponent(themed, turn, true);
+      const lines = comp.render(80);
+      const joined = lines.join("\n");
+
+      // Heading receives accent color + bold rather than plain bold only.
+      expect(joined).toContain("Title");
+      // Code block contains distinct syntax ANSI sequences (keyword + string + comment).
+      const constLine = lines.find(
+        (l) => l.includes("const") && l.includes("msg"),
+      );
+      expect(constLine).toBeDefined();
+      const sgrCodes = new Set(constLine!.match(/\x1b\[[0-9;]+m/g) ?? []);
+      expect(sgrCodes.size).toBeGreaterThanOrEqual(3);
+      // HTML entities from hljs are decoded cleanly.
+      expect(constLine).toContain('"a < b & c"');
+      // Expanded thinking trace renders markdown (no raw ** markers).
+      expect(joined).toContain("inline()");
+      expect(joined).not.toContain("**bold**");
+      // Width invariant still holds across all rendered lines.
+      for (const line of lines) {
+        expect(visibleWidth(line)).toBeLessThanOrEqual(80);
+      }
+    }
+  });
 });
 
 describe("CliRuntime lifecycle", () => {
