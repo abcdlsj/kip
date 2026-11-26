@@ -44,6 +44,7 @@ import {
 } from "./plugins/registry";
 import { MARKETPLACE, MARKETPLACE_NOTICE } from "../shared/marketplace";
 import type { KipOrchestrator } from "./agent/pi-orchestrator";
+import { hasSessionMessages } from "./agent/session-bridge";
 import type { PluginWindows } from "./plugins/windows";
 import {
   pickWorkspaceFolder,
@@ -135,13 +136,18 @@ export function createKipRpc(deps: RpcDeps) {
           return suggestFiles(workspace.rootPath, query);
         },
         listThreads: ({ workspaceId }) =>
-          deps.database.listThreads(workspaceId).map((thread) => ({
-            ...thread,
-            isRunning: deps.orchestrator.isRunning(thread.id),
-          })),
+          deps.database.listThreads(workspaceId).map((thread) => {
+            const isRunning = deps.orchestrator.isRunning(thread.id);
+            return {
+              ...thread,
+              isRunning,
+              isEmpty:
+                !isRunning && !hasSessionMessages(thread.sessionFilePath),
+            };
+          }),
         createThread: async (input: CreateThreadInput) => {
           const thread = await createThread(deps, input);
-          return { ...thread, isRunning: false };
+          return { ...thread, isRunning: false, isEmpty: true };
         },
         loadThreadTurns: ({ threadId }) =>
           deps.orchestrator.loadTurns(threadId),

@@ -41,6 +41,8 @@ export interface ThreadSummary {
   approvalPolicy?: ApprovalPolicy | null;
   updatedAt: number;
   isRunning: boolean;
+  /** True when the thread has no recorded messages yet; hidden from sidebar lists. */
+  isEmpty?: boolean;
 }
 
 export interface TextBlock {

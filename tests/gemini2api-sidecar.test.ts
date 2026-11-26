@@ -4,7 +4,13 @@
  * writes a config, starts the process, waits for health, reads models, and stops.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -42,7 +48,11 @@ afterEach(async () => {
  * that wants the sidecar up has to hand it one that is free.
  */
 function freePort(): number {
-  const held = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("") });
+  const held = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: () => new Response(""),
+  });
   const port = held.port as number;
   held.stop(true);
   return port;
@@ -104,7 +114,11 @@ describe("gemini2api sidecar", () => {
       const dataDir = join(dir, "plugin");
       saveCookies(dataDir, {
         profile: "/tmp/firefox",
-        cookies: { "__Secure-1PSID": "psid", "__Secure-1PSIDTS": "psidts", SID: "sid" },
+        cookies: {
+          "__Secure-1PSID": "psid",
+          "__Secure-1PSIDTS": "psidts",
+          SID: "sid",
+        },
       });
       const binary = stubBinary();
 
@@ -123,14 +137,19 @@ describe("gemini2api sidecar", () => {
 
         const models = await fetch(`${started.baseUrl}/models`, {
           headers: { authorization: `Bearer ${started.key}` },
-        }).then((response) => response.json() as Promise<{ data: Array<{ id: string }> }>);
+        }).then(
+          (response) =>
+            response.json() as Promise<{ data: Array<{ id: string }> }>,
+        );
         expect(models.data.map((model) => model.id)).toContain("gemini-stub");
 
         const config = readFileSync(join(dataDir, "config.yaml"), "utf8");
         expect(config).toContain('secure_1psid: "psid"');
         expect(config).toContain(`port: ${started.port}`);
         expect(config).toContain(`api_key: ${JSON.stringify(started.key)}`);
-        expect(config).toContain(`state_dir: ${JSON.stringify(join(dataDir, "state"))}`);
+        expect(config).toContain(
+          `state_dir: ${JSON.stringify(join(dataDir, "state"))}`,
+        );
         expect(status(dataDir, { binaryPath: binary }).running).toBe(true);
         expect(savedCookies(dataDir)?.cookies["SID"]).toBe("sid");
       } finally {
@@ -153,9 +172,15 @@ describe("gemini2api sidecar", () => {
   test("refuses to move to another port when the configured one is taken", async () => {
     // A saved provider points at the configured port: a random one would leave it
     // pointing at nothing, so this has to fail loudly instead.
-    const held = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("") });
+    const held = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => new Response(""),
+    });
     try {
-      await expect(findFreePort(held.port)).rejects.toThrow(/Could not open port \d+/);
+      await expect(findFreePort(held.port)).rejects.toThrow(
+        /Could not open port \d+/,
+      );
     } finally {
       held.stop(true);
     }
@@ -180,7 +205,9 @@ describe("gemini2api sidecar", () => {
       expect(readFileSync(join(dataDir, "config.yaml"), "utf8")).toContain(
         'api_key: "stored-key"',
       );
-      expect((await health(started.port, "stored-key"))?.server).toBe("gemini2api");
+      expect((await health(started.port, "stored-key"))?.server).toBe(
+        "gemini2api",
+      );
     } finally {
       await stop();
     }
@@ -208,7 +235,9 @@ describe("gemini2api sidecar", () => {
   });
 
   test("refuses to start when nothing is installed", async () => {
-    await expect(ensureRunning(join(dir, "missing"), {})).rejects.toThrow(/not installed/);
+    await expect(ensureRunning(join(dir, "missing"), {})).rejects.toThrow(
+      /not installed/,
+    );
   });
 
   test.skipIf(process.platform === "win32")(
@@ -220,14 +249,19 @@ describe("gemini2api sidecar", () => {
         cookies: { "__Secure-1PSID": "psid" },
       });
       const crasher = join(dir, "crash-gemini2api");
-      writeFileSync(crasher, "#!/bin/sh\necho 'boom on startup' >&2\nexit 2\n", { mode: 0o755 });
+      writeFileSync(
+        crasher,
+        "#!/bin/sh\necho 'boom on startup' >&2\nexit 2\n",
+        { mode: 0o755 },
+      );
 
       const startedAt = Date.now();
       await expect(
-        ensureRunning(dataDir, { binaryPath: crasher, port: String(freePort()) }),
-      ).rejects.toThrow(
-        /exited during startup \(code 2\).*boom on startup/,
-      );
+        ensureRunning(dataDir, {
+          binaryPath: crasher,
+          port: String(freePort()),
+        }),
+      ).rejects.toThrow(/exited during startup \(code 2\).*boom on startup/);
       expect(Date.now() - startedAt).toBeLessThan(5_000);
     },
   );
@@ -269,7 +303,9 @@ describe("gemini2api window", () => {
           });
         }
         if (url.pathname === "/v1/models") {
-          return Response.json({ data: [{ id: "gemini-stub", name: "gemini-stub" }] });
+          return Response.json({
+            data: [{ id: "gemini-stub", name: "gemini-stub" }],
+          });
         }
         return new Response("not found", { status: 404 });
       },
@@ -312,7 +348,10 @@ describe("gemini2api window", () => {
 
   test("a failed start explains what to do about the session", async () => {
     const dataDir = join(dir, "plugin-fail");
-    saveCookies(dataDir, { profile: "/tmp/firefox", cookies: { "__Secure-1PSID": "stale" } });
+    saveCookies(dataDir, {
+      profile: "/tmp/firefox",
+      cookies: { "__Secure-1PSID": "stale" },
+    });
     const fakeBinary = join(dir, "fake-gemini2api");
     writeFileSync(
       fakeBinary,
@@ -374,7 +413,9 @@ describe("gemini2api idle pause", () => {
       await gemini2apiPlugin.beforeRequest?.(context);
       try {
         expect(status(dataDir, context.values()).running).toBe(true);
-        expect((await health(Number(port), apiKey(dataDir)))?.server).toBe("gemini2api");
+        expect((await health(Number(port), apiKey(dataDir)))?.server).toBe(
+          "gemini2api",
+        );
       } finally {
         gemini2apiPlugin.afterRequest?.(context);
         await stop();
@@ -397,7 +438,9 @@ describe("gemini2api process tree", () => {
         binaryPath: binary,
         port: String(freePort()),
       });
-      expect((await health(started.port, started.key))?.server).toBe("gemini2api");
+      expect((await health(started.port, started.key))?.server).toBe(
+        "gemini2api",
+      );
 
       await stop();
       await Bun.sleep(500);
@@ -407,4 +450,75 @@ describe("gemini2api process tree", () => {
       expect(leftover.stdout.toString().trim()).toBe("");
     },
   );
+});
+
+describe("gemini2api reliability", () => {
+  test.skipIf(process.platform === "win32")(
+    "beforeRequest waits for an in-flight start instead of racing startup",
+    async () => {
+      const dataDir = join(dir, "plugin-race");
+      saveCookies(dataDir, {
+        profile: "/tmp/firefox",
+        cookies: { "__Secure-1PSID": "psid", "__Secure-1PSIDTS": "psidts" },
+      });
+      const slowBinary = join(dir, "slow-gemini2api");
+      const realStub = stubBinary();
+      writeFileSync(slowBinary, `#!/bin/sh\nsleep 0.6\nexec "${realStub}"\n`, {
+        mode: 0o755,
+      });
+      const port = String(freePort());
+      const context = {
+        pluginId: "gemini2api",
+        dataDir,
+        values: () => ({
+          binaryPath: slowBinary,
+          host: "127.0.0.1",
+          port,
+        }),
+      };
+
+      // Kick off background start and immediately send a request before /health is up.
+      const boot = gemini2apiPlugin.start?.(context);
+      await Bun.sleep(100);
+      await gemini2apiPlugin.beforeRequest?.(context);
+      try {
+        expect((await health(Number(port), apiKey(dataDir)))?.server).toBe(
+          "gemini2api",
+        );
+      } finally {
+        gemini2apiPlugin.afterRequest?.(context);
+        await boot;
+        await stop();
+      }
+    },
+  );
+
+  test("beforeRequest fails clearly when server is up but no account is signed in", async () => {
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        return Response.json({
+          server: "gemini2api",
+          version: "9.9.9",
+          key_required: false,
+          accounts: { firefox: { signed_in: false, status: "SIGNED_OUT" } },
+        });
+      },
+    });
+    const dataDir = join(dir, "plugin-signedout");
+    const context = {
+      pluginId: "gemini2api",
+      dataDir,
+      values: () => ({ host: "127.0.0.1", port: String(server.port) }),
+    };
+    try {
+      await expect(gemini2apiPlugin.beforeRequest?.(context)).rejects.toThrow(
+        /no Gemini account is signed in/i,
+      );
+    } finally {
+      gemini2apiPlugin.afterRequest?.(context);
+      server.stop(true);
+    }
+  });
 });

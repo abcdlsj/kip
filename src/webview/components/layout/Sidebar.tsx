@@ -78,7 +78,8 @@ export function Sidebar() {
 
   const workspace =
     workspaces.find((item) => item.id === activeWorkspaceId) ?? null;
-  const groups = groupThreads(threads);
+  const visibleThreads = threads.filter((thread) => !thread.isEmpty);
+  const groups = groupThreads(visibleThreads);
 
   const openThread = (threadId: string) => {
     selectThread(threadId);
@@ -384,7 +385,7 @@ export function Sidebar() {
                 </div>
               </div>
             ))}
-            {threads.length === 0 && (
+            {visibleThreads.length === 0 && (
               <p className="px-2 pt-1 text-[12.5px] leading-relaxed text-[var(--text-muted)]">
                 No threads yet.
               </p>

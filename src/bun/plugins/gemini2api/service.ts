@@ -64,14 +64,140 @@ interface Running {
   process: Bun.Subprocess<"ignore", "pipe", "pipe">;
   port: number;
   key: string;
+  dataDir: string;
 }
 
+interface AdoptedPid {
+  pid: number;
+  port: number;
+}
+
+/** Healthy sidecar process spawned by this process. */
 let running: Running | null = null;
+/** Process currently booting (before `/health` answers). */
+let spawning: Running | null = null;
 let starting: Promise<{ baseUrl: string; port: number; key: string }> | null =
   null;
 let lastError: string | null = null;
 let logListener: (() => void) | null = null;
 const logs: string[] = [];
+
+export function isStarting(): boolean {
+  return starting !== null;
+}
+
+function pidFile(dataDir: string): string {
+  return join(dataDir, "sidecar.pid");
+}
+
+function writePidFile(
+  dataDir: string,
+  pid: number,
+  port: number,
+  binary: string,
+): void {
+  try {
+    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    writeFileSync(pidFile(dataDir), JSON.stringify({ pid, port, binary }), {
+      mode: 0o600,
+    });
+  } catch {
+    // Best-effort metadata for adopting an orphaned sidecar after a crash.
+  }
+}
+
+function removePidFile(dataDir: string): void {
+  try {
+    if (existsSync(pidFile(dataDir))) unlinkSync(pidFile(dataDir));
+  } catch {
+    // Best-effort cleanup.
+  }
+}
+
+function isPidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isGeminiProcess(pid: number): boolean {
+  if (process.platform === "win32") return true;
+  try {
+    const res = Bun.spawnSync(["ps", "-p", String(pid), "-o", "command="], {
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    if (res.exitCode !== 0) return false;
+    return res.stdout.toString("utf8").toLowerCase().includes("gemini2api");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Recognizes a Kip-owned sidecar that survived a previous app exit/crash, either
+ * via `sidecar.pid` or by matching Kip's own installed binary path on POSIX.
+ * Never claims a server the user started from a different binary/terminal.
+ */
+export function adoptedSidecar(
+  dataDir: string,
+  values: Record<string, string> = {},
+): AdoptedPid | null {
+  const file = pidFile(dataDir);
+  if (existsSync(file)) {
+    try {
+      const parsed = JSON.parse(readFileSync(file, "utf8")) as {
+        pid?: number;
+        port?: number;
+      };
+      if (
+        typeof parsed.pid === "number" &&
+        typeof parsed.port === "number" &&
+        isPidAlive(parsed.pid) &&
+        isGeminiProcess(parsed.pid)
+      ) {
+        return { pid: parsed.pid, port: parsed.port };
+      }
+    } catch {
+      // Corrupt pid file; clean it up below.
+    }
+    removePidFile(dataDir);
+  }
+
+  // Fallback for orphans spawned before `sidecar.pid` existed: match only the
+  // exact binary inside Kip's own plugin data directory.
+  if (process.platform !== "win32") {
+    const ownBinary = installedBinary(dataDir);
+    if (existsSync(ownBinary)) {
+      try {
+        const res = Bun.spawnSync(["pgrep", "-f", ownBinary], {
+          stdout: "pipe",
+          stderr: "ignore",
+        });
+        if (res.exitCode === 0) {
+          const pids = res.stdout
+            .toString("utf8")
+            .split(/\s+/)
+            .map((raw) => Number(raw))
+            .filter((n) => Number.isInteger(n) && n > 0 && n !== process.pid);
+          if (pids.length > 0) {
+            // PyInstaller spawns a parent bootloader + child; pick the lowest PID
+            // (the process group leader) so killing its group stops both.
+            const leader = Math.min(...pids);
+            return { pid: leader, port: preferredPort(values) };
+          }
+        }
+      } catch {
+        // pgrep unavailable; skip fallback.
+      }
+    }
+  }
+  return null;
+}
 
 /** The open page subscribes so new lines appear without pressing Refresh. */
 export function setLogListener(listener: (() => void) | null): void {
@@ -134,13 +260,16 @@ export function status(
   values: Record<string, string> = {},
 ): SidecarStatus {
   const binary = resolveBinary(dataDir, values);
+  const adopted = running ? null : adoptedSidecar(dataDir, values);
+  const activePort = running?.port ?? adopted?.port ?? null;
+  const activePid = running?.process.pid ?? adopted?.pid ?? null;
   return {
     installed: binary !== null,
     version: readInstalledVersion(dataDir),
     binaryPath: binary,
-    running: running !== null,
-    port: running?.port ?? null,
-    pid: running?.process.pid ?? null,
+    running: running !== null || adopted !== null,
+    port: activePort,
+    pid: activePid,
     health: null,
     lastError,
   };
@@ -200,7 +329,9 @@ export async function install(
   }
   // Stop a running sidecar before swapping the binary: on Windows a running
   // executable cannot be overwritten, and elsewhere the version file would drift.
-  if (running) await stop();
+  if (running || adoptedSidecar(dataDir, values)) {
+    await stop({ dataDir, includeAdopted: true });
+  }
   mkdirSync(binDir(dataDir), { recursive: true, mode: 0o700 });
   const target = installedBinary(dataDir);
   const staging = `${target}.new`;
@@ -511,27 +642,38 @@ async function startProcess(
     detached: process.platform !== "win32",
   });
   let exitedCode: number | null = null;
-  running = { process: child, port, key };
+  const handle: Running = { process: child, port, key, dataDir };
+  spawning = handle;
   child.exited.then((code) => {
     exitedCode = code;
     log(`gemini2api exited with code ${code}`);
-    if (running?.process === child) running = null;
+    if (spawning?.process === child) spawning = null;
+    if (running?.process === child) {
+      running = null;
+      removePidFile(dataDir);
+    }
   });
   const stdoutDone = pump(child.stdout);
   const stderrDone = pump(child.stderr);
 
   const deadline = Date.now() + START_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    if (exitedCode !== null || running?.process !== child) break;
+    if (exitedCode !== null || spawning?.process !== child) break;
     const body = await health(port, key);
     if (body) {
+      if (spawning?.process === child) spawning = null;
+      running = handle;
+      lastError = null;
+      writePidFile(dataDir, child.pid, port, binary);
       log(`gemini2api ${body.version ?? ""} is up`);
       return { baseUrl: `http://127.0.0.1:${port}/v1`, port, key };
     }
-    if (exitedCode !== null || running?.process !== child) break;
+    if (exitedCode !== null || spawning?.process !== child) break;
     await Bun.sleep(250);
   }
-  if (running?.process === child) await stop();
+  if (spawning?.process === child || running?.process === child) {
+    await stop();
+  }
   if (exitedCode !== null) {
     await Promise.race([Promise.all([stdoutDone, stderrDone]), Bun.sleep(200)]);
   }
@@ -540,7 +682,9 @@ async function startProcess(
     exitedCode !== null
       ? `gemini2api exited during startup (code ${exitedCode}).`
       : `gemini2api did not answer on 127.0.0.1:${port}.`;
-  throw new Error(`${reason} ${detail}`.trim());
+  const message = `${reason} ${detail}`.trim();
+  lastError = message;
+  throw new Error(message);
 }
 
 async function pump(
@@ -571,46 +715,97 @@ async function pump(
   }
 }
 
-export async function stop(): Promise<void> {
-  const current = running;
+export interface StopOptions {
+  /** Required when `includeAdopted` is true so `sidecar.pid` can be checked. */
+  dataDir?: string;
+  /** Also stop a Kip-owned sidecar adopted from an earlier app session. */
+  includeAdopted?: boolean;
+}
+
+export async function stop(options: StopOptions = {}): Promise<void> {
+  const current = running ?? spawning;
   running = null;
-  if (!current) return;
-  log("stopping gemini2api");
+  spawning = null;
+  if (current) {
+    log("stopping gemini2api");
+    await killManagedProcess(current.process);
+    removePidFile(current.dataDir);
+    return;
+  }
+  if (options.includeAdopted && options.dataDir) {
+    const adopted = adoptedSidecar(options.dataDir);
+    if (adopted) {
+      log(`stopping adopted gemini2api (pid ${adopted.pid})`);
+      await killAdoptedPid(adopted.pid);
+      removePidFile(options.dataDir);
+    }
+  }
+}
+
+async function killManagedProcess(
+  child: Bun.Subprocess<"ignore", "pipe", "pipe">,
+): Promise<void> {
   let exited = false;
-  void current.process.exited.then(() => {
+  void child.exited.then(() => {
     exited = true;
   });
   if (process.platform === "win32") {
     // PyInstaller onefile spawns a child Python process; kill the whole tree.
     const killed = Bun.spawnSync(
-      ["taskkill", "/PID", String(current.process.pid), "/T", "/F"],
+      ["taskkill", "/PID", String(child.pid), "/T", "/F"],
       { stdout: "ignore", stderr: "ignore" },
     );
     if (killed.exitCode !== 0) {
       try {
-        current.process.kill();
+        child.kill();
       } catch {
         // Already gone.
       }
     }
-    await Promise.race([current.process.exited, Bun.sleep(3_000)]);
+    await Promise.race([child.exited, Bun.sleep(3_000)]);
     return;
   }
   for (const signal of ["SIGTERM", "SIGKILL"] as const) {
     try {
-      process.kill(-current.process.pid, signal);
+      process.kill(-child.pid, signal);
     } catch {
       try {
-        current.process.kill(signal);
+        child.kill(signal);
       } catch {
         // Already gone.
       }
     }
     if (exited) return;
     await Promise.race([
-      current.process.exited,
+      child.exited,
       Bun.sleep(signal === "SIGTERM" ? 3_000 : 1_000),
     ]);
+  }
+}
+
+async function killAdoptedPid(pid: number): Promise<void> {
+  if (process.platform === "win32") {
+    Bun.spawnSync(["taskkill", "/PID", String(pid), "/T", "/F"], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    return;
+  }
+  for (const signal of ["SIGTERM", "SIGKILL"] as const) {
+    try {
+      process.kill(-pid, signal);
+    } catch {
+      try {
+        process.kill(pid, signal);
+      } catch {
+        // Already gone.
+      }
+    }
+    const deadline = Date.now() + (signal === "SIGTERM" ? 3_000 : 1_000);
+    while (Date.now() < deadline) {
+      if (!isPidAlive(pid)) return;
+      await Bun.sleep(100);
+    }
   }
 }
 
@@ -619,7 +814,7 @@ export async function restart(
   dataDir: string,
   values: Record<string, string>,
 ): Promise<{ baseUrl: string; port: number; key: string }> {
-  await stop();
+  await stop({ dataDir, includeAdopted: true });
   return ensureRunning(dataDir, values);
 }
 

@@ -96,7 +96,7 @@ export function createGeminiPage(
     };
   }
 
-  /** The instance Kip started, if any. */
+  /** The instance Kip started (including one adopted across a restart), if any. */
   async function managed(): Promise<{
     port: number;
     key: string;
@@ -104,7 +104,8 @@ export function createGeminiPage(
   } | null> {
     const status = service.status(dataDir, values());
     if (!status.running || !status.port) return null;
-    const key = service.apiKey(dataDir);
+    const key =
+      (await getApiKey(service.PROVIDER_ID)) ?? service.apiKey(dataDir);
     const health = await service.health(status.port, key);
     return health ? { port: status.port, key, health } : null;
   }
@@ -159,6 +160,11 @@ export function createGeminiPage(
     const status = service.status(dataDir, values());
     const instance = (await managed()) ?? (await external());
     const jar = service.savedCookies(dataDir);
+    const surfacedError =
+      error ??
+      (instance === null && status.lastError
+        ? { message: status.lastError, hint: hintFor(status.lastError) }
+        : null);
     return {
       platform: service.platformKey(),
       installed: status.installed,
@@ -175,7 +181,7 @@ export function createGeminiPage(
       homepage: GEMINI_HOMEPAGE,
       logs: service.readLogs(),
       busy,
-      error,
+      error: surfacedError,
     };
   }
 
@@ -196,7 +202,7 @@ export function createGeminiPage(
           break;
         }
         case "uninstall": {
-          await service.stop();
+          await service.stop({ dataDir, includeAdopted: true });
           service.uninstall(dataDir);
           break;
         }
@@ -228,7 +234,7 @@ export function createGeminiPage(
               break;
             }
           }
-          await service.stop();
+          await service.stop({ dataDir, includeAdopted: true });
           break;
         }
         case "import-cookies": {

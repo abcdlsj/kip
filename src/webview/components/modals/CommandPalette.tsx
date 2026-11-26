@@ -127,7 +127,7 @@ export function CommandPalette() {
         },
       });
     }
-    for (const thread of threads.slice(0, 8)) {
+    for (const thread of threads.filter((t) => !t.isEmpty).slice(0, 8)) {
       list.push({
         id: `thread-${thread.id}`,
         label: thread.title,

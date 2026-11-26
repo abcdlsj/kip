@@ -3,6 +3,7 @@ import type { ChatTurn, PromptDelivery } from "../../shared/types";
 import { request } from "../rpc-client";
 import { useChatStore } from "../stores/chat-store";
 import { useUiStore } from "../stores/ui-store";
+import { useWorkspaceStore } from "../stores/workspace-store";
 
 export interface SubmitPromptOptions {
   threadId: string;
@@ -30,6 +31,7 @@ export async function submitPrompt(
   ];
   // A queued message appears in the transcript when the agent picks it up.
   if (!options.delivery) {
+    useWorkspaceStore.getState().markThreadNonEmpty(options.threadId);
     useChatStore
       .getState()
       .appendUserTurn(

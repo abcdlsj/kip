@@ -38,6 +38,8 @@ const emptyView = (): ThreadView => ({
 interface ChatState {
   threads: Record<string, ThreadView>;
   load: (threadId: string) => Promise<void>;
+  /** Refreshes a thread from disk in the background if idle and changed. */
+  reloadSilently: (threadId: string) => Promise<void>;
   appendUserTurn: (
     threadId: string,
     text: string,
@@ -93,6 +95,35 @@ export const useChatStore = create<ChatState>()(
           queued: previous?.queued ?? [],
         };
       });
+    },
+
+    reloadSilently: async (threadId) => {
+      const current = get().threads[threadId];
+      if (current?.running || (current?.approvals.length ?? 0) > 0) return;
+      try {
+        const [result, changes] = await Promise.all([
+          request("loadThreadTurns", { threadId }),
+          request("getRunChanges", { threadId }).catch(() => null),
+        ]);
+        const latest = get().threads[threadId];
+        if (latest?.running || (latest?.approvals.length ?? 0) > 0) return;
+        const prevSig = latest
+          ? `${latest.turns.length}:${latest.turns[latest.turns.length - 1]?.blocks.length ?? 0}:${latest.usage.usedTokens}`
+          : "";
+        const nextSig = `${result.turns.length}:${result.turns[result.turns.length - 1]?.blocks.length ?? 0}:${result.usage.usedTokens}`;
+        if (latest?.loaded && prevSig === nextSig) return;
+        set((state) => {
+          state.threads[threadId] = {
+            ...emptyView(),
+            turns: result.turns,
+            usage: result.usage,
+            loaded: true,
+            changes,
+          };
+        });
+      } catch {
+        // Silent background reload ignores transient errors.
+      }
     },
 
     appendUserTurn: (threadId, text, attachments) => {

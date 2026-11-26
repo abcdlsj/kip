@@ -23,6 +23,8 @@ import {
 } from "../src/cli/tui/components";
 import { createKipTheme } from "../src/cli/tui/theme";
 import { KipDatabase } from "../src/bun/storage/db";
+import { hasSessionMessages } from "../src/bun/agent/session-bridge";
+import { writeFileSync } from "node:fs";
 import type { ChatTurn, ModelOption } from "../src/shared/types";
 
 const temps: string[] = [];
@@ -320,6 +322,75 @@ describe("CliRuntime lifecycle", () => {
       });
       expect(second.getTuiLayout()).toBe("fullscreen");
       await second.dispose();
+    } finally {
+      if (prevDataDir === undefined) delete process.env.KIP_DATA_DIR;
+      else process.env.KIP_DATA_DIR = prevDataDir;
+    }
+  });
+
+  test("auto-deletes untouched empty TUI threads on switch and exit", async () => {
+    const dataDir = makeTempDir("kip-cli-empty-");
+    const projectDir = makeTempDir("kip-cli-empty-proj-");
+    const prevDataDir = process.env.KIP_DATA_DIR;
+    process.env.KIP_DATA_DIR = dataDir;
+
+    try {
+      const runtime = await CliRuntime.create({
+        cwd: projectDir,
+        ephemeral: false,
+        continueLast: false,
+      });
+      const firstId = runtime.thread.id;
+      expect(hasSessionMessages(runtime.thread.sessionFilePath)).toBe(false);
+
+      // Switching away from an empty thread deletes it immediately.
+      const second = runtime.createNewThread();
+      expect(runtime.database.getThread(firstId)).toBeNull();
+      expect(runtime.database.getThread(second.id)).not.toBeNull();
+
+      // Exiting TUI while the second thread is also empty deletes both thread and workspace.
+      const workspaceId = runtime.workspace.id;
+      await runtime.dispose();
+
+      const verifyDb = new KipDatabase();
+      try {
+        expect(verifyDb.getThread(second.id)).toBeNull();
+        expect(verifyDb.getWorkspace(workspaceId)).toBeNull();
+      } finally {
+        verifyDb.close();
+      }
+    } finally {
+      if (prevDataDir === undefined) delete process.env.KIP_DATA_DIR;
+      else process.env.KIP_DATA_DIR = prevDataDir;
+    }
+  });
+
+  test("keeps non-empty TUI threads on exit", async () => {
+    const dataDir = makeTempDir("kip-cli-keep-");
+    const projectDir = makeTempDir("kip-cli-keep-proj-");
+    const prevDataDir = process.env.KIP_DATA_DIR;
+    process.env.KIP_DATA_DIR = dataDir;
+
+    try {
+      const runtime = await CliRuntime.create({
+        cwd: projectDir,
+        ephemeral: false,
+        continueLast: false,
+      });
+      const threadId = runtime.thread.id;
+      writeFileSync(
+        runtime.thread.sessionFilePath,
+        `${JSON.stringify({ type: "session", version: 3, id: threadId })}\n${JSON.stringify({ type: "message", id: "m1", message: { role: "user", content: "hi" } })}\n`,
+      );
+      expect(hasSessionMessages(runtime.thread.sessionFilePath)).toBe(true);
+      await runtime.dispose();
+
+      const verifyDb = new KipDatabase();
+      try {
+        expect(verifyDb.getThread(threadId)).not.toBeNull();
+      } finally {
+        verifyDb.close();
+      }
     } finally {
       if (prevDataDir === undefined) delete process.env.KIP_DATA_DIR;
       else process.env.KIP_DATA_DIR = prevDataDir;

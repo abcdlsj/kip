@@ -8,6 +8,7 @@ import { basename, join, resolve } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { ModelRegistry } from "../bun/agent/model-registry";
 import { KipOrchestrator } from "../bun/agent/pi-orchestrator";
+import { hasSessionMessages } from "../bun/agent/session-bridge";
 import {
   afterGatewayRequest,
   beforeGatewayRequest,
@@ -53,6 +54,8 @@ export class CliRuntime {
   private readonly createdWorkspace: boolean;
   private readonly ephemeral: boolean;
   private readonly ephemeralThreadIds = new Set<string>();
+  /** Threads created during this CLI/TUI session; removed on switch/exit if still empty. */
+  private readonly createdThreadIds = new Set<string>();
   private disposed = false;
 
   private constructor(params: {
@@ -64,6 +67,7 @@ export class CliRuntime {
     listener: StreamListener;
     createdWorkspace: boolean;
     ephemeral: boolean;
+    createdInitialThread: boolean;
   }) {
     this.database = params.database;
     this.registry = params.registry;
@@ -75,6 +79,9 @@ export class CliRuntime {
     this.ephemeral = params.ephemeral;
     if (params.ephemeral) {
       this.ephemeralThreadIds.add(params.thread.id);
+    }
+    if (params.createdInitialThread) {
+      this.createdThreadIds.add(params.thread.id);
     }
   }
 
@@ -110,7 +117,10 @@ export class CliRuntime {
 
     let thread: ThreadSummary | null = null;
     if (options.continueLast) {
-      const existing = database.listThreads(workspace.id)[0] ?? null;
+      const existing =
+        database
+          .listThreads(workspace.id)
+          .find((item) => hasSessionMessages(item.sessionFilePath)) ?? null;
       if (existing) {
         thread = existing;
         if (options.modelQuery && chosenModel) {
@@ -131,7 +141,8 @@ export class CliRuntime {
       }
     }
 
-    const isEphemeral = options.ephemeral && thread === null;
+    const createdInitialThread = thread === null;
+    const isEphemeral = options.ephemeral && createdInitialThread;
     if (!thread) {
       const mode: ThreadMode = options.chat
         ? "chat"
@@ -156,6 +167,7 @@ export class CliRuntime {
       listener,
       createdWorkspace: created,
       ephemeral: isEphemeral,
+      createdInitialThread,
     });
     // Allow callers to attach listeners after construction.
     listener = (threadId, event) => runtime.listener(threadId, event);
@@ -228,6 +240,7 @@ export class CliRuntime {
   }
 
   createNewThread(options?: { mode?: ThreadMode }): ThreadSummary {
+    const previousId = this.thread.id;
     const mode =
       options?.mode ??
       resolveNewThreadMode(this.database, this.thread.modelProvider);
@@ -240,19 +253,46 @@ export class CliRuntime {
       mode,
       approvalPolicy: this.thread.approvalPolicy ?? null,
     });
+    this.createdThreadIds.add(next.id);
     this.thread = next;
+    this.cleanupEmptyThread(previousId);
     return next;
   }
 
   switchThread(threadId: string): ThreadSummary {
     const target = this.database.getThread(threadId);
     if (!target) throw new Error("Thread not found");
+    const previousId = this.thread.id;
     this.thread = target;
+    if (previousId !== target.id) {
+      this.cleanupEmptyThread(previousId);
+    }
     return target;
   }
 
   listWorkspaceThreads(): ThreadSummary[] {
-    return this.database.listThreads(this.workspace.id);
+    return this.database
+      .listThreads(this.workspace.id)
+      .filter(
+        (item) =>
+          item.id === this.thread.id ||
+          hasSessionMessages(item.sessionFilePath),
+      );
+  }
+
+  private cleanupEmptyThread(threadId: string): void {
+    if (!this.createdThreadIds.has(threadId)) return;
+    const stored = this.database.getThread(threadId);
+    if (!stored) {
+      this.createdThreadIds.delete(threadId);
+      return;
+    }
+    if (hasSessionMessages(stored.sessionFilePath)) return;
+    this.createdThreadIds.delete(threadId);
+    this.database.deleteThread(threadId);
+    if (stored.sessionFilePath && existsSync(stored.sessionFilePath)) {
+      rmSync(stored.sessionFilePath, { force: true });
+    }
   }
 
   async dispose(): Promise<void> {
@@ -276,14 +316,18 @@ export class CliRuntime {
           rmSync(stored.sessionFilePath, { force: true });
         }
       }
-      if (this.createdWorkspace) {
-        const remaining = this.database.listThreads(this.workspace.id);
-        if (remaining.length === 0) {
-          this.database.removeWorkspace(this.workspace.id);
-          const sessionDir = getSessionDir(this.workspace.id);
-          if (existsSync(sessionDir)) {
-            rmSync(sessionDir, { recursive: true, force: true });
-          }
+    }
+    // Never leave untouched empty threads behind when exiting TUI.
+    for (const threadId of [...this.createdThreadIds]) {
+      this.cleanupEmptyThread(threadId);
+    }
+    if (this.createdWorkspace) {
+      const remaining = this.database.listThreads(this.workspace.id);
+      if (remaining.length === 0) {
+        this.database.removeWorkspace(this.workspace.id);
+        const sessionDir = getSessionDir(this.workspace.id);
+        if (existsSync(sessionDir)) {
+          rmSync(sessionDir, { recursive: true, force: true });
         }
       }
     }

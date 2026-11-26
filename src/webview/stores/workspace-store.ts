@@ -26,6 +26,9 @@ interface WorkspaceState {
   removeWorkspace: (workspaceId: string) => Promise<void>;
   refreshWorkspaces: () => Promise<void>;
   refreshThreads: () => Promise<void>;
+  /** Silently refreshes workspaces and active workspace threads without UI flicker. */
+  syncSilently: () => Promise<void>;
+  markThreadNonEmpty: (threadId: string) => void;
   newThread: (mode?: ThreadMode) => Promise<ThreadSummary | null>;
   selectThread: (threadId: string | null) => void;
   deleteThread: (threadId: string) => Promise<void>;
@@ -84,9 +87,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ workspaces, activeWorkspaceId: first?.id ?? null, loading: false });
     if (first) {
       const threads = await request("listThreads", { workspaceId: first.id });
+      const initial = threads.find((thread) => !thread.isEmpty) ?? null;
       set({
         threads,
-        activeThreadId: threads[0]?.id ?? null,
+        activeThreadId: initial?.id ?? null,
       });
     }
   },
@@ -99,7 +103,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   selectWorkspace: async (workspaceId) => {
     set({ activeWorkspaceId: workspaceId, threads: [], activeThreadId: null });
     const threads = await request("listThreads", { workspaceId });
-    set({ threads, activeThreadId: threads[0]?.id ?? null });
+    const initial = threads.find((thread) => !thread.isEmpty) ?? null;
+    set({ threads, activeThreadId: initial?.id ?? null });
   },
 
   pickWorkspace: async () => {
@@ -134,6 +139,52 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ threads });
   },
 
+  syncSilently: async () => {
+    try {
+      const workspaces = await request("listWorkspaces", undefined);
+      const currentWsId = get().activeWorkspaceId;
+      const nextWsId = workspaces.some((w) => w.id === currentWsId)
+        ? currentWsId
+        : (workspaces[0]?.id ?? null);
+      if (!nextWsId) {
+        set({
+          workspaces,
+          activeWorkspaceId: null,
+          threads: [],
+          activeThreadId: null,
+        });
+        return;
+      }
+      const threads = await request("listThreads", { workspaceId: nextWsId });
+      const activeId = get().activeThreadId;
+      const activeStillExists = activeId
+        ? threads.some((t) => t.id === activeId)
+        : false;
+      set({
+        workspaces,
+        activeWorkspaceId: nextWsId,
+        threads,
+        activeThreadId: activeStillExists
+          ? activeId
+          : activeId
+            ? (threads.find((t) => !t.isEmpty)?.id ?? null)
+            : null,
+      });
+    } catch {
+      // Silent background sync must never interrupt the user.
+    }
+  },
+
+  markThreadNonEmpty: (threadId) => {
+    set((state) => ({
+      threads: state.threads.map((thread) =>
+        thread.id === threadId && thread.isEmpty
+          ? { ...thread, isEmpty: false }
+          : thread,
+      ),
+    }));
+  },
+
   newThread: async (mode) => {
     const workspaceId = get().activeWorkspaceId;
     if (!workspaceId) return null;
@@ -162,7 +213,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         threads,
         activeThreadId:
           state.activeThreadId === threadId
-            ? (threads[0]?.id ?? null)
+            ? (threads.find((thread) => !thread.isEmpty)?.id ?? null)
             : state.activeThreadId,
       };
     });

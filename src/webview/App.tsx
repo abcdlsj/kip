@@ -50,6 +50,7 @@ export default function App() {
         title: event.kind === "thread_title_updated" ? event.title : undefined,
       });
       if (event.kind === "turn_start") {
+        useWorkspaceStore.getState().markThreadNonEmpty(threadId);
         useWorkspaceStore.getState().setThreadRunning(threadId, true);
       } else if (
         event.kind === "turn_complete" ||
@@ -67,17 +68,42 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const clearActive = () => {
+    let lastSyncAt = 0;
+    const silentSync = () => {
+      const now = Date.now();
+      if (now - lastSyncAt < 2000) return;
+      lastSyncAt = now;
+      const workspace = useWorkspaceStore.getState();
+      const active = workspace.activeThreadId;
+      void workspace.syncSilently().then(() => {
+        const nextActive =
+          useWorkspaceStore.getState().activeThreadId ?? active;
+        if (nextActive) {
+          void useChatStore.getState().reloadSilently(nextActive);
+        }
+      });
+    };
+    const onFocus = () => {
       const { activeThreadId: active, selectThread } =
         useWorkspaceStore.getState();
       if (active) selectThread(active);
+      silentSync();
     };
-    window.addEventListener("focus", clearActive);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") silentSync();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") silentSync();
+    }, 15_000);
     const off = onFocusThread(({ threadId }) => {
       void useWorkspaceStore.getState().openThread(threadId);
     });
     return () => {
-      window.removeEventListener("focus", clearActive);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      clearInterval(interval);
       off();
     };
   }, []);

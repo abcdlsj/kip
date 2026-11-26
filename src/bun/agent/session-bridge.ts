@@ -2,6 +2,7 @@
  * Projects Pi's persisted session transcript into Kip's turn/block view model.
  * Pi stays authoritative for model context; this projection is display-only.
  */
+import { existsSync, readFileSync } from "node:fs";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type {
@@ -249,4 +250,23 @@ export function titleFromPrompt(text: string): string {
   title = title.replace(/[.,;:!?]+$/g, "").trim();
   if (!title) return "New Thread";
   return title.charAt(0).toUpperCase() + title.slice(1);
+}
+
+/**
+ * Fast check for whether a Pi JSONL session file contains at least one message.
+ * Stops on the first message entry so empty threads stay cheap to filter out.
+ */
+export function hasSessionMessages(sessionFilePath: string): boolean {
+  if (!sessionFilePath || !existsSync(sessionFilePath)) return false;
+  try {
+    const raw = readFileSync(sessionFilePath, "utf8");
+    for (const line of raw.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (/"type"\s*:\s*"message"/.test(trimmed)) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }

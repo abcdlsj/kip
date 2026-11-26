@@ -17,6 +17,7 @@ import {
   apiKey,
   ensureRunning,
   health as readHealth,
+  isStarting,
   log as logLine,
   resolveBinary,
   status as serviceStatus,
@@ -119,7 +120,7 @@ const idle = new IdleGuard({
   running: () =>
     idleContext !== null &&
     serviceStatus(idleContext.dataDir, idleContext.values()).running,
-  pause: () => stop(),
+  pause: () => stop({ dataDir: idleContext?.dataDir, includeAdopted: true }),
   log: (line) => logLine(line),
 });
 
@@ -208,18 +209,42 @@ export const gemini2apiPlugin: GatewayPlugin = {
     idle.cancel();
     return stop();
   },
-  /** Coming back from an idle pause happens here, before the first request goes out. */
+  /**
+   * Ensures the gateway is actually ready before sending a request:
+   * - Awaits any boot-time start that is still in flight (prevents connection reset)
+   * - Verifies `/health` so a crashed or idle-paused sidecar is brought back automatically
+   * - Fails early with a clear hint if all Gemini accounts are signed out
+   */
   beforeRequest: async (context) => {
     idleContext = context;
     inflight += 1;
     try {
       const values = context.values();
-      if (serviceStatus(context.dataDir, values).running) return;
       const port = managedPort(values);
-      if (port === null || !resolveBinary(context.dataDir, values)) return;
+      if (port === null) return;
       const key = (await getApiKey(PROVIDER_ID)) ?? apiKey(context.dataDir);
-      if (await readHealth(port, key)) return;
-      await ensureRunning(context.dataDir, values);
+      if (isStarting()) {
+        await ensureRunning(context.dataDir, values);
+      }
+      let currentHealth = await readHealth(port, key);
+      if (!currentHealth) {
+        if (!resolveBinary(context.dataDir, values)) return;
+        // A stale handle or hung adopted process on this port must be cleaned up first.
+        if (serviceStatus(context.dataDir, values).running) {
+          await stop({ dataDir: context.dataDir, includeAdopted: true });
+        }
+        const started = await ensureRunning(context.dataDir, values);
+        currentHealth = await readHealth(started.port, started.key);
+      }
+      const accounts = Object.values(currentHealth?.accounts ?? {});
+      if (
+        accounts.length > 0 &&
+        !accounts.some((account) => account.signed_in === true)
+      ) {
+        throw new Error(
+          "gemini2api is running, but no Gemini account is signed in. Open Settings → Plugins → gemini2api and press “Use Firefox session”.",
+        );
+      }
     } finally {
       idle.touch();
     }
