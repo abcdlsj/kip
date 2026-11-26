@@ -4,6 +4,7 @@
  */
 
 export type ThemeMode = "light" | "dark" | "system";
+export type CliTuiLayout = "inline" | "fullscreen";
 export type ApprovalPolicy = "read-only-auto" | "full-auto" | "strict" | "yolo";
 export type ThinkingLevel = "off" | "low" | "medium" | "high";
 /**
@@ -227,6 +228,7 @@ export interface SettingsSnapshot {
    */
   chatModeProviders: Array<{ providerId: string; defaultMode: ThreadMode }>;
   sidebarCollapsed: boolean;
+  cliTuiLayout: CliTuiLayout;
   configuredProviders: string[];
   availableModels: ModelOption[];
 }
@@ -369,4 +371,23 @@ export interface UpdateStatus {
   releaseUrl: string | null;
   /** Unix ms of the last successful check, or null before the first one. */
   checkedAt: number | null;
+}
+
+/** Status of the `kip` command-line shim installed on PATH. */
+export interface CliInstallStatus {
+  installed: boolean;
+  /** Path where Kip's CLI shim is currently installed, or null if absent. */
+  installPath: string | null;
+  /** Preferred destination used by Install. */
+  targetPath: string;
+  /** Whether the install (or target) directory is present on the user's shell PATH. */
+  inPath: boolean;
+  /** True when an existing Kip shim points to a different or missing runtime. */
+  outdated: boolean;
+  /** True when the CLI entrypoint and Bun runtime can be resolved from this app. */
+  available: boolean;
+  /** Short message when unavailable or when an existing non-Kip binary conflicts. */
+  reason?: string;
+  /** One-line shell snippet shown only when the install directory is not in PATH. */
+  pathHint?: string;
 }

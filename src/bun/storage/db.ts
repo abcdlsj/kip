@@ -26,6 +26,7 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
   defaultModelId: "",
   defaultThinkingLevel: "medium",
   sidebarCollapsed: false,
+  cliTuiLayout: "inline",
 };
 
 interface WorkspaceRow {

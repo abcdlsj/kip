@@ -7,6 +7,8 @@ import type {
   AgentStreamEnvelope,
   ApprovalPolicy,
   ChatTurn,
+  CliInstallStatus,
+  CliTuiLayout,
   ContextUsage,
   CreateThreadInput,
   FileSuggestion,
@@ -47,6 +49,7 @@ export interface UpdateSettingsInput {
   defaultModelId?: string;
   defaultThinkingLevel?: ThinkingLevel;
   sidebarCollapsed?: boolean;
+  cliTuiLayout?: CliTuiLayout;
 }
 
 export interface KipRPCSchema {
@@ -223,6 +226,11 @@ export interface KipRPCSchema {
       getRunningThreadCount: { params: void; response: number };
       /** Replaces the staged bundle and quits; the new copy relaunches itself. */
       restartForUpdate: { params: void; response: { started: boolean } };
+
+      /** Command-line (`kip`) PATH installation management. */
+      getCliStatus: { params: void; response: CliInstallStatus };
+      installCli: { params: void; response: CliInstallStatus };
+      uninstallCli: { params: void; response: CliInstallStatus };
     };
     messages: {};
   };

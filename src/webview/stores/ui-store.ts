@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import type {
   ApprovalPolicy,
+  CliTuiLayout,
   ProviderRecord,
   SettingsSnapshot,
   ThemeMode,
@@ -11,7 +12,8 @@ import type {
 import { request } from "../rpc-client";
 import { applyTheme, watchSystemTheme } from "../lib/theme";
 
-type SettingsTab = "providers" | "plugins" | "appearance" | "safety" | "sync";
+type SettingsTab =
+  "providers" | "plugins" | "appearance" | "safety" | "cli" | "sync";
 
 interface UiState {
   settings: SettingsSnapshot | null;
@@ -36,6 +38,7 @@ interface UiState {
   setTheme: (theme: ThemeMode) => Promise<void>;
   setApprovalPolicy: (policy: ApprovalPolicy) => Promise<void>;
   setDefaultThinking: (level: ThinkingLevel) => Promise<void>;
+  setCliTuiLayout: (layout: CliTuiLayout) => Promise<void>;
   toggleSidebar: () => Promise<void>;
   openSettings: (tab?: SettingsTab) => void;
   closeSettings: () => void;
@@ -122,6 +125,11 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   setDefaultThinking: async (defaultThinkingLevel) => {
     const settings = await request("updateSettings", { defaultThinkingLevel });
+    set({ settings });
+  },
+
+  setCliTuiLayout: async (cliTuiLayout) => {
+    const settings = await request("updateSettings", { cliTuiLayout });
     set({ settings });
   },
 

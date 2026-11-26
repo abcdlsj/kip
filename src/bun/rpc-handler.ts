@@ -59,6 +59,7 @@ import {
 import { connectGoogleDrive, disconnectGoogleDrive } from "./sync/gdrive-sync";
 import { getSyncConfig, triggerSync, updateSyncConfig } from "./sync/s3-sync";
 import type { UpdateChecker } from "./system/update-checker";
+import { getCliStatus, installCli, uninstallCli } from "./system/cli-installer";
 
 export interface RpcDeps {
   database: KipDatabase;
@@ -421,6 +422,9 @@ export function createKipRpc(deps: RpcDeps) {
         restartForUpdate: async () => ({
           started: await deps.updateChecker.applyUpdate(),
         }),
+        getCliStatus: () => getCliStatus(),
+        installCli: () => installCli(),
+        uninstallCli: () => uninstallCli(),
       },
       messages: {},
     },
@@ -511,6 +515,7 @@ async function settingsSnapshot(deps: RpcDeps): Promise<SettingsSnapshot> {
     ),
     chatModeProviders: chatModeSupport(deps.database),
     sidebarCollapsed: deps.database.getSetting("sidebarCollapsed", false),
+    cliTuiLayout: deps.database.getSetting("cliTuiLayout", "inline"),
     configuredProviders: providers
       .filter((provider) => provider.hasApiKey)
       .map((p) => p.id),

@@ -7,6 +7,7 @@ import {
   Puzzle,
   RotateCw,
   ShieldCheck,
+  Terminal,
   X,
 } from "lucide-react";
 import type {
@@ -16,6 +17,7 @@ import type {
 } from "../../../shared/types";
 import { modShortcut } from "../../lib/platform";
 import { useUiStore } from "../../stores/ui-store";
+import { CliPanel } from "./CliPanel";
 import { PluginsPanel } from "./PluginsPanel";
 import { ProvidersPanel } from "./ProvidersPanel";
 import { SyncPanel } from "./SyncPanel";
@@ -25,6 +27,7 @@ const TABS = [
   { id: "plugins", label: "Plugins", icon: Puzzle },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "safety", label: "Safety", icon: ShieldCheck },
+  { id: "cli", label: "CLI", icon: Terminal },
   { id: "sync", label: "Sync", icon: Cloud },
 ] as const;
 
@@ -236,6 +239,7 @@ export function SettingsModal() {
                 </p>
               </div>
             )}
+            {tab === "cli" && <CliPanel />}
             {tab === "sync" && <SyncPanel />}
           </div>
         </Dialog.Content>

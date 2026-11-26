@@ -51,6 +51,7 @@ install:
 dev:
 	@test -d node_modules/electrobun || { echo "run 'make install' first"; exit 1; }
 	$(BUN) run build:view
+	$(BUN) run build:cli
 	$(ELECTROBUN) dev
 
 # Skip icons/vite/electrobun entirely: handy when only re-opening the app and

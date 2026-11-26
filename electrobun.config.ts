@@ -27,6 +27,7 @@ const config: ElectrobunConfig = {
       // authority), so `/assets/...` resolves to views://plugins/assets/.
       "dist-plugins/plugins": "views/plugins",
       "dist-plugins/assets": "views/plugins/assets",
+      "dist-cli/kip-cli.js": "cli/kip-cli.js",
     },
     mac: {
       bundleCEF: true,
