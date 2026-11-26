@@ -25,7 +25,11 @@ import {
   disposePlugins,
   startPlugins,
   afterGatewayRequest,
+  beforeGatewayAttempt,
   beforeGatewayRequest,
+  gatewayRequestPolicy,
+  onGatewayRequestFailure,
+  onGatewayRequestSuccess,
 } from "./plugins/registry";
 
 // Must run before the first window exists, so it cannot move below.
@@ -113,10 +117,19 @@ const orchestrator = new KipOrchestrator(
     streamHolder.send({ threadId, event });
   },
   {
-    // A local gateway can stop itself when unused and come back on the next run.
+    // A local gateway can pause when idle and recover automatically if it stalls or crashes.
     providerActivity: {
-      before: (providerId) => beforeGatewayRequest(database, providerId),
+      before: (providerId, reportStatus) =>
+        beforeGatewayRequest(database, providerId, reportStatus),
       after: (providerId) => afterGatewayRequest(database, providerId),
+      requestPolicy: (providerId) => gatewayRequestPolicy(database, providerId),
+      beforeAttempt: (providerId, options) =>
+        beforeGatewayAttempt(database, providerId, options),
+      onFailure: (providerId, failure, reportStatus) =>
+        onGatewayRequestFailure(database, providerId, failure, {
+          reportStatus,
+        }),
+      onSuccess: (providerId) => onGatewayRequestSuccess(database, providerId),
     },
     clientLabel: "the Kip app",
   },

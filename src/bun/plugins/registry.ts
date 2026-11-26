@@ -15,8 +15,12 @@ import type {
 import { findMarketplaceEntry } from "../../shared/marketplace";
 import { gemini2apiPlugin } from "./gemini2api";
 import type {
-  KipPlugin,
   GatewayPlugin,
+  GatewayRecoveryResult,
+  GatewayRequestFailure,
+  GatewayRequestPolicy,
+  GatewayStatusNotice,
+  KipPlugin,
   PluginRuntimeContext,
   TitleGenerationInput,
   TitlePlugin,
@@ -313,16 +317,21 @@ export async function generateTitleWithPlugins(
 export function pluginRuntime(
   plugin: GatewayPlugin,
   database: KipDatabase,
+  reportStatus?: (notice: GatewayStatusNotice) => void,
 ): PluginRuntimeContext {
   return {
     pluginId: plugin.id,
     dataDir: pluginDataDir(plugin.id),
     values: () => readPluginValues(database, plugin),
+    reportStatus,
   };
 }
 
-function gatewayFor(providerId: string): GatewayPlugin | undefined {
-  return defaultPluginRegistry
+function gatewayFor(
+  providerId: string,
+  registry: PluginRegistry = defaultPluginRegistry,
+): GatewayPlugin | undefined {
+  return registry
     .list()
     .find(
       (plugin): plugin is GatewayPlugin =>
@@ -338,23 +347,107 @@ function gatewayFor(providerId: string): GatewayPlugin | undefined {
 export async function beforeGatewayRequest(
   database: KipDatabase,
   providerId: string,
+  reportStatus?: (notice: GatewayStatusNotice) => void,
+  registry: PluginRegistry = defaultPluginRegistry,
 ): Promise<void> {
-  const plugin = gatewayFor(providerId);
+  const plugin = gatewayFor(providerId, registry);
   if (!plugin?.beforeRequest || !isPluginAccepted(database, plugin)) return;
-  await plugin.beforeRequest(pluginRuntime(plugin, database));
+  await plugin.beforeRequest(pluginRuntime(plugin, database, reportStatus));
 }
 
 /** The run ended, so the gateway may count itself idle from now on. */
 export function afterGatewayRequest(
   database: KipDatabase,
   providerId: string,
+  registry: PluginRegistry = defaultPluginRegistry,
 ): void {
-  const plugin = gatewayFor(providerId);
+  const plugin = gatewayFor(providerId, registry);
   if (!plugin?.afterRequest) return;
   try {
     plugin.afterRequest(pluginRuntime(plugin, database));
   } catch (error) {
     console.error(`Plugin ${plugin.id}: afterRequest failed`, error);
+  }
+}
+
+/**
+ * Returns local-gateway timeout guardrails for this provider, or null for
+ * remote providers and plugins that do not manage a local process.
+ */
+export function gatewayRequestPolicy(
+  database: KipDatabase,
+  providerId: string,
+  registry: PluginRegistry = defaultPluginRegistry,
+): GatewayRequestPolicy | null {
+  const plugin = gatewayFor(providerId, registry);
+  if (!plugin?.requestPolicy || !isPluginAccepted(database, plugin))
+    return null;
+  try {
+    return plugin.requestPolicy(pluginRuntime(plugin, database)) ?? null;
+  } catch (error) {
+    console.error(`Plugin ${plugin.id}: requestPolicy failed`, error);
+    return null;
+  }
+}
+
+/** Awaits any in-flight gateway recovery before sending an attempt or retry. */
+export async function beforeGatewayAttempt(
+  database: KipDatabase,
+  providerId: string,
+  options: {
+    signal?: AbortSignal;
+    reportStatus?: (notice: GatewayStatusNotice) => void;
+    registry?: PluginRegistry;
+  } = {},
+): Promise<void> {
+  const plugin = gatewayFor(providerId, options.registry);
+  if (!plugin?.beforeAttempt || !isPluginAccepted(database, plugin)) return;
+  await plugin.beforeAttempt(
+    pluginRuntime(plugin, database, options.reportStatus),
+    options.signal,
+  );
+}
+
+/** Notifies a local gateway plugin that a request failed so it can recover. */
+export async function onGatewayRequestFailure(
+  database: KipDatabase,
+  providerId: string,
+  failure: GatewayRequestFailure,
+  options: {
+    reportStatus?: (notice: GatewayStatusNotice) => void;
+    registry?: PluginRegistry;
+  } = {},
+): Promise<GatewayRecoveryResult | undefined> {
+  const plugin = gatewayFor(providerId, options.registry);
+  if (!plugin?.onRequestFailure || !isPluginAccepted(database, plugin))
+    return undefined;
+  try {
+    const result = await plugin.onRequestFailure(
+      pluginRuntime(plugin, database, options.reportStatus),
+      failure,
+    );
+    return result ?? undefined;
+  } catch (error) {
+    console.error(`Plugin ${plugin.id}: onRequestFailure failed`, error);
+    return {
+      recovered: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/** Resets failure pressure after a healthy response from a local gateway. */
+export function onGatewayRequestSuccess(
+  database: KipDatabase,
+  providerId: string,
+  registry: PluginRegistry = defaultPluginRegistry,
+): void {
+  const plugin = gatewayFor(providerId, registry);
+  if (!plugin?.onRequestSuccess || !isPluginAccepted(database, plugin)) return;
+  try {
+    plugin.onRequestSuccess(pluginRuntime(plugin, database));
+  } catch (error) {
+    console.error(`Plugin ${plugin.id}: onRequestSuccess failed`, error);
   }
 }
 

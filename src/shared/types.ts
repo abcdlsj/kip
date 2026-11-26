@@ -316,6 +316,15 @@ export type AgentStreamEvent =
     }
   /** The retry attempt finished; `success` is false when the run finally failed. */
   | { kind: "retry_end"; attempt: number; success: boolean }
+  /** Lifecycle update from a locally managed gateway plugin during a run. */
+  | {
+      kind: "gateway_status";
+      providerId: string;
+      phase: "restarting" | "recovered" | "degraded" | "unhealthy";
+      message: string;
+      attempt?: number;
+      maxAttempts?: number;
+    }
   | { kind: "turn_complete" }
   /** A message sent during a run was delivered to the agent. */
   | { kind: "user_turn"; turn: ChatTurn }

@@ -221,7 +221,18 @@ export function ThreadCanvas({
                   }
                 />
               ))}
-              {view?.retry ? (
+              {view?.gatewayStatus ? (
+                <div className="mt-3 flex items-start gap-2 text-[12.5px] text-[var(--text-muted)]">
+                  <RotateCcw
+                    size={12}
+                    strokeWidth={1.5}
+                    className="mt-[3px] shrink-0"
+                  />
+                  <span className="thinking-shimmer leading-[1.5]">
+                    {view.gatewayStatus.message}
+                  </span>
+                </div>
+              ) : view?.retry ? (
                 <div className="mt-3 flex items-start gap-2 text-[12.5px] text-[var(--text-muted)]">
                   <RotateCcw
                     size={12}

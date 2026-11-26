@@ -29,6 +29,7 @@ import type { ModelRegistry } from "./agent/model-registry";
 import { displayModelName, fetchRemoteModels } from "./agent/model-registry";
 import {
   acceptPlugin,
+  afterGatewayRequest,
   chatModeSupport,
   findPlugin,
   getOrCreatePluginDeviceId,
@@ -285,8 +286,12 @@ export function createKipRpc(deps: RpcDeps) {
         },
         testProvider: async ({ provider }) => {
           // Testing a paused gateway is a use of it: bring it up first.
-          await beforeGatewayRequest(deps.database, provider);
-          return deps.registry.testProvider(provider);
+          try {
+            await beforeGatewayRequest(deps.database, provider);
+            return await deps.registry.testProvider(provider);
+          } finally {
+            afterGatewayRequest(deps.database, provider);
+          }
         },
         fetchProviderModels: ({ baseUrl, apiKey }) =>
           fetchRemoteModels(baseUrl, apiKey ?? undefined),

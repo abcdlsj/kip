@@ -129,6 +129,15 @@ export async function runPrintMode(
           ),
         );
         break;
+      case "gateway_status":
+        if (event.phase === "recovered") {
+          writeStatus(`${ok("✓")} ${dim(event.message)}`);
+        } else if (event.phase === "restarting") {
+          writeStatus(dim(`↻ ${event.message}`));
+        } else {
+          writeStatus(`${warn("!")} ${dim(event.message)}`);
+        }
+        break;
       case "tool_end": {
         const formatted = formatToolDuration(event.durationMs);
         const ms = formatted ? dim(` (${formatted})`) : "";

@@ -10,6 +10,7 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  RotateCcw,
   Square,
   Trash2,
   UserRoundCheck,
@@ -19,11 +20,18 @@ import type { GeminiPageState } from "../../../shared/plugins/gemini2api";
 import { connectPluginPage } from "../../lib/plugin-page-client";
 
 function StatusDot({ state }: { state: GeminiPageState }) {
+  const watchdogState = state.external ? undefined : state.watchdog?.state;
   const { label, color } = !state.installed
     ? { label: "Not installed", color: "var(--text-muted)" }
-    : state.running
-      ? { label: "Running", color: "var(--status-ok)" }
-      : { label: "Stopped", color: "var(--status-warn)" };
+    : watchdogState === "restarting"
+      ? { label: "Restarting…", color: "var(--status-warn)" }
+      : watchdogState === "degraded"
+        ? { label: "Degraded", color: "var(--status-err)" }
+        : watchdogState === "unhealthy"
+          ? { label: "Unhealthy", color: "var(--status-err)" }
+          : state.running
+            ? { label: "Running", color: "var(--status-ok)" }
+            : { label: "Stopped", color: "var(--status-warn)" };
   return (
     <span className="inline-flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)]">
       <span
@@ -141,6 +149,26 @@ function App() {
           <Square size={11} strokeWidth={1.5} />
           Stop
         </button>
+        {!state.external && installed && (
+          <button
+            type="button"
+            className="btn-secondary h-8 rounded-[8px] px-3 text-[12px]"
+            disabled={
+              busy ||
+              (!state.running &&
+                state.watchdog?.state !== "degraded" &&
+                state.watchdog?.state !== "unhealthy")
+            }
+            onClick={() => run("restart")}
+          >
+            {busy && state.busy === "restart" ? (
+              <Loader2 size={12} strokeWidth={1.5} className="animate-spin" />
+            ) : (
+              <RotateCcw size={11} strokeWidth={1.5} />
+            )}
+            Restart
+          </button>
+        )}
         <button
           type="button"
           className="btn-secondary h-8 rounded-[8px] px-3 text-[12px]"
@@ -227,6 +255,23 @@ function App() {
                 : "—"
             }
           />
+          {!state.external && state.watchdog && (
+            <Row
+              label="Watchdog"
+              value={
+                state.watchdog.state === "degraded"
+                  ? `degraded · ${state.watchdog.restartCount}/${state.watchdog.maxRestarts} restarts`
+                  : state.watchdog.state === "restarting"
+                    ? `restarting (${state.watchdog.restartCount}/${state.watchdog.maxRestarts})`
+                    : state.watchdog.restartCount > 0
+                      ? `${state.watchdog.state} · ${state.watchdog.restartCount}/${state.watchdog.maxRestarts} restarts`
+                      : state.watchdog.state
+              }
+            />
+          )}
+          {!state.external && state.watchdog?.lastFailure && (
+            <Row label="Last issue" value={state.watchdog.lastFailure} />
+          )}
         </div>
       </section>
 

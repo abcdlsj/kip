@@ -11,8 +11,12 @@ import { KipOrchestrator } from "../bun/agent/pi-orchestrator";
 import { hasSessionMessages } from "../bun/agent/session-bridge";
 import {
   afterGatewayRequest,
+  beforeGatewayAttempt,
   beforeGatewayRequest,
   disposePlugins,
+  gatewayRequestPolicy,
+  onGatewayRequestFailure,
+  onGatewayRequestSuccess,
   resolveNewThreadMode,
 } from "../bun/plugins/registry";
 import { getSessionDir, KipDatabase, newId } from "../bun/storage/db";
@@ -97,8 +101,19 @@ export class CliRuntime {
       (threadId, event) => listener(threadId, event),
       {
         providerActivity: {
-          before: (providerId) => beforeGatewayRequest(database, providerId),
+          before: (providerId, reportStatus) =>
+            beforeGatewayRequest(database, providerId, reportStatus),
           after: (providerId) => afterGatewayRequest(database, providerId),
+          requestPolicy: (providerId) =>
+            gatewayRequestPolicy(database, providerId),
+          beforeAttempt: (providerId, options) =>
+            beforeGatewayAttempt(database, providerId, options),
+          onFailure: (providerId, failure, reportStatus) =>
+            onGatewayRequestFailure(database, providerId, failure, {
+              reportStatus,
+            }),
+          onSuccess: (providerId) =>
+            onGatewayRequestSuccess(database, providerId),
         },
         clientLabel: "the kip CLI",
       },

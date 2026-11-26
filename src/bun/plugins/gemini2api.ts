@@ -8,11 +8,13 @@ import type { ProviderModel } from "../../shared/types";
 import { geminiModelName } from "../../shared/plugins/gemini2api";
 import type {
   GatewayPlugin,
+  GatewayRequestPolicy,
   PluginProbeOutcome,
   PluginRuntimeContext,
 } from "./types";
 import { createGeminiPage } from "./gemini2api/page";
 import { IdleGuard } from "./gemini2api/idle";
+import { GatewayWatchdog } from "./gemini2api/watchdog";
 import {
   apiKey,
   ensureRunning,
@@ -20,6 +22,7 @@ import {
   isStarting,
   log as logLine,
   resolveBinary,
+  setExitListener,
   status as serviceStatus,
   stop,
   type HealthBody,
@@ -29,6 +32,9 @@ import { getApiKey } from "../storage/keychain";
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = "8790";
 const TIMEOUT_MS = 8_000;
+/** Local sidecar stall thresholds (much tighter than Pi's 5-minute remote default). */
+const DEFAULT_FIRST_BYTE_TIMEOUT_MS = 60_000;
+const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 60_000;
 /** The web app reports no output cap, so this mirrors the default every other provider uses. */
 const DEFAULT_MAX_OUTPUT = 65_536;
 const DEFAULT_CONTEXT_WINDOW = 200_000;
@@ -109,6 +115,60 @@ function idleMinutes(values: Record<string, string>): number {
 let idleContext: PluginRuntimeContext | null = null;
 /** Runs currently pointed at this provider; a pause waits for the last one to end. */
 let inflight = 0;
+/** True when `/health` answered on loopback from a server Kip did not start. */
+let usingExternalServer = false;
+
+function isLocallyManaged(
+  dataDir: string,
+  values: Record<string, string>,
+): boolean {
+  if (managedPort(values) === null) return false;
+  if (serviceStatus(dataDir, values).running) return true;
+  if (usingExternalServer) return false;
+  return resolveBinary(dataDir, values) !== null;
+}
+
+async function checkManagedHealth(): Promise<boolean> {
+  if (!idleContext) return false;
+  const values = idleContext.values();
+  const port = managedPort(values);
+  if (port === null) return false;
+  const key = (await getApiKey(PROVIDER_ID)) ?? apiKey(idleContext.dataDir);
+  return (await readHealth(port, key)) !== null;
+}
+
+const watchdog = new GatewayWatchdog({
+  label: "gemini2api",
+  busy: () => inflight > 0,
+  isProcessRunning: () =>
+    idleContext !== null &&
+    serviceStatus(idleContext.dataDir, idleContext.values()).running,
+  checkHealth: checkManagedHealth,
+  restartProcess: async () => {
+    if (!idleContext) throw new Error("gemini2api context is not initialized.");
+    const values = idleContext.values();
+    await stop({
+      dataDir: idleContext.dataDir,
+      includeAdopted: true,
+      values,
+    });
+    await ensureRunning(idleContext.dataDir, values);
+  },
+  log: (line) => logLine(line),
+});
+
+setExitListener((code) => {
+  watchdog.handleUnexpectedExit(code);
+});
+
+/** Test helper: resets module-level watchdog state between isolated test cases. */
+export function resetGeminiWatchdog(): void {
+  usingExternalServer = false;
+  inflight = 0;
+  idle.cancel();
+  watchdog.resetBudget();
+  watchdog.markStopped();
+}
 
 const idle = new IdleGuard({
   delayMs: () => {
@@ -120,7 +180,16 @@ const idle = new IdleGuard({
   running: () =>
     idleContext !== null &&
     serviceStatus(idleContext.dataDir, idleContext.values()).running,
-  pause: () => stop({ dataDir: idleContext?.dataDir, includeAdopted: true }),
+  pause: async () => {
+    // Mark intentionally stopped first so the watchdog does not treat an idle
+    // pause as an unexpected crash.
+    watchdog.markStopped();
+    await stop({
+      dataDir: idleContext?.dataDir,
+      includeAdopted: true,
+      values: idleContext?.values(),
+    });
+  },
   log: (line) => logLine(line),
 });
 
@@ -192,7 +261,22 @@ export const gemini2apiPlugin: GatewayPlugin = {
     width: 780,
     height: 660,
   },
-  page: (context) => createGeminiPage(context, () => idle.touch()),
+  page: (context) =>
+    createGeminiPage(context, {
+      onAwake: () => {
+        idleContext = context;
+        usingExternalServer = false;
+        watchdog.resetBudget();
+        watchdog.markHealthy();
+        idle.touch();
+      },
+      onStop: () => {
+        watchdog.markStopped();
+        idle.cancel();
+      },
+      watchdogState: () => watchdog.getSnapshot(),
+      subscribeWatchdog: (listener) => watchdog.subscribe(listener),
+    }),
   // Kip restarts the gateway at boot, so a provider saved earlier keeps working.
   start: async (context) => {
     idleContext = context;
@@ -201,18 +285,35 @@ export const gemini2apiPlugin: GatewayPlugin = {
     const port = managedPort(current);
     if (port === null) return;
     const key = (await getApiKey(PROVIDER_ID)) ?? apiKey(context.dataDir);
-    if (!(await readHealth(port, key)))
-      await ensureRunning(context.dataDir, current);
+    if (await readHealth(port, key)) {
+      if (serviceStatus(context.dataDir, current).running) {
+        usingExternalServer = false;
+        watchdog.markHealthy();
+      } else {
+        usingExternalServer = true;
+      }
+    } else {
+      usingExternalServer = false;
+      watchdog.markStarting();
+      try {
+        await ensureRunning(context.dataDir, current);
+        watchdog.markHealthy();
+      } catch (error) {
+        watchdog.markStopped();
+        throw error;
+      }
+    }
     idle.touch();
   },
   dispose: () => {
     idle.cancel();
+    watchdog.dispose();
     return stop();
   },
   /**
    * Ensures the gateway is actually ready before sending a request:
-   * - Awaits any boot-time start that is still in flight (prevents connection reset)
-   * - Verifies `/health` so a crashed or idle-paused sidecar is brought back automatically
+   * - Awaits any boot-time start or watchdog recovery still in flight
+   * - Verifies `/health` so a crashed, hung, or idle-paused sidecar is brought back
    * - Fails early with a clear hint if all Gemini accounts are signed out
    */
   beforeRequest: async (context) => {
@@ -223,18 +324,63 @@ export const gemini2apiPlugin: GatewayPlugin = {
       const port = managedPort(values);
       if (port === null) return;
       const key = (await getApiKey(PROVIDER_ID)) ?? apiKey(context.dataDir);
+      if (watchdog.isRecovering()) {
+        const result = await watchdog.waitForReady();
+        if (result && !result.recovered && result.abortRetry) {
+          throw new Error(
+            result.message ??
+              "gemini2api reached its automatic restart limit. Open Settings → Plugins → gemini2api to restart it.",
+          );
+        }
+      }
       if (isStarting()) {
         await ensureRunning(context.dataDir, values);
       }
       let currentHealth = await readHealth(port, key);
-      if (!currentHealth) {
-        if (!resolveBinary(context.dataDir, values)) return;
-        // A stale handle or hung adopted process on this port must be cleaned up first.
+      if (currentHealth) {
         if (serviceStatus(context.dataDir, values).running) {
-          await stop({ dataDir: context.dataDir, includeAdopted: true });
+          usingExternalServer = false;
+          watchdog.markHealthy();
+        } else {
+          usingExternalServer = true;
         }
-        const started = await ensureRunning(context.dataDir, values);
-        currentHealth = await readHealth(started.port, started.key);
+      } else {
+        if (!resolveBinary(context.dataDir, values)) return;
+        usingExternalServer = false;
+        // A hung/stale process on this port must go through the watchdog so
+        // restart limits and status notices apply consistently.
+        if (
+          serviceStatus(context.dataDir, values).running ||
+          watchdog.isDesiredRunning()
+        ) {
+          const result = await watchdog.recover(
+            "health check unresponsive before request",
+            context.reportStatus,
+          );
+          if (!result.recovered) {
+            throw new Error(
+              result.message ??
+                "gemini2api did not respond and could not be restarted.",
+            );
+          }
+          currentHealth = await readHealth(port, key);
+        } else {
+          const snapshot = watchdog.getSnapshot();
+          if (snapshot.state === "degraded") {
+            throw new Error(
+              `gemini2api failed after ${snapshot.maxRestarts} automatic restarts. Open Settings → Plugins → gemini2api to inspect logs and restart.`,
+            );
+          }
+          watchdog.markStarting();
+          try {
+            const started = await ensureRunning(context.dataDir, values);
+            watchdog.markHealthy();
+            currentHealth = await readHealth(started.port, started.key);
+          } catch (error) {
+            watchdog.markStopped();
+            throw error;
+          }
+        }
       }
       const accounts = Object.values(currentHealth?.accounts ?? {});
       if (
@@ -247,6 +393,63 @@ export const gemini2apiPlugin: GatewayPlugin = {
       }
     } finally {
       idle.touch();
+    }
+  },
+  requestPolicy: (context): GatewayRequestPolicy | null => {
+    idleContext = context;
+    if (!isLocallyManaged(context.dataDir, context.values())) return null;
+    return {
+      firstByteTimeoutMs: DEFAULT_FIRST_BYTE_TIMEOUT_MS,
+      streamIdleTimeoutMs: DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+    };
+  },
+  beforeAttempt: async (context, signal) => {
+    idleContext = context;
+    const values = context.values();
+    if (!isLocallyManaged(context.dataDir, values)) return;
+    if (watchdog.isRecovering()) {
+      const result = await watchdog.waitForReady(signal);
+      if (result && !result.recovered && result.abortRetry) {
+        throw new Error(
+          result.message ??
+            "gemini2api reached its automatic restart limit. Open Settings → Plugins → gemini2api to restart it.",
+        );
+      }
+      return;
+    }
+    const snapshot = watchdog.getSnapshot();
+    if (snapshot.state === "degraded") {
+      throw new Error(
+        `gemini2api failed after ${snapshot.maxRestarts} automatic restarts. Open Settings → Plugins → gemini2api to inspect logs and restart.`,
+      );
+    }
+    if (
+      !serviceStatus(context.dataDir, values).running &&
+      watchdog.isDesiredRunning()
+    ) {
+      const result = await watchdog.recover(
+        "managed process exited before retry",
+        context.reportStatus,
+      );
+      if (!result.recovered && result.abortRetry) {
+        throw new Error(
+          result.message ??
+            "gemini2api reached its automatic restart limit. Open Settings → Plugins → gemini2api to restart it.",
+        );
+      }
+    }
+  },
+  onRequestFailure: async (context, failure) => {
+    idleContext = context;
+    if (!isLocallyManaged(context.dataDir, context.values())) {
+      return { recovered: false };
+    }
+    return watchdog.handleRequestFailure(failure, context.reportStatus);
+  },
+  onRequestSuccess: (context) => {
+    idleContext = context;
+    if (isLocallyManaged(context.dataDir, context.values())) {
+      watchdog.markHealthy();
     }
   },
   afterRequest: () => {

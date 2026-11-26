@@ -58,6 +58,7 @@ export interface HealthBody {
   key_required?: boolean;
   accounts?: Record<string, { signed_in?: boolean; status?: string }>;
   api?: { context_window?: number; supports_reasoning?: boolean };
+  chats?: number;
 }
 
 interface Running {
@@ -80,7 +81,15 @@ let starting: Promise<{ baseUrl: string; port: number; key: string }> | null =
   null;
 let lastError: string | null = null;
 let logListener: (() => void) | null = null;
+let exitListener: ((code: number | null) => void) | null = null;
 const logs: string[] = [];
+
+/** Notified only when a running Kip-owned sidecar exits unexpectedly (not via `stop()`). */
+export function setExitListener(
+  listener: ((code: number | null) => void) | null,
+): void {
+  exitListener = listener;
+}
 
 export function isStarting(): boolean {
   return starting !== null;
@@ -651,6 +660,11 @@ async function startProcess(
     if (running?.process === child) {
       running = null;
       removePidFile(dataDir);
+      try {
+        exitListener?.(code);
+      } catch {
+        // An exit listener failure must never break child cleanup.
+      }
     }
   });
   const stdoutDone = pump(child.stdout);
@@ -720,6 +734,8 @@ export interface StopOptions {
   dataDir?: string;
   /** Also stop a Kip-owned sidecar adopted from an earlier app session. */
   includeAdopted?: boolean;
+  /** Plugin settings used to resolve the configured port when adopting orphans. */
+  values?: Record<string, string>;
 }
 
 export async function stop(options: StopOptions = {}): Promise<void> {
@@ -733,7 +749,7 @@ export async function stop(options: StopOptions = {}): Promise<void> {
     return;
   }
   if (options.includeAdopted && options.dataDir) {
-    const adopted = adoptedSidecar(options.dataDir);
+    const adopted = adoptedSidecar(options.dataDir, options.values);
     if (adopted) {
       log(`stopping adopted gemini2api (pid ${adopted.pid})`);
       await killAdoptedPid(adopted.pid);

@@ -11,6 +11,7 @@ import {
   type GeminiHealth,
   type GeminiModel,
   type GeminiPageState,
+  type GeminiWatchdogState,
 } from "../../../shared/plugins/gemini2api";
 import { getApiKey } from "../../storage/keychain";
 import type { PluginPageContext, PluginPageController } from "../types";
@@ -51,25 +52,42 @@ function hintFor(message: string): string | null {
   return null;
 }
 
+export interface GeminiPageHooks {
+  /** Called after this window brings the managed gateway up, so idle/watchdog activate. */
+  onAwake?: () => void;
+  /** Called before an intentional stop/uninstall so the watchdog does not auto-restart. */
+  onStop?: () => void;
+  /** Reads the live watchdog state for display in the window. */
+  watchdogState?: () => GeminiWatchdogState;
+  /** Subscribes to watchdog transitions so the open page repaints live. */
+  subscribeWatchdog?: (listener: () => void) => () => void;
+}
+
 export function createGeminiPage(
   context: PluginPageContext,
-  /** Called after this window brings the managed gateway up, so the idle countdown starts. */
-  onAwake?: () => void,
+  /** Callback or hook bundle wired by the plugin. */
+  hooksOrOnAwake?: (() => void) | GeminiPageHooks,
 ): PluginPageController {
+  const hooks: GeminiPageHooks =
+    typeof hooksOrOnAwake === "function"
+      ? { onAwake: hooksOrOnAwake }
+      : (hooksOrOnAwake ?? {});
   const { dataDir } = context;
   const values = () => context.values();
   let busy: string | null = null;
   let error: GeminiPageState["error"] = null;
   let emitQueued = false;
-  // New log lines arrive while the gateway runs; repaint without polling.
-  service.setLogListener(() => {
+  const scheduleEmit = () => {
     if (emitQueued) return;
     emitQueued = true;
     setTimeout(() => {
       emitQueued = false;
       context.emit();
     }, 300);
-  });
+  };
+  // New log lines and watchdog transitions arrive while the gateway runs; repaint without polling.
+  service.setLogListener(scheduleEmit);
+  const unsubscribeWatchdog = hooks.subscribeWatchdog?.(scheduleEmit) ?? null;
 
   function configured(): Endpoint | null {
     const current = values();
@@ -88,6 +106,7 @@ export function createGeminiPage(
     return {
       version: body.version ?? null,
       keyRequired: body.key_required === true,
+      chats: typeof body.chats === "number" ? body.chats : null,
       accounts: Object.entries(body.accounts ?? {}).map(([id, state]) => ({
         id,
         status: state.status ?? (state.signed_in ? "signed in" : "signed out"),
@@ -182,6 +201,7 @@ export function createGeminiPage(
       logs: service.readLogs(),
       busy,
       error: surfacedError,
+      watchdog: hooks.watchdogState?.(),
     };
   }
 
@@ -202,7 +222,8 @@ export function createGeminiPage(
           break;
         }
         case "uninstall": {
-          await service.stop({ dataDir, includeAdopted: true });
+          hooks.onStop?.();
+          await service.stop({ dataDir, includeAdopted: true, values: values() });
           service.uninstall(dataDir);
           break;
         }
@@ -220,7 +241,7 @@ export function createGeminiPage(
             }
           }
           await service.ensureRunning(dataDir, values());
-          onAwake?.();
+          hooks.onAwake?.();
           break;
         }
         case "stop": {
@@ -234,14 +255,32 @@ export function createGeminiPage(
               break;
             }
           }
-          await service.stop({ dataDir, includeAdopted: true });
+          hooks.onStop?.();
+          await service.stop({ dataDir, includeAdopted: true, values: values() });
+          break;
+        }
+        case "restart": {
+          if (!service.status(dataDir, values()).running) {
+            const running = await external();
+            if (running) {
+              error = {
+                message: `The server on 127.0.0.1:${running.port} was not started by Kip.`,
+                hint: "Restart it where you started it (for example the terminal running gemini2api).",
+              };
+              break;
+            }
+          }
+          hooks.onStop?.();
+          await service.restart(dataDir, values());
+          hooks.onAwake?.();
           break;
         }
         case "import-cookies": {
           service.importFirefoxCookies(dataDir);
           if (service.status(dataDir, values()).running) {
+            hooks.onStop?.();
             await service.restart(dataDir, values());
-            onAwake?.();
+            hooks.onAwake?.();
           }
           break;
         }
@@ -265,6 +304,7 @@ export function createGeminiPage(
       // The gateway belongs to Kip, not to this window: closing it only stops
       // watching. It ends on Stop, or with the app.
       service.setLogListener(null);
+      unsubscribeWatchdog?.();
     },
   };
 }

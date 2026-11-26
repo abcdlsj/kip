@@ -1244,6 +1244,19 @@ async function runTuiSession(
         tui.requestRender();
         return;
       }
+      case "gateway_status": {
+        if (event.phase === "restarting") {
+          workingLine.setRetry(event.message);
+        } else if (event.phase === "recovered") {
+          workingLine.setRetry(null);
+          addNotice(`↻ ${event.message}`, "ok");
+        } else {
+          workingLine.setRetry(null);
+          addNotice(`! ${event.message}`, "err");
+        }
+        tui.requestRender();
+        return;
+      }
       case "turn_complete": {
         running = false;
         aborting = false;

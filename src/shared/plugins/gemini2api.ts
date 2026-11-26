@@ -36,6 +36,26 @@ export interface GeminiHealth {
   version: string | null;
   accounts: Array<{ id: string; status: string; signedIn: boolean }>;
   keyRequired: boolean;
+  chats?: number | null;
+}
+
+export type GeminiWatchdogHealthState =
+  | "stopped"
+  | "starting"
+  | "healthy"
+  | "unhealthy"
+  | "restarting"
+  | "degraded";
+
+export interface GeminiWatchdogState {
+  state: GeminiWatchdogHealthState;
+  restartCount: number;
+  maxRestarts: number;
+  windowMs: number;
+  lastRestartAt: number | null;
+  lastFailure: string | null;
+  nextRetryAt: number | null;
+  consecutiveFailures: number;
 }
 
 /** What went wrong, plus the next step the user can take. */
@@ -62,9 +82,16 @@ export interface GeminiPageState {
   logs: string[];
   busy: string | null;
   error: GeminiPageError | null;
+  watchdog?: GeminiWatchdogState;
 }
 
 export type GeminiAction =
-  "install" | "uninstall" | "start" | "stop" | "import-cookies" | "refresh";
+  | "install"
+  | "uninstall"
+  | "start"
+  | "stop"
+  | "restart"
+  | "import-cookies"
+  | "refresh";
 
 export const GEMINI_HOMEPAGE = "https://github.com/abcdlsj/gemini2api";

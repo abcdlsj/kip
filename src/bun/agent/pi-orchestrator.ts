@@ -50,12 +50,40 @@ import {
 } from "./session-bridge";
 import { summarizeToolCall } from "./tool-policy";
 import { generateTitleWithPlugins } from "../plugins/registry";
+import type {
+  GatewayFailureKind,
+  GatewayRecoveryResult,
+  GatewayRequestFailure,
+  GatewayRequestPolicy,
+  GatewayStatusNotice,
+} from "../plugins/types";
 
 export interface ProviderActivityHooks {
   /** Called before a run sends its first request to this provider. */
-  before?(providerId: string): Promise<void> | void;
+  before?(
+    providerId: string,
+    reportStatus?: (notice: GatewayStatusNotice) => void,
+  ): Promise<void> | void;
   /** Called when that run ends, whether it worked or not. */
   after?(providerId: string): void;
+  /** Returns local-gateway timeout guardrails, or null for remote providers. */
+  requestPolicy?(providerId: string): GatewayRequestPolicy | null;
+  /** Called before each HTTP attempt (including retries) to await recovery. */
+  beforeAttempt?(
+    providerId: string,
+    options?: {
+      signal?: AbortSignal;
+      reportStatus?: (notice: GatewayStatusNotice) => void;
+    },
+  ): Promise<void> | void;
+  /** Called when a request fails so a local gateway plugin can restart its sidecar. */
+  onFailure?(
+    providerId: string,
+    failure: GatewayRequestFailure,
+    reportStatus?: (notice: GatewayStatusNotice) => void,
+  ): Promise<GatewayRecoveryResult | void> | GatewayRecoveryResult | void;
+  /** Called when a request succeeds so a local gateway plugin can reset failure state. */
+  onSuccess?(providerId: string): void;
 }
 
 export interface OrchestratorOptions {
@@ -99,6 +127,10 @@ interface ActiveSession {
   retryAttempt: number;
   /** Last failed attempt's message, so a cancelled retry still reports the cause. */
   retryFailure: string | null;
+  /** In-flight gateway restart triggered by a failed attempt; awaited before retry. */
+  pendingRecovery: Promise<GatewayRecoveryResult | void> | null;
+  /** Set when the gateway watchdog cancels Pi retries after exhausting its restart budget. */
+  abortedRetryReason: string | null;
 }
 
 /** Prefix for notes Kip adds to a prompt; the transcript view hides these lines. */
@@ -266,6 +298,8 @@ export class KipOrchestrator {
     active.firstPrompt = null;
     active.retryAttempt = 0;
     active.retryFailure = null;
+    active.pendingRecovery = null;
+    active.abortedRetryReason = null;
     const thread = this.requireThread(input.threadId);
     const workspace = this.database.getWorkspace(thread.workspaceId);
     if (!workspace) {
@@ -281,8 +315,10 @@ export class KipOrchestrator {
       : snapshotTree(workspace.rootPath).catch(() => null);
 
     try {
-      // A gateway paused for idleness comes back here, before the first request.
-      await this.providerActivity.before?.(thread.modelProvider);
+      // A gateway paused for idleness or hung comes back here, before the first request.
+      await this.providerActivity.before?.(thread.modelProvider, (notice) =>
+        this.emitGatewayStatus(input.threadId, thread.modelProvider, notice),
+      );
       await active.session.prompt(
         promptText,
         images.length ? { images } : undefined,
@@ -787,7 +823,11 @@ export class KipOrchestrator {
       runBefore: null,
       retryAttempt: 0,
       retryFailure: null,
+      pendingRecovery: null,
+      abortedRetryReason: null,
     };
+
+    this.installGatewayStreamGuard(active, settingsManager);
 
     active.unsubscribe = session.subscribe((event) =>
       this.onSessionEvent(active, event),
@@ -986,6 +1026,26 @@ export class KipOrchestrator {
         // auto_retry_end, which carries the final error.
         if (event.willRetry || active.retryAttempt > 0) return;
         if (!failure) return;
+        const providerId = this.activeProviderId(active);
+        if (
+          providerId &&
+          this.providerActivity.onFailure &&
+          !active.pendingRecovery
+        ) {
+          const reportStatus = (notice: GatewayStatusNotice) =>
+            this.emitGatewayStatus(active.threadId, providerId, notice);
+          void Promise.resolve(
+            this.providerActivity.onFailure(
+              providerId,
+              {
+                kind: inferFailureKind(failure),
+                message: failure,
+                willRetry: false,
+              },
+              reportStatus,
+            ),
+          ).catch(() => undefined);
+        }
         this.sealThinking(active);
         this.emit(active.threadId, { kind: "turn_error", message: failure });
         return;
@@ -1001,23 +1061,64 @@ export class KipOrchestrator {
           delayMs: event.delayMs,
           message: event.errorMessage,
         });
+        const providerId = this.activeProviderId(active);
+        if (providerId && this.providerActivity.onFailure) {
+          const reportStatus = (notice: GatewayStatusNotice) =>
+            this.emitGatewayStatus(active.threadId, providerId, notice);
+          const recovery = Promise.resolve(
+            this.providerActivity.onFailure(
+              providerId,
+              {
+                kind: inferFailureKind(event.errorMessage),
+                message: event.errorMessage,
+                willRetry: true,
+                attempt: event.attempt,
+                maxAttempts: event.maxAttempts,
+              },
+              reportStatus,
+            ),
+          )
+            .then((result) => {
+              if (result?.abortRetry && active.session.isRetrying) {
+                active.abortedRetryReason =
+                  result.message ||
+                  event.errorMessage ||
+                  "The local gateway could not be restarted";
+                active.session.abortRetry();
+              }
+              return result;
+            })
+            .catch(() => undefined);
+          active.pendingRecovery = recovery;
+          void recovery.finally(() => {
+            if (active.pendingRecovery === recovery) {
+              active.pendingRecovery = null;
+            }
+          });
+        }
         return;
       }
       case "auto_retry_end": {
         active.retryAttempt = 0;
+        const abortedReason = active.abortedRetryReason;
+        active.abortedRetryReason = null;
         this.emit(active.threadId, {
           kind: "retry_end",
           attempt: event.attempt,
           success: event.success,
         });
-        // A stop request cancels the retry; the user does not need an error
-        // banner for a run they just ended. The transcript keeps the failure.
-        if (event.success || event.finalError === "Retry cancelled") return;
+        // A user stop request cancels the retry silently; a watchdog-aborted
+        // retry still surfaces the degraded gateway reason to the user.
+        if (event.success) return;
+        if (event.finalError === "Retry cancelled" && !abortedReason) return;
         this.sealThinking(active);
         this.emit(active.threadId, {
           kind: "turn_error",
           message:
-            event.finalError || active.retryFailure || "The agent run failed",
+            abortedReason ||
+            event.finalError ||
+            active.retryFailure ||
+            "The agent run failed",
         });
         return;
       }
@@ -1192,6 +1293,169 @@ export class KipOrchestrator {
     });
   }
 
+  private emitGatewayStatus(
+    threadId: string,
+    providerId: string,
+    notice: GatewayStatusNotice,
+  ): void {
+    this.emit(threadId, {
+      kind: "gateway_status",
+      providerId,
+      phase: notice.phase,
+      message: notice.message,
+      attempt: notice.attempt,
+      maxAttempts: notice.maxAttempts,
+    });
+  }
+
+  private activeProviderId(active: ActiveSession): string | null {
+    const modelProvider = active.session.model?.provider;
+    if (modelProvider) return modelProvider;
+    return this.database.getThread(active.threadId)?.modelProvider ?? null;
+  }
+
+  /**
+   * Wraps the session's stream function so locally managed gateways get:
+   * - Tighter first-byte and stream-idle stall timeouts (instead of Pi's 5m default)
+   * - Serialization behind any in-flight restart so retries hit the fresh process
+   * - Zero interference with remote API providers (policy === null passes through)
+   */
+  private installGatewayStreamGuard(
+    active: ActiveSession,
+    settingsManager: SettingsManager,
+  ): void {
+    const baseStream = active.session.agent.streamFunction;
+    active.session.agent.streamFunction = async (
+      streamModel,
+      llmContext,
+      streamOptions,
+    ) => {
+      const providerId = streamModel.provider;
+      const policy = this.providerActivity.requestPolicy?.(providerId) ?? null;
+      if (!policy) {
+        return baseStream(streamModel, llmContext, streamOptions);
+      }
+
+      const reportStatus = (notice: GatewayStatusNotice) =>
+        this.emitGatewayStatus(active.threadId, providerId, notice);
+
+      const outerSignal = streamOptions?.signal;
+      try {
+        if (active.pendingRecovery) {
+          const result = await raceWithSignal(
+            active.pendingRecovery,
+            outerSignal,
+          );
+          if (result && result.abortRetry) {
+            return syntheticErrorStream(
+              streamModel,
+              result.message || "The local gateway could not be restarted.",
+            );
+          }
+        }
+        await this.providerActivity.beforeAttempt?.(providerId, {
+          signal: outerSignal,
+          reportStatus,
+        });
+      } catch (error) {
+        if (outerSignal?.aborted) {
+          return syntheticErrorStream(
+            streamModel,
+            "Request was aborted",
+            "aborted",
+          );
+        }
+        const message =
+          error instanceof Error
+            ? error.message
+            : "The local gateway is unavailable.";
+        return syntheticErrorStream(streamModel, message, "error");
+      }
+
+      const configuredTimeout = settingsManager.getHttpIdleTimeoutMs();
+      const effectiveConfigured =
+        configuredTimeout === 0 ? Number.POSITIVE_INFINITY : configuredTimeout;
+      const firstByteTimeoutMs = Math.min(
+        policy.firstByteTimeoutMs,
+        effectiveConfigured,
+      );
+      const streamIdleTimeoutMs = Math.min(
+        policy.streamIdleTimeoutMs,
+        effectiveConfigured,
+      );
+
+      const attemptController = new AbortController();
+      const onOuterAbort = () => attemptController.abort(outerSignal?.reason);
+      if (outerSignal?.aborted) {
+        attemptController.abort(outerSignal.reason);
+      } else {
+        outerSignal?.addEventListener("abort", onOuterAbort, { once: true });
+      }
+
+      let stalledReason: string | null = null;
+      let stallTimer: ReturnType<typeof setTimeout> | null = null;
+      const clearStallTimer = () => {
+        if (stallTimer !== null) {
+          clearTimeout(stallTimer);
+          stallTimer = null;
+        }
+      };
+      const armStallTimer = (ms: number, reason: string) => {
+        clearStallTimer();
+        if (!Number.isFinite(ms) || ms <= 0) return;
+        stallTimer = setTimeout(() => {
+          stallTimer = null;
+          if (outerSignal?.aborted) return;
+          stalledReason = reason;
+          attemptController.abort(new Error(reason));
+        }, ms);
+        (stallTimer as { unref?: () => void }).unref?.();
+      };
+
+      const cleanup = () => {
+        clearStallTimer();
+        outerSignal?.removeEventListener("abort", onOuterAbort);
+      };
+
+      armStallTimer(
+        firstByteTimeoutMs,
+        `Local gateway timed out waiting for response (${formatTimeoutLabel(firstByteTimeoutMs)})`,
+      );
+
+      let innerStream: Awaited<ReturnType<typeof baseStream>>;
+      try {
+        innerStream = await baseStream(streamModel, llmContext, {
+          ...streamOptions,
+          signal: attemptController.signal,
+          ...(Number.isFinite(firstByteTimeoutMs)
+            ? { timeoutMs: firstByteTimeoutMs }
+            : {}),
+        } as typeof streamOptions);
+      } catch (error) {
+        cleanup();
+        throw error;
+      }
+
+      return wrapMonitoredStream(innerStream, {
+        onEvent: (event) => {
+          if (event.type === "done" || event.type === "error") {
+            cleanup();
+            if (event.type === "done") {
+              this.providerActivity.onSuccess?.(providerId);
+            }
+          } else {
+            armStallTimer(
+              streamIdleTimeoutMs,
+              `Local gateway stream timed out (no data for ${formatTimeoutLabel(streamIdleTimeoutMs)})`,
+            );
+          }
+        },
+        onFinally: cleanup,
+        getStallReason: () => (outerSignal?.aborted ? null : stalledReason),
+      });
+    };
+  }
+
   private requireThread(threadId: string): ThreadSummary {
     const thread = this.database.getThread(threadId);
     if (!thread) throw new Error("Thread not found");
@@ -1249,4 +1513,168 @@ function lastAssistantFailure(messages: readonly unknown[]): string | null {
 /** Chat threads have no tools, no system prompt, and write nothing to the workspace. */
 function isChatThread(thread: { mode: ThreadMode }): boolean {
   return thread.mode === "chat";
+}
+
+function inferFailureKind(message: string): GatewayFailureKind {
+  if (/stalled|no data/i.test(message)) return "stall";
+  if (/timed? out|timeout|etimedout/i.test(message)) return "timeout";
+  if (
+    /econnrefused|econnreset|epipe|connection|socket|fetch failed|unable to connect|other side closed|stream ended without|stream disconnected/i.test(
+      message,
+    )
+  ) {
+    return "transport";
+  }
+  if (/\b50[0234]\b|bad gateway|service unavailable|gateway timeout|server.?error/i.test(message)) {
+    return "server_error";
+  }
+  return "unknown";
+}
+
+function formatTimeoutLabel(ms: number): string {
+  if (ms >= 1_000) return `${Math.round(ms / 1_000)}s`;
+  return `${Math.max(1, Math.round(ms))}ms`;
+}
+
+function raceWithSignal<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new Error("Request was aborted"));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error("Request was aborted"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+function syntheticErrorStream<T>(
+  model: { api: string; provider: string; id: string },
+  errorMessage: string,
+  stopReason: "error" | "aborted" = "error",
+): T {
+  const finalMessage = {
+    role: "assistant",
+    content: [],
+    api: model.api,
+    provider: model.provider,
+    model: model.id,
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason,
+    errorMessage,
+    timestamp: Date.now(),
+  };
+  const event = {
+    type: "error",
+    reason: stopReason,
+    error: finalMessage,
+  };
+  return {
+    async *[Symbol.asyncIterator]() {
+      yield event;
+    },
+    result: async () => finalMessage,
+  } as unknown as T;
+}
+
+/**
+ * Wraps a Pi AssistantMessageEventStream so every event resets the stall timer,
+ * and a stall-triggered abort is rewritten into a retryable timeout error
+ * (whereas a real user abort stays `aborted`).
+ */
+function wrapMonitoredStream<
+  TStream extends AsyncIterable<{
+    type: string;
+    reason?: string;
+    error?: { stopReason?: string; errorMessage?: string };
+  }> & { result: () => Promise<unknown> },
+>(
+  inner: TStream,
+  hooks: {
+    onEvent: (event: { type: string }) => void;
+    onFinally: () => void;
+    getStallReason: () => string | null;
+  },
+): TStream {
+  let rewrittenResult: unknown | undefined;
+
+  const rewriteErrorMessage = (
+    message: { stopReason?: string; errorMessage?: string } | undefined,
+  ) => {
+    if (!message) return message;
+    const stallReason = hooks.getStallReason();
+    if (stallReason) {
+      return {
+        ...message,
+        stopReason: "error",
+        errorMessage: stallReason,
+      };
+    }
+    // Bun's raw connect failures (e.g. "Unable to connect...") may not match
+    // Pi's retryable error pattern; normalize so Pi triggers retry & recovery.
+    if (
+      message.stopReason === "error" &&
+      message.errorMessage &&
+      /unable to connect|econnrefused|econnreset/i.test(message.errorMessage) &&
+      !/connection.?error|connection.?refused|timed? out/i.test(
+        message.errorMessage,
+      )
+    ) {
+      return {
+        ...message,
+        errorMessage: `${message.errorMessage} (connection error)`,
+      };
+    }
+    return message;
+  };
+
+  return {
+    async *[Symbol.asyncIterator]() {
+      try {
+        for await (const rawEvent of inner) {
+          hooks.onEvent(rawEvent);
+          if (rawEvent.type === "error") {
+            const rewritten = rewriteErrorMessage(rawEvent.error);
+            if (rewritten !== rawEvent.error) {
+              rewrittenResult = rewritten;
+              yield {
+                ...rawEvent,
+                reason: rewritten?.stopReason ?? rawEvent.reason,
+                error: rewritten,
+              };
+              continue;
+            }
+          }
+          yield rawEvent;
+        }
+      } finally {
+        hooks.onFinally();
+      }
+    },
+    async result() {
+      const base = await inner.result();
+      if (rewrittenResult !== undefined) return rewrittenResult;
+      const rewritten = rewriteErrorMessage(
+        base as { stopReason?: string; errorMessage?: string } | undefined,
+      );
+      return rewritten ?? base;
+    },
+  } as unknown as TStream;
 }

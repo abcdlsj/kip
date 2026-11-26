@@ -54,6 +54,56 @@ export interface PluginWindowSpec {
   height?: number;
 }
 
+export type GatewayStatusPhase =
+  | "restarting"
+  | "recovered"
+  | "degraded"
+  | "unhealthy";
+
+export interface GatewayStatusNotice {
+  phase: GatewayStatusPhase;
+  message: string;
+  attempt?: number;
+  maxAttempts?: number;
+}
+
+/**
+ * Per-request timeout guardrails for a local managed gateway. Remote API
+ * providers (and plugins that omit this hook or return null) keep Pi's default
+ * timeout behavior untouched.
+ */
+export interface GatewayRequestPolicy {
+  /** Max time to wait for response headers / first stream event from the local process. */
+  firstByteTimeoutMs: number;
+  /** Max silence between consecutive stream events before treating the local stream as stalled. */
+  streamIdleTimeoutMs: number;
+}
+
+export type GatewayFailureKind =
+  | "stall"
+  | "timeout"
+  | "transport"
+  | "server_error"
+  | "unknown";
+
+export interface GatewayRequestFailure {
+  kind: GatewayFailureKind;
+  message: string;
+  /** True when Pi is about to retry this request automatically. */
+  willRetry: boolean;
+  attempt?: number;
+  maxAttempts?: number;
+}
+
+export interface GatewayRecoveryResult {
+  /** True when the gateway was restarted (or is now healthy) and the retry should proceed. */
+  recovered: boolean;
+  /** True when automatic recovery is exhausted so Pi should stop retrying immediately. */
+  abortRetry?: boolean;
+  /** Human-readable status or failure reason. */
+  message?: string;
+}
+
 /** What the host hands a plugin that needs its own directory or settings. */
 export interface PluginRuntimeContext {
   pluginId: string;
@@ -61,6 +111,8 @@ export interface PluginRuntimeContext {
   dataDir: string;
   /** The plugin's saved form values, read fresh on each call. */
   values: () => Record<string, string>;
+  /** Optional status sink wired during an active run (GUI & CLI). */
+  reportStatus?: (notice: GatewayStatusNotice) => void;
 }
 
 /** What the host hands a plugin that wants a window of its own. */
@@ -119,6 +171,29 @@ export interface GatewayPlugin {
   beforeRequest?(context: PluginRuntimeContext): void | Promise<void>;
   /** Called when that run ends, whether it worked or not. */
   afterRequest?(context: PluginRuntimeContext): void;
+  /**
+   * Returns tighter first-byte / stream-idle timeouts when this plugin is actively
+   * managing a local process, or null when pointing at a remote/external server.
+   */
+  requestPolicy?(context: PluginRuntimeContext): GatewayRequestPolicy | null;
+  /**
+   * Called before each individual HTTP attempt (including Pi retries). Awaits any
+   * in-flight recovery so retries hit the fresh process instead of racing.
+   */
+  beforeAttempt?(
+    context: PluginRuntimeContext,
+    signal?: AbortSignal,
+  ): void | Promise<void>;
+  /**
+   * Called when a request to this provider fails (stall, timeout, transport error,
+   * 5xx). A managed local gateway can classify the failure and restart its sidecar.
+   */
+  onRequestFailure?(
+    context: PluginRuntimeContext,
+    failure: GatewayRequestFailure,
+  ): Promise<GatewayRecoveryResult | void> | GatewayRecoveryResult | void;
+  /** Called when a request produces a healthy response, resetting failure pressure. */
+  onRequestSuccess?(context: PluginRuntimeContext): void;
   /** Called after the user saves this plugin's form, so copied-out settings can be re-read. */
   settingsChanged?(context: PluginRuntimeContext): void;
   probe(
