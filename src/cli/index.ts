@@ -115,28 +115,43 @@ async function main(): Promise<number> {
     return 1;
   }
 
+  let exitCode = 0;
   try {
     if (usePrintMode) {
       if (runtime.availableModels.length === 0) {
         console.error(
           "kip: no model configured yet. Open Kip Desktop → Settings → Providers to add one.",
         );
-        return 1;
+        exitCode = 1;
+        return exitCode;
       }
-      return await runPrintMode(runtime, {
+      exitCode = await runPrintMode(runtime, {
         prompt: combinedPrompt,
         quiet: args.quiet,
         canPromptApproval: stdinIsTty && Boolean(process.stderr.isTTY),
       });
+      return exitCode;
     }
 
-    return await runTui(runtime, {
+    exitCode = await runTui(runtime, {
       initialPrompt: combinedPrompt || null,
       resumed: args.continueLast,
       layout: args.layout ?? runtime.getTuiLayout(),
     });
+    return exitCode;
   } finally {
-    await runtime.dispose();
+    const forceSigint = () => process.exit(130);
+    const forceSigterm = () => process.exit(143);
+    process.once("SIGINT", forceSigint);
+    process.once("SIGTERM", forceSigterm);
+    const hardDeadline = setTimeout(() => process.exit(exitCode), 3_000);
+    try {
+      await runtime.dispose();
+    } finally {
+      clearTimeout(hardDeadline);
+      process.off("SIGINT", forceSigint);
+      process.off("SIGTERM", forceSigterm);
+    }
   }
 }
 

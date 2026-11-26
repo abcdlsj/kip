@@ -564,7 +564,17 @@ export class KipOrchestrator {
     active.queued = [];
     try {
       active.session.clearQueue();
-      if (active.running) await active.session.abort();
+      if (active.running) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([
+          active.session.abort(),
+          new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, 1_500);
+          }),
+        ]).finally(() => {
+          if (timer) clearTimeout(timer);
+        });
+      }
     } catch {
       // Best-effort abort during disposal.
     }
@@ -1186,8 +1196,7 @@ function findToolBlock(
 function lastAssistantFailure(messages: readonly unknown[]): string | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index] as
-      | { role?: string; stopReason?: string; errorMessage?: string }
-      | undefined;
+      { role?: string; stopReason?: string; errorMessage?: string } | undefined;
     if (!message || message.role !== "assistant") continue;
     if (message.stopReason !== "error") return null;
     return message.errorMessage || "The agent run failed";

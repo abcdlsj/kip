@@ -299,12 +299,12 @@ export class CliRuntime {
     if (this.disposed) return;
     this.disposed = true;
     try {
-      await this.orchestrator.shutdown();
+      await settleWithin(this.orchestrator.shutdown(), 1_500);
     } catch {
       // Best-effort shutdown.
     }
     try {
-      await disposePlugins();
+      await settleWithin(disposePlugins(), 1_500);
     } catch {
       // Best-effort plugin teardown.
     }
@@ -337,6 +337,18 @@ export class CliRuntime {
       // Ignore double close.
     }
   }
+}
+
+function settleWithin(promise: Promise<void>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, ms);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 function safeRealpath(path: string): string {

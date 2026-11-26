@@ -16,6 +16,7 @@ import {
   TuiAltScreen,
   TuiMainScreen,
   VStack,
+  isKeyRelease,
   isViewportTUI,
   matchesKey,
   type OverlayHandle,
@@ -212,10 +213,20 @@ async function runTuiSession(
 
   let verbose = opts.verbose;
   let running = false;
+  let aborting = false;
   let lastCtrlCAt = 0;
   let toastTimer: ReturnType<typeof setTimeout> | null = null;
   let activeOverlay: OverlayHandle | null = null;
-  let finishSession: ((outcome: SessionOutcome) => void) | null = null;
+  let finished = false;
+  let resolveSession!: (outcome: SessionOutcome) => void;
+  const sessionDone = new Promise<SessionOutcome>((resolve) => {
+    resolveSession = resolve;
+  });
+  const finishSession = (outcome: SessionOutcome) => {
+    if (finished) return;
+    finished = true;
+    resolveSession(outcome);
+  };
 
   const git = await inspectGit(runtime.workspace.rootPath);
   const currentModelLabel = () => {
@@ -552,7 +563,7 @@ async function runTuiSession(
       showToast(`Already in ${target} layout`, "muted");
       return;
     }
-    finishSession?.({
+    finishSession({
       kind: "switch_layout",
       layout: target,
       verbose,
@@ -825,7 +836,7 @@ async function runTuiSession(
   );
 
   const requestExit = (code = 0) => {
-    finishSession?.({ kind: "exit", code });
+    finishSession({ kind: "exit", code });
   };
 
   const handleSlashCommand = async (raw: string): Promise<boolean> => {
@@ -1012,8 +1023,12 @@ async function runTuiSession(
 
       case "new": {
         if (running) {
-          await runtime.orchestrator.abort(runtime.thread.id);
+          await settleWithin(
+            runtime.orchestrator.abort(runtime.thread.id),
+            1_500,
+          ).catch(() => undefined);
           running = false;
+          aborting = false;
           workingLine.stop();
         }
         runtime.createNewThread();
@@ -1231,6 +1246,7 @@ async function runTuiSession(
       }
       case "turn_complete": {
         running = false;
+        aborting = false;
         workingLine.stop();
         activeTurnComponent = null;
         syncFollowUps();
@@ -1239,6 +1255,7 @@ async function runTuiSession(
       }
       case "turn_error": {
         running = false;
+        aborting = false;
         workingLine.stop();
         if (activeTurnComponent) {
           activeTurnComponent.turn.error = event.message;
@@ -1312,6 +1329,7 @@ async function runTuiSession(
       })
       .catch((error: unknown) => {
         running = false;
+        aborting = false;
         workingLine.stop();
         addNotice(
           `× ${error instanceof Error ? error.message : "Run failed"}`,
@@ -1325,8 +1343,33 @@ async function runTuiSession(
     submitPrompt(text);
   };
 
+  const abortActiveRun = (hint?: string) => {
+    aborting = true;
+    if (hint) showToast(hint, "muted", 2500);
+    void settleWithin(runtime.orchestrator.abort(runtime.thread.id), 2_500)
+      .then((restored) => {
+        if (restored && restored.length > 0 && !editor.getText()) {
+          editor.setText(restored.join("\n"));
+        }
+        if (!finished) showToast("Stopped", "muted");
+      })
+      .catch(() => {
+        if (!finished) showToast("Stopped", "muted");
+      })
+      .finally(() => {
+        running = false;
+        aborting = false;
+        workingLine.stop();
+        if (!finished) tui.requestRender();
+      });
+  };
+
   // --- Global Keyboard Shortcuts ---
   tui.addInputListener((data) => {
+    // Ghostty / Kitty keyboard protocol (flags=7) reports key release events too;
+    // inputListeners run before TuiBase's release filter, so ignore them here.
+    if (isKeyRelease(data)) return undefined;
+
     if (matchesKey(data, "ctrl+c")) {
       if (activeOverlay) {
         closeOverlay();
@@ -1346,16 +1389,16 @@ async function runTuiSession(
         tui.requestRender();
         return { consume: true };
       }
+      const now = Date.now();
       if (running) {
-        void runtime.orchestrator.abort(runtime.thread.id).then((restored) => {
-          running = false;
-          workingLine.stop();
-          if (restored.length > 0) editor.setText(restored.join("\n"));
-          showToast("Stopped", "muted");
-        });
+        if (aborting && now - lastCtrlCAt < 2500) {
+          requestExit(0);
+          return { consume: true };
+        }
+        lastCtrlCAt = now;
+        abortActiveRun("Stopping… press Ctrl+C again to exit");
         return { consume: true };
       }
-      const now = Date.now();
       if (now - lastCtrlCAt < 1800) {
         requestExit(0);
       } else {
@@ -1395,21 +1438,20 @@ async function runTuiSession(
       !activeOverlay &&
       !currentApproval &&
       !editor.isShowingAutocomplete() &&
-      running
+      running &&
+      !aborting
     ) {
-      void runtime.orchestrator.abort(runtime.thread.id).then((restored) => {
-        running = false;
-        workingLine.stop();
-        if (restored.length > 0 && !editor.getText()) {
-          editor.setText(restored.join("\n"));
-        }
-        showToast("Stopped", "muted");
-      });
+      abortActiveRun("Stopping…");
       return { consume: true };
     }
 
     return undefined;
   });
+
+  const onSigint = () => requestExit(130);
+  const onSigterm = () => requestExit(143);
+  process.on("SIGINT", onSigint);
+  process.on("SIGTERM", onSigterm);
 
   const spinnerTimer = setInterval(() => {
     let dirty = false;
@@ -1440,36 +1482,52 @@ async function runTuiSession(
     if (nextScheme !== theme.scheme) applyTheme(createKipTheme(nextScheme));
   });
 
-  if (opts.loadHistory) {
+  if (opts.loadHistory && !finished) {
     await loadCurrentThreadHistory();
   }
 
-  if (opts.initialToast) {
+  if (!finished && opts.initialToast) {
     showToast(opts.initialToast, "ok");
   }
 
-  if (runtime.availableModels.length === 0) {
+  if (!finished && runtime.availableModels.length === 0) {
     addNotice(
       "No model configured yet. Open Kip Desktop → Settings → Providers to add one.",
       "warn",
     );
-  } else if (opts.initialPrompt) {
+  } else if (!finished && opts.initialPrompt) {
     submitPrompt(opts.initialPrompt);
   }
 
-  const outcome = await new Promise<SessionOutcome>((resolveOutcome) => {
-    finishSession = resolveOutcome;
-  });
+  const outcome = await sessionDone;
 
+  process.off("SIGINT", onSigint);
+  process.off("SIGTERM", onSigterm);
   clearInterval(spinnerTimer);
   if (toastTimer) clearTimeout(toastTimer);
   stopSchemeWatch();
-  if (running) {
-    await runtime.orchestrator.abort(runtime.thread.id).catch(() => undefined);
-  }
-  await terminal.drainInput(200, 30);
+  const abortPromise: Promise<unknown> = running
+    ? runtime.orchestrator.abort(runtime.thread.id).catch(() => undefined)
+    : Promise.resolve();
+  await terminal.drainInput(120, 25);
   tui.stop({ preserveScreen: outcome.kind === "switch_layout" });
+  await settleWithin(abortPromise, 800);
   return outcome;
+}
+
+function settleWithin<T>(
+  promise: Promise<T>,
+  ms: number,
+): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<undefined>((resolve) => {
+      timer = setTimeout(() => resolve(undefined), ms);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 function formatRelative(timestamp: number): string {
