@@ -82,8 +82,9 @@ describe("cli-installer", () => {
       },
       "darwin",
     );
-    expect(posix).toContain("#!/bin/sh");
+    expect(posix).toContain("#!/usr/bin/env bash");
     expect(posix).toContain("# Installed by Kip");
+    expect(posix).toContain("exec -a kip ");
     expect(posix).toContain("Kip'\\''s App.app");
     expect(posix).toContain('"$@"');
 

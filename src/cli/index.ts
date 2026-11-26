@@ -16,6 +16,7 @@ import { CliRuntime } from "./runtime";
 import { runTui } from "./tui/app";
 
 const VERSION = pkg.version ?? "0.0.0";
+process.title = "kip";
 
 async function readPipedStdin(): Promise<string> {
   if (process.stdin.isTTY) return "";

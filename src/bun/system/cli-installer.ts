@@ -76,9 +76,9 @@ export function renderShimContent(
     ].join("\r\n");
   }
   return [
-    "#!/bin/sh",
+    "#!/usr/bin/env bash",
     POSIX_MARKER,
-    `exec ${shellQuotePosix(runtime.bunPath)} ${shellQuotePosix(runtime.entryPath)} "$@"`,
+    `exec -a ${COMMAND_NAME_POSIX} ${shellQuotePosix(runtime.bunPath)} ${shellQuotePosix(runtime.entryPath)} "$@"`,
     "",
   ].join("\n");
 }
