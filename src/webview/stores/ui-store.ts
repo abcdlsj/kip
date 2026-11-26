@@ -13,7 +13,7 @@ import { request } from "../rpc-client";
 import { applyTheme, watchSystemTheme } from "../lib/theme";
 
 type SettingsTab =
-  "providers" | "plugins" | "appearance" | "safety" | "cli" | "sync";
+  "providers" | "plugins" | "appearance" | "safety" | "tui" | "sync";
 
 interface UiState {
   settings: SettingsSnapshot | null;

@@ -126,10 +126,10 @@ export function CliPanel() {
 
   return (
     <div>
-      <h2 className="text-[15px] font-semibold">Command line</h2>
+      <h2 className="text-[15px] font-semibold">TUI</h2>
       <p className="mt-1 max-w-[460px] text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
-        Use Kip from any terminal — one-shot answers or a minimal interactive
-        TUI, sharing your providers, keys, and safety policy.
+        Use Kip in your terminal — interactive TUI or one-shot CLI, sharing your
+        providers, keys, and safety policy.
       </p>
 
       <div className="mt-4 rounded-[11px] border hairline bg-[var(--bg-subtle)] px-3.5 py-3">
@@ -210,7 +210,7 @@ export function CliPanel() {
                     className="animate-spin"
                   />
                 ) : null}
-                {status?.installed ? "Update" : "Install to PATH"}
+                {status?.installed ? "Update CLI" : "Install CLI to PATH"}
               </button>
             )}
           </div>

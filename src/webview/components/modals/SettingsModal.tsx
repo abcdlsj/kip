@@ -27,7 +27,7 @@ const TABS = [
   { id: "plugins", label: "Plugins", icon: Puzzle },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "safety", label: "Safety", icon: ShieldCheck },
-  { id: "cli", label: "CLI", icon: Terminal },
+  { id: "tui", label: "TUI", icon: Terminal },
   { id: "sync", label: "Sync", icon: Cloud },
 ] as const;
 
@@ -239,7 +239,7 @@ export function SettingsModal() {
                 </p>
               </div>
             )}
-            {tab === "cli" && <CliPanel />}
+            {tab === "tui" && <CliPanel />}
             {tab === "sync" && <SyncPanel />}
           </div>
         </Dialog.Content>
