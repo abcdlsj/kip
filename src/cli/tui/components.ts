@@ -29,9 +29,11 @@ import type {
   ToolCallBlock,
 } from "../../shared/types";
 import {
-  extractCitations,
   mergeCitations,
+  parseReplyContent,
   type CitationSource,
+  type ElicitationItem,
+  type ElicitationsGroup,
 } from "../../shared/citations";
 import {
   formatThinkingDuration,
@@ -303,6 +305,7 @@ export class NoticeComponent implements Component {
 export class AssistantTurnComponent implements Component {
   private readonly markdownCache = new Map<string, Markdown>();
   private spinnerFrame = 0;
+  private showFollowUps = false;
 
   constructor(
     private theme: KipTuiTheme,
@@ -317,6 +320,20 @@ export class AssistantTurnComponent implements Component {
 
   setVerbose(verbose: boolean): void {
     this.verbose = verbose;
+  }
+
+  setShowFollowUps(show: boolean): void {
+    this.showFollowUps = show;
+  }
+
+  getFollowUps(): ElicitationItem[] {
+    for (let i = this.turn.blocks.length - 1; i >= 0; i -= 1) {
+      const block = this.turn.blocks[i];
+      if (block?.type !== "text") continue;
+      const group = parseReplyContent(block.text).elicitations;
+      if (group && group.items.length > 0) return group.items;
+    }
+    return [];
   }
 
   tickSpinner(): boolean {
@@ -338,6 +355,7 @@ export class AssistantTurnComponent implements Component {
     const safeW = Math.max(20, width);
     const out: string[] = [];
     const collectedSources: CitationSource[][] = [];
+    let elicitations: ElicitationsGroup | null = null;
     let lastKind: ContentBlock["type"] | null = null;
 
     for (const block of this.turn.blocks) {
@@ -351,16 +369,19 @@ export class AssistantTurnComponent implements Component {
         lastKind = "tool_call";
       } else if (block.type === "text") {
         if (!block.text.trim()) continue;
-        const { body, sources } = extractCitations(block.text);
-        if (sources.length > 0) collectedSources.push(sources);
-        if (!body.trim()) continue;
+        const parsed = parseReplyContent(block.text);
+        if (parsed.sources.length > 0) collectedSources.push(parsed.sources);
+        if (parsed.elicitations && parsed.elicitations.items.length > 0) {
+          elicitations = parsed.elicitations;
+        }
+        if (!parsed.body.trim()) continue;
         if (lastKind !== null && lastKind !== "text") out.push("");
         let md = this.markdownCache.get(block.id);
         if (!md) {
-          md = new Markdown(body, 1, 0, this.theme.markdown);
+          md = new Markdown(parsed.body, 1, 0, this.theme.markdown);
           this.markdownCache.set(block.id, md);
         } else {
-          md.setText(body);
+          md.setText(parsed.body);
         }
         out.push(...md.render(safeW));
         lastKind = "text";
@@ -371,6 +392,11 @@ export class AssistantTurnComponent implements Component {
     if (sources.length > 0) {
       if (out.length > 0) out.push("");
       out.push(...this.renderSources(sources, safeW));
+    }
+
+    if (this.showFollowUps && elicitations && elicitations.items.length > 0) {
+      if (out.length > 0) out.push("");
+      out.push(...this.renderFollowUps(elicitations, safeW));
     }
 
     if (this.turn.error) {
@@ -417,6 +443,20 @@ export class AssistantTurnComponent implements Component {
         truncateToWidth(` ${this.theme.faint(`+${hidden} more  ^O`)}`, width),
       );
     }
+    return lines;
+  }
+
+  private renderFollowUps(group: ElicitationsGroup, width: number): string[] {
+    const lines: string[] = [];
+    if (group.message) {
+      lines.push(truncateToWidth(` ${this.theme.faint(group.message)}`, width));
+    }
+    group.items.forEach((item, index) => {
+      const cmd = this.theme.faint(`/${index + 1}`);
+      lines.push(
+        truncateToWidth(` ${cmd}  ${this.theme.muted(item.label)}`, width),
+      );
+    });
     return lines;
   }
 

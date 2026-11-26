@@ -11,9 +11,144 @@ export interface CitationSource {
   domain: string;
 }
 
+export interface ElicitationItem {
+  label: string;
+  query: string;
+}
+
+export interface ElicitationsGroup {
+  message?: string;
+  items: ElicitationItem[];
+}
+
 export interface ExtractedCitations {
   body: string;
   sources: CitationSource[];
+}
+
+export interface ExtractedElicitations {
+  body: string;
+  elicitations: ElicitationsGroup | null;
+}
+
+export interface ParsedReply {
+  body: string;
+  sources: CitationSource[];
+  elicitations: ElicitationsGroup | null;
+}
+
+const ELICITATIONS_GROUP_RE =
+  /<ElicitationsGroup\b([^>]*)>([\s\S]*?)<\/ElicitationsGroup>/gi;
+
+const ELICITATION_ITEM_RE =
+  /<Elicitation\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Elicitation>)/gi;
+
+const XML_ATTR_RE = /\b([A-Za-z_][\w-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+
+function decodeXmlEntities(text: string): string {
+  return text
+    .replaceAll("&quot;", '"')
+    .replaceAll("&apos;", "'")
+    .replaceAll("&#39;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
+}
+
+function normalizeAttrText(raw: string): string {
+  const decoded = decodeXmlEntities(raw).trim();
+  // Collapse wrapped lines inside attribute values without inserting awkward
+  // spaces between CJK characters.
+  return decoded
+    .replace(
+      /([\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])[ \t]*\r?\n[ \t]*([\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])/gu,
+      "$1$2",
+    )
+    .replace(/\s*\r?\n\s*/g, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function parseXmlAttrs(raw: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  XML_ATTR_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = XML_ATTR_RE.exec(raw)) !== null) {
+    const key = match[1]?.toLowerCase();
+    const value = match[2] ?? match[3] ?? "";
+    if (key) attrs[key] = normalizeAttrText(value);
+  }
+  return attrs;
+}
+
+/**
+ * Extracts Gemini `<ElicitationsGroup>` follow-up suggestions from prose.
+ * Returns the cleaned body plus parsed follow-up items (if any).
+ */
+export function extractElicitations(text: string): ExtractedElicitations {
+  if (!text || !/<ElicitationsGroup\b/i.test(text)) {
+    return { body: text, elicitations: null };
+  }
+
+  let message: string | undefined;
+  const items: ElicitationItem[] = [];
+  const seen = new Set<string>();
+
+  const cleaned = text.replace(
+    ELICITATIONS_GROUP_RE,
+    (_full, groupAttrsRaw: string, inner: string) => {
+      const groupAttrs = parseXmlAttrs(groupAttrsRaw);
+      if (!message && groupAttrs.message) message = groupAttrs.message;
+
+      ELICITATION_ITEM_RE.lastIndex = 0;
+      let itemMatch: RegExpExecArray | null;
+      while ((itemMatch = ELICITATION_ITEM_RE.exec(inner)) !== null) {
+        const attrs = parseXmlAttrs(itemMatch[1] ?? "");
+        const fallback = normalizeAttrText(itemMatch[2] ?? "");
+        const label = attrs.label || attrs.query || fallback;
+        const query = attrs.query || attrs.label || fallback;
+        if (!label || !query) continue;
+        const key = `${label}\0${query}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push({ label, query });
+      }
+      return "";
+    },
+  );
+
+  if (items.length === 0) {
+    // Still strip empty/malformed ElicitationsGroup shells cleanly.
+    return { body: cleaned.trimEnd(), elicitations: null };
+  }
+
+  return {
+    body: cleaned.replace(/\n{3,}/g, "\n\n").trimEnd(),
+    elicitations: { message, items },
+  };
+}
+
+/**
+ * Parses both trailing `Sources:` blocks and `<ElicitationsGroup>` follow-ups
+ * in either order so GUI and TUI render clean prose plus quiet interactive UI.
+ */
+export function parseReplyContent(markdown: string): ParsedReply {
+  if (!markdown) return { body: "", sources: [], elicitations: null };
+  const firstCitations = extractCitations(markdown);
+  const elicited = extractElicitations(firstCitations.body);
+  if (firstCitations.sources.length > 0) {
+    return {
+      body: elicited.body,
+      sources: firstCitations.sources,
+      elicitations: elicited.elicitations,
+    };
+  }
+  const secondCitations = extractCitations(elicited.body);
+  return {
+    body: secondCitations.body,
+    sources: secondCitations.sources,
+    elicitations: elicited.elicitations,
+  };
 }
 
 const TRAILING_SOURCES_BLOCK =

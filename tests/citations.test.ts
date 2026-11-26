@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   domainOfUrl,
   extractCitations,
+  extractElicitations,
   mergeCitations,
+  parseReplyContent,
 } from "../src/shared/citations";
 
 describe("citation extraction", () => {
@@ -77,5 +79,57 @@ describe("citation extraction", () => {
       "https://a.com",
       "https://b.com",
     ]);
+  });
+
+  test("extracts multiline ElicitationsGroup follow-ups and cleans CJK wraps", () => {
+    const input = `这里是今天的新闻汇总。
+
+<ElicitationsGroup message="如果想深挖其中某条动态：">
+   <Elicitation label="展开看看 Claude Ship 和 AWS 决策模型的技术细节"
+ query="展开介绍一下 Anthropic Claude Ship、AWS Strands Decider v2 和星辰
+ 4.1 的核心技术细节与适用场景。"/>
+   <Elicitation label="复盘黄仁勋被调查及复职英伟达 CEO 的来龙去脉"
+ query="梳理一下最近英伟达调查黄仁勋以及董事会恢复其 CEO 职务的完整经过和
+ 市场反应。"/>
+   <Elicitation label="查看 TGA 2026 最佳独立游戏等完整提名与看点" query="
+ 帮我查一下 TGA 2026 最佳独立游戏、最佳动作游戏等完整提名名单和主要看点。
+ "/>
+ </ElicitationsGroup>
+
+Sources:
+- [1] [Tech News](https://news.example.com/ai)`;
+
+    const parsed = parseReplyContent(input);
+    expect(parsed.body).toBe("这里是今天的新闻汇总。");
+    expect(parsed.sources).toHaveLength(1);
+    expect(parsed.sources[0]?.domain).toBe("news.example.com");
+    expect(parsed.elicitations).toEqual({
+      message: "如果想深挖其中某条动态：",
+      items: [
+        {
+          label: "展开看看 Claude Ship 和 AWS 决策模型的技术细节",
+          query:
+            "展开介绍一下 Anthropic Claude Ship、AWS Strands Decider v2 和星辰 4.1 的核心技术细节与适用场景。",
+        },
+        {
+          label: "复盘黄仁勋被调查及复职英伟达 CEO 的来龙去脉",
+          query:
+            "梳理一下最近英伟达调查黄仁勋以及董事会恢复其 CEO 职务的完整经过和市场反应。",
+        },
+        {
+          label: "查看 TGA 2026 最佳独立游戏等完整提名与看点",
+          query:
+            "帮我查一下 TGA 2026 最佳独立游戏、最佳动作游戏等完整提名名单和主要看点。",
+        },
+      ],
+    });
+  });
+
+  test("extractElicitations leaves plain replies untouched", () => {
+    const plain = "Just a normal answer with <div>html</div>.";
+    expect(extractElicitations(plain)).toEqual({
+      body: plain,
+      elicitations: null,
+    });
   });
 });

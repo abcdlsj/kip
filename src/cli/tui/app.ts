@@ -400,9 +400,18 @@ async function runTuiSession(
     tui.requestRender();
   };
 
+  const syncFollowUps = () => {
+    const last = turnComponents[turnComponents.length - 1];
+    for (const comp of turnComponents) {
+      comp.setShowFollowUps(!running && comp === last);
+    }
+  };
+
   const addAssistantTurn = (turn: ChatTurn): AssistantTurnComponent => {
     dismissWelcome();
+    for (const comp of turnComponents) comp.setShowFollowUps(false);
     const comp = new AssistantTurnComponent(theme, turn, verbose);
+    comp.setShowFollowUps(!running);
     transcript.addChild(comp);
     themedNodes.push(comp);
     turnComponents.push(comp);
@@ -1212,6 +1221,7 @@ async function runTuiSession(
         running = false;
         workingLine.stop();
         activeTurnComponent = null;
+        syncFollowUps();
         tui.requestRender();
         return;
       }
@@ -1241,9 +1251,29 @@ async function runTuiSession(
     editor.addToHistory(trimmed);
 
     if (trimmed.startsWith("/")) {
+      const followUpMatch = /^\/(\d+)$/.exec(trimmed);
+      if (followUpMatch) {
+        const index = Number(followUpMatch[1]) - 1;
+        const followUps =
+          turnComponents[turnComponents.length - 1]?.getFollowUps() ?? [];
+        const picked = followUps[index];
+        if (picked) {
+          submitPrompt(picked.query);
+          return;
+        }
+        showToast(
+          followUps.length > 0
+            ? `Pick /1 to /${followUps.length}`
+            : "No follow-up suggestions available",
+          "warn",
+        );
+        return;
+      }
       void handleSlashCommand(trimmed);
       return;
     }
+
+    for (const comp of turnComponents) comp.setShowFollowUps(false);
 
     const referencedFiles: string[] = [];
     const matches = trimmed.matchAll(/(?:^|\s)@([^\s]+)/g);

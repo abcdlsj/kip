@@ -8,9 +8,9 @@ import {
   RotateCcw,
 } from "lucide-react";
 import {
-  extractCitations,
   mergeCitations,
-  type CitationSource,
+  parseReplyContent,
+  type ParsedReply,
 } from "../../../shared/citations";
 import type {
   ChatTurn,
@@ -21,6 +21,7 @@ import type {
 } from "../../../shared/types";
 import { copyText } from "../../lib/clipboard";
 import { ApprovalBanner } from "./ApprovalBanner";
+import { FollowUpsRow } from "./FollowUpsRow";
 import { Markdown } from "./Markdown";
 import { SourcesRow } from "./SourcesRow";
 import { ThinkingTrace } from "./ThinkingTrace";
@@ -42,6 +43,8 @@ interface MessageTurnProps {
   onRetry?: (turnId: string) => void;
   /** Present when the message can be edited (the thread is idle). */
   onEdit?: (turnId: string, text: string) => void;
+  /** Sends a suggested follow-up query when the user clicks an elicitation item. */
+  onFollowUp?: (query: string) => void;
 }
 
 function groupBlocks(turn: ChatTurn): Segment[] {
@@ -74,6 +77,7 @@ function MessageTurnInner({
   isLast,
   onRetry,
   onEdit,
+  onFollowUp,
 }: MessageTurnProps) {
   const segments = useMemo(() => groupBlocks(turn), [turn]);
 
@@ -88,22 +92,35 @@ function MessageTurnInner({
   const textBlocks = turn.blocks.filter(
     (block): block is TextBlock => block.type === "text",
   );
-  const extractedByBlock = useMemo(() => {
-    const map = new Map<string, { body: string; sources: CitationSource[] }>();
+  const parsedByBlock = useMemo(() => {
+    const map = new Map<string, ParsedReply>();
     for (const block of textBlocks) {
-      map.set(block.id, extractCitations(block.text));
+      map.set(block.id, parseReplyContent(block.text));
     }
     return map;
   }, [textBlocks]);
+  const cleanTextBlocks = useMemo(
+    () =>
+      textBlocks.map((block) => ({
+        ...block,
+        text: parsedByBlock.get(block.id)?.body ?? block.text,
+      })),
+    [textBlocks, parsedByBlock],
+  );
   const sources = useMemo(
     () =>
       mergeCitations(
-        textBlocks.map(
-          (block) => extractedByBlock.get(block.id)?.sources ?? [],
-        ),
+        textBlocks.map((block) => parsedByBlock.get(block.id)?.sources ?? []),
       ),
-    [textBlocks, extractedByBlock],
+    [textBlocks, parsedByBlock],
   );
+  const elicitations = useMemo(() => {
+    for (let i = textBlocks.length - 1; i >= 0; i -= 1) {
+      const group = parsedByBlock.get(textBlocks[i]!.id)?.elicitations;
+      if (group && group.items.length > 0) return group;
+    }
+    return null;
+  }, [textBlocks, parsedByBlock]);
   const workSegments = segments.filter(
     (segment) => segment.kind === "work",
   ).length;
@@ -115,7 +132,7 @@ function MessageTurnInner({
           const isStreamingBlock =
             streaming && segment.block.id === lastTextBlock?.id;
           const body =
-            extractedByBlock.get(segment.block.id)?.body ?? segment.block.text;
+            parsedByBlock.get(segment.block.id)?.body ?? segment.block.text;
           return (
             <div
               key={segment.block.id}
@@ -202,7 +219,10 @@ function MessageTurnInner({
         </div>
       )}
       {sources.length > 0 && <SourcesRow sources={sources} />}
-      {!streaming && <TurnActions blocks={textBlocks} />}
+      {!streaming && <TurnActions blocks={cleanTextBlocks} />}
+      {isLast && !streaming && elicitations && onFollowUp && (
+        <FollowUpsRow group={elicitations} onSelect={onFollowUp} />
+      )}
     </div>
   );
 }

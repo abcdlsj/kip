@@ -214,6 +214,11 @@ export function ThreadCanvas({
                   isLast={index === view.turns.length - 1}
                   onRetry={threadId ? retry : undefined}
                   onEdit={threadId && !view.running ? edit : undefined}
+                  onFollowUp={
+                    !view.running
+                      ? (query) => void startSuggestion(query)
+                      : undefined
+                  }
                 />
               ))}
               {view?.running &&
