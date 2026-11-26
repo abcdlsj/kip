@@ -2,13 +2,20 @@
  * Kip main process. Initializes local storage, the model registry, the Pi
  * session pool, and the single frameless application window.
  */
-import { ApplicationMenu, BrowserWindow, Updater, Utils } from "electrobun/bun";
+import Electrobun, {
+  ApplicationMenu,
+  BrowserWindow,
+  Updater,
+  Utils,
+} from "electrobun/bun";
+import { join } from "node:path";
 import { KipDatabase } from "./storage/db";
 import { ModelRegistry } from "./agent/model-registry";
 import { KipOrchestrator } from "./agent/pi-orchestrator";
 import { createKipRpc } from "./rpc-handler";
 import type { AgentStreamEnvelope } from "../shared/types";
 import { triggerSync } from "./sync/s3-sync";
+import { prepareCefUserDataDir } from "./system/cef-guard";
 import { NotchIndicator, type NotchState } from "./system/notch";
 import { applyWindowsDpiAwareness } from "./system/windows-dpi";
 import { UpdateChecker } from "./system/update-checker";
@@ -26,6 +33,8 @@ applyWindowsDpiAwareness();
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
+const SHUTDOWN_TIMEOUT_MS = 2_500;
+const APP_IDENTIFIER = "ai.kip.desktop";
 
 process.on("unhandledRejection", (reason) => {
   console.error(
@@ -37,8 +46,62 @@ process.on("uncaughtException", (error) => {
   console.error("Uncaught exception:", error.message);
 });
 
+async function readLocalVersion(): Promise<string> {
+  try {
+    const version = await Updater.localInfo.version();
+    return version || "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+async function readLocalChannel(): Promise<string> {
+  try {
+    const channel = await Updater.localInfo.channel();
+    return channel || "stable";
+  } catch {
+    return "stable";
+  }
+}
+
+function resolveCefDir(channel: string): string | null {
+  try {
+    const userData = Utils.paths.userData;
+    if (userData && userData.includes(APP_IDENTIFIER)) {
+      return join(userData, "CEF");
+    }
+  } catch {
+    // Fall back to explicit identifier/channel path below.
+  }
+  try {
+    return join(Utils.paths.appData, APP_IDENTIFIER, channel, "CEF");
+  } catch {
+    return null;
+  }
+}
+
+async function prepareCefProfile(channel: string): Promise<void> {
+  if (process.platform !== "darwin") return;
+  const cefDir = resolveCefDir(channel);
+  if (!cefDir) return;
+  const result = await prepareCefUserDataDir(cefDir);
+  if (result.status === "cleaned") {
+    console.warn(
+      `Removed stale CEF lock (${result.removed.join(", ")}) from exited process ${result.pid ?? "unknown"}.`,
+    );
+  } else if (result.status === "live") {
+    console.warn(
+      `Another Kip process (pid ${result.pid}) already holds the CEF profile lock.`,
+    );
+  }
+}
+
 const database = new KipDatabase();
-const registry = await ModelRegistry.create(database);
+const [registry, localVersion, updateChannel] = await Promise.all([
+  ModelRegistry.create(database),
+  readLocalVersion(),
+  readLocalChannel(),
+]);
 
 const streamHolder: { send: (payload: AgentStreamEnvelope) => void } = {
   send: () => {},
@@ -62,13 +125,11 @@ const windowRef: { current: BrowserWindow | null } = { current: null };
 const updateChecker = new UpdateChecker({
   // Dev bundles carry a stale version.json, so local builds stay quiet unless
   // KIP_UPDATE_CURRENT_VERSION pins the version explicitly.
-  currentVersion:
-    process.env.KIP_UPDATE_CURRENT_VERSION ??
-    (await Updater.localInfo.version()),
+  currentVersion: process.env.KIP_UPDATE_CURRENT_VERSION ?? localVersion,
   installer: createUpdateInstaller({
     // Restarting for an update stops any running agent; the view warns first.
     onQuit: () => {
-      void shutdown().finally(() => Utils.quit());
+      quitCleanly();
     },
   }),
   onStatus: (status) => rpc.send.updateStatus(status),
@@ -99,6 +160,9 @@ const attention = {
   focused: true,
 };
 let notch: NotchIndicator | null = null;
+let isShuttingDown = false;
+let readyToQuit = false;
+let quitScheduled = false;
 
 function topThread(): { threadId: string | null; state: NotchState } {
   for (const [threadId, calls] of attention.awaiting) {
@@ -159,16 +223,16 @@ streamHolder.send = (payload) => {
   }
 };
 
-async function resolveViewUrl(): Promise<string> {
-  if (process.env.KIP_DEV_SERVER === "1") {
-    const channel = await Updater.localInfo.channel();
-    if (channel === "dev") {
-      try {
-        const response = await fetch(DEV_SERVER_URL, { method: "HEAD" });
-        if (response.ok) return DEV_SERVER_URL;
-      } catch {
-        console.log("Vite dev server is not running; loading the built view.");
-      }
+async function resolveViewUrl(channel: string): Promise<string> {
+  if (process.env.KIP_DEV_SERVER === "1" && channel === "dev") {
+    try {
+      const response = await fetch(DEV_SERVER_URL, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(1_500),
+      });
+      if (response.ok) return DEV_SERVER_URL;
+    } catch {
+      console.log("Vite dev server is not running; loading the built view.");
     }
   }
   return "views://mainview/index.html";
@@ -211,60 +275,121 @@ ApplicationMenu.setApplicationMenu([
   },
 ]);
 
-const window = new BrowserWindow({
-  title: "Kip",
-  url: await resolveViewUrl(),
-  rpc,
-  titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
-  renderer: process.platform === "darwin" ? "cef" : "native",
-  trafficLightOffset: { x: 16, y: 18 },
-  frame: { x: 120, y: 90, width: 1180, height: 780 },
+await prepareCefProfile(updateChannel);
+const viewUrl = await resolveViewUrl(updateChannel);
+
+function createMainWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    title: "Kip",
+    url: viewUrl,
+    rpc,
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+    renderer: process.platform === "darwin" ? "cef" : "native",
+    trafficLightOffset: { x: 16, y: 18 },
+    frame: { x: 120, y: 90, width: 1180, height: 780 },
+  });
+  windowRef.current = win;
+
+  // Wire close immediately so an early close cannot strand a windowless process.
+  win.on("close", () => {
+    if (windowRef.current === win) windowRef.current = null;
+    quitCleanly();
+  });
+
+  // Windows and Linux draw their own window buttons, so the view needs to know
+  // whether the window is maximized to pick the right icon.
+  const pushWindowState = (): void => {
+    rpc.send.windowState({ maximized: win.isMaximized() });
+  };
+  win.on("resize", pushWindowState);
+  win.on("focus", () => {
+    attention.focused = true;
+    attention.done.clear();
+    refreshNotch();
+  });
+  win.on("blur", () => {
+    attention.focused = false;
+    refreshNotch();
+  });
+
+  try {
+    win.show();
+    win.activate();
+  } catch {
+    // Best-effort foreground activation.
+  }
+  return win;
+}
+
+function focusMainWindow(): void {
+  if (isShuttingDown) return;
+  const win = windowRef.current;
+  if (!win) {
+    createMainWindow();
+    return;
+  }
+  try {
+    if (win.isMinimized()) win.unminimize();
+  } catch {
+    // Ignore if the native window cannot report minimized state.
+  }
+  try {
+    win.show();
+    win.activate();
+  } catch {
+    // If the native handle is gone, fall back to a fresh window.
+    windowRef.current = null;
+    createMainWindow();
+  }
+}
+
+createMainWindow();
+
+// macOS Dock / Spotlight / `open -a Kip` sends reopen when Kip is already running
+// (for example hidden with Cmd+H, minimized, or on another Space).
+Electrobun.events.on("reopen", () => {
+  focusMainWindow();
 });
-windowRef.current = window;
-const updateChannel = await Updater.localInfo.channel();
+
+// Run bounded cleanup before native Cmd+Q exits so sidecars, notch window,
+// and SQLite are released cleanly without leaving a zombie holding CEF locks.
+Electrobun.events.on(
+  "before-quit",
+  (event: { response?: { allow: boolean } }) => {
+    if (readyToQuit) return;
+    event.response = { allow: false };
+    quitCleanly();
+  },
+);
+
 if (updateChannel === "dev" && !process.env.KIP_UPDATE_CURRENT_VERSION) {
   console.log("Update checks are off for the dev channel.");
 } else {
   updateChecker.start();
 }
-// Windows and Linux draw their own window buttons, so the view needs to know
-// whether the window is maximized to pick the right icon.
-const pushWindowState = (): void => {
-  rpc.send.windowState({ maximized: window.isMaximized() });
-};
-window.on("resize", pushWindowState);
-window.on("focus", () => {
-  attention.focused = true;
-  attention.done.clear();
-  refreshNotch();
-});
-window.on("blur", () => {
-  attention.focused = false;
-  refreshNotch();
-});
+
 notch = new NotchIndicator(() => {
   const { threadId } = topThread();
-  if (window.isMinimized()) window.unminimize();
-  window.activate();
+  focusMainWindow();
   if (threadId) rpc.send.focusThread({ threadId });
 });
 refreshNotch();
-// Closing the window quits: a running instance with no window cannot be
-// reopened from the Dock, so leaving the process alive would strand the user.
-window.on("close", () => {
-  void shutdown().finally(() => process.exit(0));
-});
 
 let shutdownPromise: Promise<void> | null = null;
 
 function shutdown(): Promise<void> {
   if (shutdownPromise) return shutdownPromise;
+  isShuttingDown = true;
   shutdownPromise = (async () => {
     if (syncTimer) {
       clearTimeout(syncTimer);
       syncTimer = null;
     }
     updateChecker.stop();
+    if (notch) {
+      notch.dispose();
+      notch = null;
+    }
     try {
       await pluginWindows.disposeAll();
     } catch {
@@ -289,11 +414,29 @@ function shutdown(): Promise<void> {
   return shutdownPromise;
 }
 
+function quitCleanly(): void {
+  if (quitScheduled) return;
+  quitScheduled = true;
+  // Bound shutdown so a hung plugin or session cannot strand a windowless process.
+  const failsafe = setTimeout(() => {
+    readyToQuit = true;
+    process.exit(0);
+  }, SHUTDOWN_TIMEOUT_MS + 6_000);
+  failsafe.unref();
+
+  void Promise.race([shutdown(), Bun.sleep(SHUTDOWN_TIMEOUT_MS)]).finally(
+    () => {
+      readyToQuit = true;
+      Utils.quit();
+    },
+  );
+}
+
 process.on("SIGINT", () => {
-  void shutdown().finally(() => process.exit(0));
+  quitCleanly();
 });
 process.on("SIGTERM", () => {
-  void shutdown().finally(() => process.exit(0));
+  quitCleanly();
 });
 process.on("beforeExit", () => {
   void shutdown();

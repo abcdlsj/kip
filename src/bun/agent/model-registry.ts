@@ -176,9 +176,12 @@ export class ModelRegistry {
       this.runtime.unregisterProvider(providerId);
     }
     this.registered.clear();
-    for (const provider of this.database.listProviders()) {
-      const apiKey = await getApiKey(provider.id);
-      await this.register(provider, apiKey ?? undefined);
+    const providers = this.database.listProviders();
+    const keys = await Promise.all(
+      providers.map((provider) => getApiKey(provider.id)),
+    );
+    for (let i = 0; i < providers.length; i += 1) {
+      await this.register(providers[i]!, keys[i] ?? undefined);
     }
   }
 

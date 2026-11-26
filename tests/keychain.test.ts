@@ -2,7 +2,14 @@ import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deleteApiKey, getApiKey, hasApiKey, setApiKey } from "../src/bun/storage/keychain";
+import {
+  deleteApiKey,
+  getApiKey,
+  hasApiKey,
+  resetKeychainTimeoutState,
+  runCredentialCommand,
+  setApiKey,
+} from "../src/bun/storage/keychain";
 
 let dir = "";
 
@@ -10,11 +17,13 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "kip-keys-"));
   process.env.KIP_DATA_DIR = dir;
   process.env.KIP_KEYCHAIN = "file";
+  resetKeychainTimeoutState();
 });
 
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
   delete process.env.KIP_KEYCHAIN;
+  resetKeychainTimeoutState();
 });
 
 describe("secure credentials", () => {
@@ -35,5 +44,18 @@ describe("secure credentials", () => {
     await setApiKey("demo", "value");
     await deleteApiKey("demo");
     expect(await getApiKey("demo")).toBeNull();
+  });
+
+  test("kills a stalled credential subprocess after the timeout", async () => {
+    const started = performance.now();
+    const result = await runCredentialCommand(
+      [process.execPath, "-e", "setTimeout(() => {}, 10_000)"],
+      { timeoutMs: 120 },
+    );
+    const elapsed = performance.now() - started;
+
+    expect(result.timedOut).toBe(true);
+    expect(result.code).toBe(-1);
+    expect(elapsed).toBeLessThan(2_000);
   });
 });

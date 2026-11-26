@@ -257,6 +257,24 @@ export class NotchIndicator {
     this.render();
   }
 
+  /** Closes the hidden indicator window so it does not keep the app alive on exit. */
+  dispose(): void {
+    if (this.hideTimer) {
+      clearTimeout(this.hideTimer);
+      this.hideTimer = null;
+    }
+    const window = this.window;
+    this.window = null;
+    this.ready = false;
+    this.visible = false;
+    if (!window) return;
+    try {
+      window.close();
+    } catch {
+      // The window may already be gone.
+    }
+  }
+
   private render(): void {
     const window = this.window;
     if (!window) return;
