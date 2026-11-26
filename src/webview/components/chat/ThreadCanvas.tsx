@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowDown, ArrowUpRight, Plus } from "lucide-react";
+import { ArrowDown, ArrowUpRight, Plus, RotateCcw } from "lucide-react";
 import type { Workspace } from "../../../shared/types";
 import { SUGGESTIONS } from "../../../shared/constants";
 import { compactHomePath, greeting } from "../../lib/format";
@@ -221,7 +221,20 @@ export function ThreadCanvas({
                   }
                 />
               ))}
-              {view?.running &&
+              {view?.retry ? (
+                <div className="mt-3 flex items-start gap-2 text-[12.5px] text-[var(--text-muted)]">
+                  <RotateCcw
+                    size={12}
+                    strokeWidth={1.5}
+                    className="mt-[3px] shrink-0"
+                  />
+                  <span className="thinking-shimmer leading-[1.5]">
+                    {view.retry.message} · retrying {view.retry.attempt} /
+                    {view.retry.maxAttempts}
+                  </span>
+                </div>
+              ) : (
+                view?.running &&
                 !view.turns[view.turns.length - 1]?.blocks.some(
                   (block) => block.type !== "text",
                 ) && (
@@ -229,7 +242,8 @@ export function ThreadCanvas({
                     <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-secondary)] pulse-dot" />
                     <span className="thinking-shimmer">Kip is thinking</span>
                   </div>
-                )}
+                )
+              )}
             </>
           )}
         </div>

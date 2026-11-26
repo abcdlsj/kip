@@ -19,6 +19,8 @@ export interface ThreadView {
   /** Messages sent during the run that the agent has not picked up yet. */
   queued: QueuedPrompt[];
   error: string | null;
+  /** A failed request Pi is about to re-send; null when no retry is pending. */
+  retry: { attempt: number; maxAttempts: number; message: string } | null;
   loaded: boolean;
   /** The latest run with undoable file changes (Git workspaces only). */
   changes: RunChanges | null;
@@ -31,6 +33,7 @@ const emptyView = (): ThreadView => ({
   approvals: [],
   queued: [],
   error: null,
+  retry: null,
   loaded: false,
   changes: null,
 });
@@ -261,8 +264,21 @@ export const useChatStore = create<ChatState>()(
           case "usage_update":
             view.usage = event.usage;
             return;
+          case "retry_start": {
+            view.retry = {
+              attempt: event.attempt,
+              maxAttempts: event.maxAttempts,
+              message: event.message,
+            };
+            return;
+          }
+          case "retry_end": {
+            view.retry = null;
+            return;
+          }
           case "turn_complete": {
             view.running = false;
+            view.retry = null;
             view.approvals = [];
             view.queued = [];
             const lastTurn = view.turns[view.turns.length - 1];
@@ -283,6 +299,7 @@ export const useChatStore = create<ChatState>()(
             return;
           case "turn_error": {
             view.running = false;
+            view.retry = null;
             view.error = event.message;
             const last = view.turns[view.turns.length - 1];
             if (last?.role === "assistant") {
@@ -316,6 +333,7 @@ export const useChatStore = create<ChatState>()(
       set((state) => {
         const view = state.threads[threadId] ?? emptyView();
         view.running = false;
+        view.retry = null;
         view.error = message;
         const last = view.turns[view.turns.length - 1];
         if (last?.role === "assistant") {
@@ -350,6 +368,7 @@ export const useChatStore = create<ChatState>()(
         const view = state.threads[threadId];
         if (view) {
           view.running = false;
+          view.retry = null;
           view.approvals = [];
           view.queued = [];
         }

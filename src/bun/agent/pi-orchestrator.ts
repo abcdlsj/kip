@@ -89,6 +89,10 @@ interface ActiveSession {
   queued: QueuedEntry[];
   /** Git tree of the workspace when the current run started; null outside Git. */
   runBefore: Promise<string | null> | null;
+  /** Pi retry attempt in progress for this run; 0 means no retry. */
+  retryAttempt: number;
+  /** Last failed attempt's message, so a cancelled retry still reports the cause. */
+  retryFailure: string | null;
 }
 
 /** Prefix for notes Kip adds to a prompt; the transcript view hides these lines. */
@@ -241,6 +245,8 @@ export class KipOrchestrator {
 
     active.running = true;
     active.firstPrompt = null;
+    active.retryAttempt = 0;
+    active.retryFailure = null;
     const thread = this.requireThread(input.threadId);
     const workspace = this.database.getWorkspace(thread.workspaceId);
     if (!workspace) {
@@ -727,6 +733,8 @@ export class KipOrchestrator {
       buffer,
       queued: [],
       runBefore: null,
+      retryAttempt: 0,
+      retryFailure: null,
     };
 
     active.unsubscribe = session.subscribe((event) =>
@@ -919,6 +927,48 @@ export class KipOrchestrator {
         });
         return;
       }
+      case "agent_end": {
+        const failure = lastAssistantFailure(event.messages);
+        if (failure) active.retryFailure = failure;
+        // A retry follows, and the retry budget running out is reported by
+        // auto_retry_end, which carries the final error.
+        if (event.willRetry || active.retryAttempt > 0) return;
+        if (!failure) return;
+        this.sealThinking(active);
+        this.emit(active.threadId, { kind: "turn_error", message: failure });
+        return;
+      }
+      case "auto_retry_start": {
+        active.buffer.flush();
+        this.sealThinking(active);
+        active.retryAttempt = event.attempt;
+        this.emit(active.threadId, {
+          kind: "retry_start",
+          attempt: event.attempt,
+          maxAttempts: event.maxAttempts,
+          delayMs: event.delayMs,
+          message: event.errorMessage,
+        });
+        return;
+      }
+      case "auto_retry_end": {
+        active.retryAttempt = 0;
+        this.emit(active.threadId, {
+          kind: "retry_end",
+          attempt: event.attempt,
+          success: event.success,
+        });
+        // A stop request cancels the retry; the user does not need an error
+        // banner for a run they just ended. The transcript keeps the failure.
+        if (event.success || event.finalError === "Retry cancelled") return;
+        this.sealThinking(active);
+        this.emit(active.threadId, {
+          kind: "turn_error",
+          message:
+            event.finalError || active.retryFailure || "The agent run failed",
+        });
+        return;
+      }
       case "agent_settled": {
         active.buffer.flush();
         active.running = false;
@@ -943,6 +993,8 @@ export class KipOrchestrator {
         active.currentTurn = null;
         active.textBlockId = null;
         active.thinkingBlockId = null;
+        active.retryAttempt = 0;
+        active.retryFailure = null;
         if (active.firstPrompt) {
           const firstPrompt = active.firstPrompt;
           const fallbackTitle = titleFromPrompt(firstPrompt);
@@ -1064,6 +1116,30 @@ export class KipOrchestrator {
     return id;
   }
 
+  /** Closes an in-flight thinking block so a failed attempt stops shimmering. */
+  private sealThinking(active: ActiveSession): void {
+    const turn = active.currentTurn;
+    const blockId = active.thinkingBlockId;
+    if (!turn || !blockId) return;
+    const durationMs =
+      active.thinkingStartedAt === null
+        ? 0
+        : Math.max(0, Date.now() - active.thinkingStartedAt);
+    const block = turn.blocks.find((item) => item.id === blockId);
+    if (block?.type === "thinking") {
+      block.isComplete = true;
+      block.durationMs = durationMs > 0 ? durationMs : undefined;
+    }
+    active.thinkingBlockId = null;
+    active.thinkingStartedAt = null;
+    this.emit(active.threadId, {
+      kind: "thinking_done",
+      turnId: turn.id,
+      blockId,
+      durationMs,
+    });
+  }
+
   private requireThread(threadId: string): ThreadSummary {
     const thread = this.database.getThread(threadId);
     if (!thread) throw new Error("Thread not found");
@@ -1104,6 +1180,19 @@ function findToolBlock(
     if (block.type === "tool_call" && block.id === toolCallId) return block;
   }
   return undefined;
+}
+
+/** The error message of a run's final assistant message, if that run failed. */
+function lastAssistantFailure(messages: readonly unknown[]): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index] as
+      | { role?: string; stopReason?: string; errorMessage?: string }
+      | undefined;
+    if (!message || message.role !== "assistant") continue;
+    if (message.stopReason !== "error") return null;
+    return message.errorMessage || "The agent run failed";
+  }
+  return null;
 }
 
 /** Chat threads have no tools, no system prompt, and write nothing to the workspace. */

@@ -302,6 +302,20 @@ export type AgentStreamEvent =
     }
   | { kind: "usage_update"; usage: ContextUsage }
   | { kind: "thread_title_updated"; title: string }
+  /**
+   * Pi treats a failed request as retryable and re-sends it. Without this event
+   * the UI shows nothing between attempts, so a stalled provider looks like an
+   * endlessly thinking agent.
+   */
+  | {
+      kind: "retry_start";
+      attempt: number;
+      maxAttempts: number;
+      delayMs: number;
+      message: string;
+    }
+  /** The retry attempt finished; `success` is false when the run finally failed. */
+  | { kind: "retry_end"; attempt: number; success: boolean }
   | { kind: "turn_complete" }
   /** A message sent during a run was delivered to the agent. */
   | { kind: "user_turn"; turn: ChatTurn }

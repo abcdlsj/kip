@@ -1217,6 +1217,18 @@ async function runTuiSession(
         syncChrome();
         return;
       }
+      case "retry_start": {
+        workingLine.setRetry(
+          `Retrying ${event.attempt}/${event.maxAttempts} · ${event.message}`,
+        );
+        tui.requestRender();
+        return;
+      }
+      case "retry_end": {
+        workingLine.setRetry(null);
+        tui.requestRender();
+        return;
+      }
       case "turn_complete": {
         running = false;
         workingLine.stop();

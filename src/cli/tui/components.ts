@@ -551,6 +551,7 @@ export class WorkingLineComponent implements Component {
   private startedAt = 0;
   private frame = 0;
   private queuedCount = 0;
+  private retryNote: string | null = null;
 
   constructor(private theme: KipTuiTheme) {}
 
@@ -567,10 +568,16 @@ export class WorkingLineComponent implements Component {
   stop(): void {
     this.active = false;
     this.queuedCount = 0;
+    this.retryNote = null;
   }
 
   setQueuedCount(count: number): void {
     this.queuedCount = count;
+  }
+
+  /** Shows a pending automatic retry instead of an unexplained spinner. */
+  setRetry(note: string | null): void {
+    this.retryNote = note;
   }
 
   tick(): boolean {
@@ -589,7 +596,11 @@ export class WorkingLineComponent implements Component {
       this.queuedCount > 0
         ? ` ${this.theme.faint("·")} ${this.theme.muted(`${this.queuedCount} queued`)}`
         : "";
-    const status = elapsed ? `Working · ${elapsed}` : "Working";
+    const status = this.retryNote
+      ? this.retryNote
+      : elapsed
+        ? `Working · ${elapsed}`
+        : "Working";
     const left = ` ${spinner} ${this.theme.muted(status)}${queued}`;
     const right = this.theme.faint("esc to stop ");
     return [composeRow(left, right, Math.max(20, width))];

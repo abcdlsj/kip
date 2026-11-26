@@ -122,6 +122,13 @@ export async function runPrintMode(
       case "tool_start":
         writeStatus(dim(`· ${event.block.summaryLabel}…`));
         break;
+      case "retry_start":
+        writeStatus(
+          dim(
+            `↻ retrying ${event.attempt}/${event.maxAttempts} · ${event.message}`,
+          ),
+        );
+        break;
       case "tool_end": {
         const formatted = formatToolDuration(event.durationMs);
         const ms = formatted ? dim(` (${formatted})`) : "";
