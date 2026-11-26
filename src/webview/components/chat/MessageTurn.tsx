@@ -7,6 +7,11 @@ import {
   Pencil,
   RotateCcw,
 } from "lucide-react";
+import {
+  extractCitations,
+  mergeCitations,
+  type CitationSource,
+} from "../../../shared/citations";
 import type {
   ChatTurn,
   TextBlock,
@@ -17,6 +22,7 @@ import type {
 import { copyText } from "../../lib/clipboard";
 import { ApprovalBanner } from "./ApprovalBanner";
 import { Markdown } from "./Markdown";
+import { SourcesRow } from "./SourcesRow";
 import { ThinkingTrace } from "./ThinkingTrace";
 import { ToolStepPill } from "./ToolStepPill";
 import { TurnActions } from "./TurnActions";
@@ -82,6 +88,22 @@ function MessageTurnInner({
   const textBlocks = turn.blocks.filter(
     (block): block is TextBlock => block.type === "text",
   );
+  const extractedByBlock = useMemo(() => {
+    const map = new Map<string, { body: string; sources: CitationSource[] }>();
+    for (const block of textBlocks) {
+      map.set(block.id, extractCitations(block.text));
+    }
+    return map;
+  }, [textBlocks]);
+  const sources = useMemo(
+    () =>
+      mergeCitations(
+        textBlocks.map(
+          (block) => extractedByBlock.get(block.id)?.sources ?? [],
+        ),
+      ),
+    [textBlocks, extractedByBlock],
+  );
   const workSegments = segments.filter(
     (segment) => segment.kind === "work",
   ).length;
@@ -92,14 +114,14 @@ function MessageTurnInner({
         if (segment.kind === "text") {
           const isStreamingBlock =
             streaming && segment.block.id === lastTextBlock?.id;
+          const body =
+            extractedByBlock.get(segment.block.id)?.body ?? segment.block.text;
           return (
             <div
               key={segment.block.id}
               className={isStreamingBlock ? "caret" : ""}
             >
-              <Markdown streaming={isStreamingBlock}>
-                {segment.block.text}
-              </Markdown>
+              <Markdown streaming={isStreamingBlock}>{body}</Markdown>
             </div>
           );
         }
@@ -179,6 +201,7 @@ function MessageTurnInner({
           )}
         </div>
       )}
+      {sources.length > 0 && <SourcesRow sources={sources} />}
       {!streaming && <TurnActions blocks={textBlocks} />}
     </div>
   );

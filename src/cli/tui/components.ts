@@ -29,6 +29,11 @@ import type {
   ToolCallBlock,
 } from "../../shared/types";
 import {
+  extractCitations,
+  mergeCitations,
+  type CitationSource,
+} from "../../shared/citations";
+import {
   formatThinkingDuration,
   formatToolDuration,
   formatWorkDuration,
@@ -332,6 +337,7 @@ export class AssistantTurnComponent implements Component {
   render(width: number): string[] {
     const safeW = Math.max(20, width);
     const out: string[] = [];
+    const collectedSources: CitationSource[][] = [];
     let lastKind: ContentBlock["type"] | null = null;
 
     for (const block of this.turn.blocks) {
@@ -345,17 +351,26 @@ export class AssistantTurnComponent implements Component {
         lastKind = "tool_call";
       } else if (block.type === "text") {
         if (!block.text.trim()) continue;
+        const { body, sources } = extractCitations(block.text);
+        if (sources.length > 0) collectedSources.push(sources);
+        if (!body.trim()) continue;
         if (lastKind !== null && lastKind !== "text") out.push("");
         let md = this.markdownCache.get(block.id);
         if (!md) {
-          md = new Markdown(block.text, 1, 0, this.theme.markdown);
+          md = new Markdown(body, 1, 0, this.theme.markdown);
           this.markdownCache.set(block.id, md);
         } else {
-          md.setText(block.text);
+          md.setText(body);
         }
         out.push(...md.render(safeW));
         lastKind = "text";
       }
+    }
+
+    const sources = mergeCitations(collectedSources);
+    if (sources.length > 0) {
+      if (out.length > 0) out.push("");
+      out.push(...this.renderSources(sources, safeW));
     }
 
     if (this.turn.error) {
@@ -371,6 +386,38 @@ export class AssistantTurnComponent implements Component {
     }
 
     return out;
+  }
+
+  private renderSources(sources: CitationSource[], width: number): string[] {
+    const limit = this.verbose ? sources.length : Math.min(4, sources.length);
+    const hidden = sources.length - limit;
+    const lines = [truncateToWidth(` ${this.theme.faint("Sources")}`, width)];
+    for (let i = 0; i < limit; i += 1) {
+      const source = sources[i]!;
+      const num = source.id ?? i + 1;
+      const prefix = ` ${this.theme.faint(`[${num}]`)} `;
+      const label =
+        source.title && source.title !== source.url
+          ? source.title
+          : source.domain;
+      const combined = `${prefix}${this.theme.muted(label)} ${this.theme.faint(source.url)}`;
+      if (visibleWidth(combined) <= width) {
+        lines.push(combined);
+      } else {
+        lines.push(
+          truncateToWidth(`${prefix}${this.theme.muted(label)}`, width),
+        );
+        lines.push(
+          truncateToWidth(`     ${this.theme.faint(source.url)}`, width),
+        );
+      }
+    }
+    if (hidden > 0) {
+      lines.push(
+        truncateToWidth(` ${this.theme.faint(`+${hidden} more  ^O`)}`, width),
+      );
+    }
+    return lines;
   }
 
   private renderThinking(block: ThinkingBlock, width: number): string[] {
