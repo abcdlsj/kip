@@ -5,7 +5,7 @@
  * Everything here is plain HTTP against the server the user runs; nothing reaches Google.
  */
 import type { ProviderModel } from "../../shared/types";
-import { geminiModelName } from "../../shared/plugins/gemini2api";
+import { geminiModelName, stallTimeoutMs, DEFAULT_STALL_TIMEOUT_SECONDS } from "../../shared/plugins/gemini2api";
 import type {
   GatewayPlugin,
   GatewayRequestPolicy,
@@ -32,9 +32,6 @@ import { getApiKey } from "../storage/keychain";
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = "8790";
 const TIMEOUT_MS = 8_000;
-/** Local sidecar stall thresholds (much tighter than Pi's 5-minute remote default). */
-const DEFAULT_FIRST_BYTE_TIMEOUT_MS = 60_000;
-const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 60_000;
 /** The web app reports no output cap, so this mirrors the default every other provider uses. */
 const DEFAULT_MAX_OUTPUT = 65_536;
 const DEFAULT_CONTEXT_WINDOW = 200_000;
@@ -397,10 +394,13 @@ export const gemini2apiPlugin: GatewayPlugin = {
   },
   requestPolicy: (context): GatewayRequestPolicy | null => {
     idleContext = context;
-    if (!isLocallyManaged(context.dataDir, context.values())) return null;
+    const values = context.values();
+    if (!isLocallyManaged(context.dataDir, values)) return null;
+    // Much tighter than Pi's five-minute remote default, but configurable:
+    // Gemini Web can think for a while before the first byte arrives.
     return {
-      firstByteTimeoutMs: DEFAULT_FIRST_BYTE_TIMEOUT_MS,
-      streamIdleTimeoutMs: DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+      firstByteTimeoutMs: stallTimeoutMs(values, "firstByteTimeoutSeconds"),
+      streamIdleTimeoutMs: stallTimeoutMs(values, "streamIdleTimeoutSeconds"),
     };
   },
   beforeAttempt: async (context, signal) => {
@@ -496,6 +496,20 @@ export const gemini2apiPlugin: GatewayPlugin = {
       kind: "text",
       placeholder: String(DEFAULT_IDLE_MINUTES),
       help: `Only used while pausing is on. Everything below ${MIN_IDLE_MINUTES} is treated as ${MIN_IDLE_MINUTES}.`,
+    },
+    {
+      name: "firstByteTimeoutSeconds",
+      label: "First byte timeout",
+      kind: "text",
+      placeholder: String(DEFAULT_STALL_TIMEOUT_SECONDS),
+      help: `Seconds to wait for the gateway to start answering before Kip treats it as hung and restarts it. Raise it if long thinking turns get cut. Blank keeps ${DEFAULT_STALL_TIMEOUT_SECONDS}.`,
+    },
+    {
+      name: "streamIdleTimeoutSeconds",
+      label: "Stream idle timeout",
+      kind: "text",
+      placeholder: String(DEFAULT_STALL_TIMEOUT_SECONDS),
+      help: `Seconds of silence allowed in the middle of a reply before the gateway counts as hung. Blank keeps ${DEFAULT_STALL_TIMEOUT_SECONDS}.`,
     },
     {
       name: "threadMode",

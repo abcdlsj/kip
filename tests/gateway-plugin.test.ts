@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { gemini2apiPlugin } from "../src/bun/plugins/gemini2api";
+import {
+  DEFAULT_STALL_TIMEOUT_SECONDS,
+  MAX_STALL_TIMEOUT_SECONDS,
+  MIN_STALL_TIMEOUT_SECONDS,
+  stallTimeoutMs,
+} from "../src/shared/plugins/gemini2api";
 
 interface GatewayOptions {
   server?: string;
@@ -218,5 +224,49 @@ describe("Chat threads capability", () => {
     const field = gemini2apiPlugin.fields.find((item) => item.name === "threadMode");
     expect(field?.kind).toBe("select");
     expect(field?.options?.map((option) => option.value)).toEqual(["chat", "agent"]);
+  });
+});
+
+describe("Stall timeouts", () => {
+  test("defaults to 120 seconds when the setting is blank or unusable", () => {
+    expect(DEFAULT_STALL_TIMEOUT_SECONDS).toBe(120);
+    expect(stallTimeoutMs({}, "firstByteTimeoutSeconds")).toBe(120_000);
+    expect(stallTimeoutMs({ firstByteTimeoutSeconds: "  " }, "firstByteTimeoutSeconds")).toBe(
+      120_000,
+    );
+    expect(stallTimeoutMs({ firstByteTimeoutSeconds: "soon" }, "firstByteTimeoutSeconds")).toBe(
+      120_000,
+    );
+  });
+
+  test("reads seconds from the plugin form and clamps what is out of range", () => {
+    expect(
+      stallTimeoutMs({ streamIdleTimeoutSeconds: "300" }, "streamIdleTimeoutSeconds"),
+    ).toBe(300_000);
+    expect(
+      stallTimeoutMs({ streamIdleTimeoutSeconds: "1" }, "streamIdleTimeoutSeconds"),
+    ).toBe(MIN_STALL_TIMEOUT_SECONDS * 1_000);
+    expect(
+      stallTimeoutMs({ streamIdleTimeoutSeconds: "99999" }, "streamIdleTimeoutSeconds"),
+    ).toBe(MAX_STALL_TIMEOUT_SECONDS * 1_000);
+  });
+
+  test("the gateway window offers both timeouts", () => {
+    const names = gemini2apiPlugin.fields.map((field) => field.name);
+    expect(names).toContain("firstByteTimeoutSeconds");
+    expect(names).toContain("streamIdleTimeoutSeconds");
+    const field = gemini2apiPlugin.fields.find(
+      (item) => item.name === "firstByteTimeoutSeconds",
+    );
+    expect(field?.placeholder).toBe(String(DEFAULT_STALL_TIMEOUT_SECONDS));
+  });
+
+  test("remote or external servers keep Pi's own timeouts", () => {
+    const policy = gemini2apiPlugin.requestPolicy?.({
+      pluginId: "gemini2api",
+      dataDir: "/nonexistent-kip-plugin-dir",
+      values: () => ({ host: "192.168.1.9", port: "8790" }),
+    });
+    expect(policy).toBeNull();
   });
 });

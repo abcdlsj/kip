@@ -32,6 +32,32 @@ export interface GeminiModel {
   displayName: string;
 }
 
+/**
+ * How long a locally managed gateway may stay silent before Kip treats it as
+ * hung. Generous by default: Gemini Web can think for a while before the first
+ * byte, and a restart costs the user the whole answer.
+ */
+export const DEFAULT_STALL_TIMEOUT_SECONDS = 120;
+export const MIN_STALL_TIMEOUT_SECONDS = 10;
+export const MAX_STALL_TIMEOUT_SECONDS = 1800;
+
+/** Reads a stall timeout in seconds from a plugin's saved values. */
+export function stallTimeoutMs(
+  values: Record<string, string>,
+  field: string,
+  fallbackSeconds = DEFAULT_STALL_TIMEOUT_SECONDS,
+): number {
+  const raw = (values[field] ?? "").trim();
+  const seconds = Number(raw);
+  if (raw === "" || !Number.isFinite(seconds))
+    return fallbackSeconds * 1_000;
+  const clamped = Math.min(
+    MAX_STALL_TIMEOUT_SECONDS,
+    Math.max(MIN_STALL_TIMEOUT_SECONDS, seconds),
+  );
+  return Math.round(clamped * 1_000);
+}
+
 export interface GeminiHealth {
   version: string | null;
   accounts: Array<{ id: string; status: string; signedIn: boolean }>;
