@@ -60,14 +60,14 @@ import {
 } from "./sync/exporter";
 import { connectGoogleDrive, disconnectGoogleDrive } from "./sync/gdrive-sync";
 import { getSyncConfig, triggerSync, updateSyncConfig } from "./sync/s3-sync";
-import type { UpdateChecker } from "./system/update-checker";
+import type { UpdateManager } from "./updater";
 import { getCliStatus, installCli, uninstallCli } from "./system/cli-installer";
 
 export interface RpcDeps {
   database: KipDatabase;
   registry: ModelRegistry;
   orchestrator: KipOrchestrator;
-  updateChecker: UpdateChecker;
+  updater: UpdateManager;
   pluginWindows: PluginWindows;
   windowRef: { current: BrowserWindow | null };
 }
@@ -425,9 +425,14 @@ export function createKipRpc(deps: RpcDeps) {
             else window.maximize();
           } else window.close();
         },
-        getUpdateStatus: () => deps.updateChecker.statusSnapshot(),
+        updaterGetStatus: () => deps.updater.status(),
+        updaterCheckNow: () => deps.updater.checkManual(),
+        updaterDownloadUpdate: () => deps.updater.startDownload(),
+        updaterCommitRestart: ({ appState }) =>
+          deps.updater.commitRestart(appState),
+        updaterTakeHandoff: () => deps.updater.takeStartupHandoff(),
         openUpdatePage: () => {
-          const { releaseUrl } = deps.updateChecker.statusSnapshot();
+          const releaseUrl = deps.updater.status().release_url;
           if (!releaseUrl || !/^https?:\/\//i.test(releaseUrl))
             return { opened: false };
           Utils.openExternal(releaseUrl);
@@ -435,9 +440,6 @@ export function createKipRpc(deps: RpcDeps) {
         },
         getRunningThreadCount: () =>
           deps.orchestrator.runningThreadIds().length,
-        restartForUpdate: async () => ({
-          started: await deps.updateChecker.applyUpdate(),
-        }),
         getCliStatus: () => getCliStatus(),
         installCli: () => installCli(),
         uninstallCli: () => uninstallCli(),

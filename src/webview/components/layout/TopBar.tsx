@@ -24,6 +24,7 @@ import { request } from "../../rpc-client";
 import { useChatStore } from "../../stores/chat-store";
 import { useUiStore } from "../../stores/ui-store";
 import { ChangesChip } from "./ChangesChip";
+import { UpdatePill } from "./UpdatePill";
 import { WindowControls } from "./WindowControls";
 
 interface TopBarProps {
@@ -139,6 +140,7 @@ export function TopBar({ workspace, thread, usage, scrolled }: TopBarProps) {
         )}
       </div>
       <div className="no-drag ml-auto flex items-center gap-1">
+        {collapsed && <UpdatePill compact />}
         {thread && changes && (
           <ChangesChip
             threadId={thread.id}

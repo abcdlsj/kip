@@ -28,6 +28,8 @@ import type {
   ThinkingLevel,
   ThreadMode,
   ThreadSummary,
+  UpdateHandoffAppState,
+  UpdateHandoffPayload,
   UpdateStatus,
   WindowAction,
   Workspace,
@@ -218,14 +220,22 @@ export interface KipRPCSchema {
 
       windowControl: { params: { action: WindowAction }; response: void };
 
-      /** Last known result of the background GitHub Releases check. */
-      getUpdateStatus: { params: void; response: UpdateStatus };
-      /** Opens the release page in the default browser. */
+      /** Seamless Ed25519 auto-updater endpoints. */
+      updaterGetStatus: { params: void; response: UpdateStatus };
+      updaterCheckNow: { params: void; response: UpdateStatus };
+      updaterDownloadUpdate: { params: void; response: UpdateStatus };
+      updaterCommitRestart: {
+        params: { appState: UpdateHandoffAppState };
+        response: { started: boolean };
+      };
+      updaterTakeHandoff: {
+        params: void;
+        response: UpdateHandoffPayload | null;
+      };
+      /** Opens the release page in the default browser when in-place apply is unavailable. */
       openUpdatePage: { params: void; response: { opened: boolean } };
-      /** Agents still working, so the restart prompt can warn before stopping them. */
+      /** Agents still working, so the restart gate can defer interrupting them. */
       getRunningThreadCount: { params: void; response: number };
-      /** Replaces the staged bundle and quits; the new copy relaunches itself. */
-      restartForUpdate: { params: void; response: { started: boolean } };
 
       /** Command-line (`kip`) PATH installation management. */
       getCliStatus: { params: void; response: CliInstallStatus };

@@ -84,10 +84,21 @@ jobs:
       # binaries must resolve inside this install, not a bunx cache.
       - run: bun run electrobun build --env=stable
 
-      - name: Attach the dmg
+      - name: Package macOS .app.zip for auto-update
+        run: |
+          set -euo pipefail
+          app="build/stable-macos-${{ matrix.arch }}/Kip.app"
+          if [ ! -d "$app" ]; then
+            app=$(find build -maxdepth 2 -name 'Kip.app' -type d | head -n 1)
+          fi
+          [ -d "$app" ] || { echo "::error::Kip.app not found in build/"; ls -la build/; exit 1; }
+          /usr/bin/codesign --verify --deep --strict "$app"
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$app" "artifacts/stable-macos-${{ matrix.arch }}-Kip.app.zip"
+
+      - name: Attach macOS release assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" artifacts/*.dmg --clobber
+        run: gh release upload "$TAG" artifacts/*.dmg artifacts/*-Kip.app.zip --clobber
 
       - uses: actions/upload-artifact@v7
         with:
@@ -263,6 +274,38 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: kip-macos-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate and attach signed auto-update manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          arm_zip="release-assets/stable-macos-arm64-Kip.app.zip"
+          x64_zip="release-assets/stable-macos-x64-Kip.app.zip"
+          for f in "$arm_zip" "$x64_zip"; do
+            [ -f "$f" ] || { echo "::error::missing $f"; ls -la release-assets; exit 1; }
+          done
+          python3 scripts/generate-update-manifest.py \
+            --app kip \
+            --repo abcdlsj/kip \
+            --tag "$TAG" \
+            --version "${TAG#v}" \
+            --bundle-id ai.kip.desktop \
+            --bundle-name Kip.app \
+            --min-os 12.0 \
+            --out-dir update-manifest \
+            --asset "darwin-aarch64=${arm_zip}" \
+            --asset "darwin-x86_64=${x64_zip}"
+          if [ -f update-manifest/latest.json ] && [ -f update-manifest/latest.json.sig ]; then
+            gh release upload "$TAG" update-manifest/latest.json update-manifest/latest.json.sig --clobber
+          fi
 
       - name: Drop the draft flag and list the assets
         env:

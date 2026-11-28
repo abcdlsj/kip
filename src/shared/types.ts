@@ -370,32 +370,52 @@ export interface CreateThreadInput {
 
 export type WindowAction = "minimize" | "maximize" | "close";
 
-/**
- * How this copy of Kip was installed, which decides how an update is applied.
- * `homebrew` points at `brew upgrade --cask kip`, `direct` can replace itself,
- * `manual` has no writable bundle and falls back to the release page.
- */
-export type UpdateInstallSource = "homebrew" | "direct" | "manual";
+/** Lifecycle phase of the Ed25519-verified seamless auto-updater. */
+export type UpdatePhase =
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "verifying"
+  | "ready_to_restart"
+  | "flushing"
+  | "installing"
+  | "error";
 
-/**
- * Result of the background GitHub Releases check. `available` drives the single
- * quiet arrow at the bottom of the sidebar.
- */
+/** Current status snapshot pushed from the Bun updater to the webview. */
 export interface UpdateStatus {
-  /** Version of the running app, e.g. "0.2.2". */
+  /** Running version without leading "v", e.g. "0.2.18". */
   current: string;
-  /** Newer release version without the leading "v", when one exists. */
-  latest: string | null;
+  /** Latest version advertised by the signed manifest, if checked. */
+  latest?: string | null;
   available: boolean;
-  /** `ready` means a staged bundle waits for the user to restart. */
-  state: "idle" | "checking" | "available" | "downloading" | "ready";
-  installSource: UpdateInstallSource;
-  /** Download progress, 0-100. Only meaningful while `downloading`. */
+  state: UpdatePhase;
+  /** Download/verification progress, 0-100. */
   progress: number;
-  /** Release page for `latest`, opened from the sidebar arrow. */
-  releaseUrl: string | null;
-  /** Unix ms of the last successful check, or null before the first one. */
-  checkedAt: number | null;
+  /** True when the current macOS bundle can be atomically swapped in place. */
+  can_apply: boolean;
+  release_url?: string | null;
+  notes?: string | null;
+  error?: string | null;
+}
+
+/** Frontend session state preserved across an atomic update restart. */
+export interface UpdateHandoffAppState {
+  activeWorkspaceId?: string | null;
+  activeThreadId?: string | null;
+  drafts?: Record<string, string>;
+  scrollTop?: number;
+  scrollPinned?: boolean;
+}
+
+/** Atomic one-shot handoff payload written before exit and consumed on boot. */
+export interface UpdateHandoffPayload {
+  schema_version: number;
+  from_version: string;
+  to_version: string;
+  created_at_ms: number;
+  ttl_ms: number;
+  app_state: UpdateHandoffAppState;
 }
 
 /** Status of the `kip` command-line shim installed on PATH. */

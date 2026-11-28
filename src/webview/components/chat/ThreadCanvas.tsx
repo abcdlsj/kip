@@ -12,6 +12,10 @@ import { SUGGESTIONS } from "../../../shared/constants";
 import { compactHomePath, greeting } from "../../lib/format";
 import { modShortcut } from "../../lib/platform";
 import { submitPrompt } from "../../lib/send";
+import {
+  consumePendingScrollRestore,
+  recordThreadScroll,
+} from "../../lib/update-handoff";
 import { useChatStore } from "../../stores/chat-store";
 import { useUiStore } from "../../stores/ui-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
@@ -59,10 +63,33 @@ export function ThreadCanvas({
   }, []);
 
   useLayoutEffect(() => {
-    if (pinned && view?.loaded) {
+    if (!view?.loaded) return;
+    const restored = consumePendingScrollRestore(threadId);
+    if (restored) {
+      setPinned(restored.scrollPinned);
+      requestAnimationFrame(() => {
+        const container = scrollRef.current;
+        if (!container) return;
+        container.scrollTop = restored.scrollTop;
+        const distance =
+          container.scrollHeight - container.scrollTop - container.clientHeight;
+        setShowJump(!restored.scrollPinned && distance > 120);
+        onScrolled?.(container.scrollTop > 8);
+      });
+      return;
+    }
+    if (pinned) {
       requestAnimationFrame(() => scrollToBottom());
     }
-  }, [view?.turns, view?.running, view?.loaded, pinned, scrollToBottom]);
+  }, [
+    threadId,
+    view?.turns,
+    view?.running,
+    view?.loaded,
+    pinned,
+    scrollToBottom,
+    onScrolled,
+  ]);
 
   useLayoutEffect(() => {
     if (approvalCount > previousApprovals.current) {
@@ -85,6 +112,7 @@ export function ThreadCanvas({
     setPinned(nextPinned);
     setShowJump(!nextPinned && distance > 120);
     onScrolled?.(container.scrollTop > 8);
+    recordThreadScroll(threadId, container.scrollTop, nextPinned);
   };
 
   const editTurn = useChatStore((state) => state.editUserTurn);

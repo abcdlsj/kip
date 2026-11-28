@@ -15,6 +15,7 @@ import {
   Sun,
 } from "lucide-react";
 import type { ThemeMode } from "../../../shared/types";
+import { checkForUpdatesNow } from "../../lib/auto-update";
 import { compactHomePath } from "../../lib/format";
 import { modShortcut } from "../../lib/platform";
 import { request } from "../../rpc-client";
@@ -111,6 +112,13 @@ export function CommandPalette() {
         icon: RefreshCw,
         run: () =>
           void request("triggerSync", undefined).catch(() => undefined),
+      },
+      {
+        id: "check-updates",
+        label: "Check for Updates",
+        group: "Actions",
+        icon: RefreshCw,
+        run: () => void checkForUpdatesNow(),
       },
     ];
     if (activeThreadId) {

@@ -3,13 +3,15 @@ import { AppShell } from "./components/layout/AppShell";
 import { Logo } from "./components/layout/Logo";
 import { CommandPalette } from "./components/modals/CommandPalette";
 import { SettingsModal } from "./components/modals/SettingsModal";
+import { initAutoUpdateListeners } from "./lib/auto-update";
 import { stopThread } from "./lib/send";
+import { applyUpdateHandoff } from "./lib/update-handoff";
 import {
   onAgentStream,
   onFocusThread,
   onSyncStatus,
-  onUpdateStatus,
   onWindowState,
+  request,
 } from "./rpc-client";
 import { useChatStore } from "./stores/chat-store";
 import { useUiStore } from "./stores/ui-store";
@@ -27,6 +29,14 @@ export default function App() {
         useUiStore.getState().initialize(),
         useWorkspaceStore.getState().initialize(),
       ]);
+      try {
+        const handoff = await request("updaterTakeHandoff", undefined);
+        if (handoff && !cancelled) {
+          await applyUpdateHandoff(handoff);
+        }
+      } catch {
+        // Best-effort handoff restore must never block boot.
+      }
       if (!cancelled) setBooted(true);
     })();
     return () => {
@@ -115,9 +125,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    return onUpdateStatus((status) => {
-      useUiStore.getState().setUpdate(status);
-    });
+    return initAutoUpdateListeners();
   }, []);
 
   useEffect(() => {

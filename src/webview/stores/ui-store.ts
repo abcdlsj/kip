@@ -27,11 +27,16 @@ interface UiState {
   syncMessage: string | null;
   /** Maximized state of the window, for the in-app buttons off macOS. */
   windowMaximized: boolean;
-  /** Last known update check result; null until the first reply arrives. */
+  /** Last known update status; null until the first reply arrives. */
   update: UpdateStatus | null;
+  /** True while frontend state is flushing to `update-handoff.json` before exit. */
+  updateFlushing: boolean;
+  /** Transient notice when a restart is deferred or an update check fails. */
+  updateNotice: string | null;
   /** Unsent composer text per thread; NEW_THREAD_DRAFT holds text before a thread exists. */
   drafts: Record<string, string>;
   setDraft: (key: string, draft: string) => void;
+  restoreDrafts: (drafts: Record<string, string>) => void;
   initialize: () => Promise<void>;
   refresh: () => Promise<void>;
   refreshProviders: () => Promise<void>;
@@ -46,8 +51,8 @@ interface UiState {
   setSyncState: (state: "idle" | "running" | "error", message?: string) => void;
   setWindowMaximized: (maximized: boolean) => void;
   setUpdate: (update: UpdateStatus) => void;
-  openUpdatePage: () => Promise<void>;
-  restartForUpdate: () => Promise<void>;
+  setUpdateFlushing: (flushing: boolean) => void;
+  setUpdateNotice: (notice: string | null) => void;
 }
 
 let systemListenerAttached = false;
@@ -66,6 +71,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   syncMessage: null,
   windowMaximized: false,
   update: null,
+  updateFlushing: false,
+  updateNotice: null,
   drafts: {},
 
   setDraft: (key, draft) =>
@@ -73,6 +80,17 @@ export const useUiStore = create<UiState>((set, get) => ({
       const drafts = { ...state.drafts };
       if (draft) drafts[key] = draft;
       else delete drafts[key];
+      return { drafts };
+    }),
+
+  restoreDrafts: (incoming) =>
+    set((state) => {
+      const drafts = { ...state.drafts };
+      for (const [key, value] of Object.entries(incoming)) {
+        if (typeof value === "string" && value.length > 0) {
+          drafts[key] = value;
+        }
+      }
       return { drafts };
     }),
 
@@ -87,7 +105,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     const providers = await request("listProviders", undefined);
     set({ providers });
     // The first check may finish before the view exists; ask once on boot.
-    const update = await request("getUpdateStatus", undefined);
+    const update = await request("updaterGetStatus", undefined);
     set({ update });
     if (!systemListenerAttached) {
       systemListenerAttached = true;
@@ -156,11 +174,7 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   setUpdate: (update) => set({ update }),
 
-  openUpdatePage: async () => {
-    await request("openUpdatePage", undefined);
-  },
+  setUpdateFlushing: (updateFlushing) => set({ updateFlushing }),
 
-  restartForUpdate: async () => {
-    await request("restartForUpdate", undefined);
-  },
+  setUpdateNotice: (updateNotice) => set({ updateNotice }),
 }));

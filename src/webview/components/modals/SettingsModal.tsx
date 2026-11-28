@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   Boxes,
@@ -15,6 +16,7 @@ import type {
   ThemeMode,
   ThinkingLevel,
 } from "../../../shared/types";
+import { activateUpdate, checkForUpdatesNow } from "../../lib/auto-update";
 import { modShortcut } from "../../lib/platform";
 import { useUiStore } from "../../stores/ui-store";
 import { CliPanel } from "./CliPanel";
@@ -41,9 +43,22 @@ export function SettingsModal() {
   const setTheme = useUiStore((state) => state.setTheme);
   const setApprovalPolicy = useUiStore((state) => state.setApprovalPolicy);
   const setDefaultThinking = useUiStore((state) => state.setDefaultThinking);
-  // Same source as the update arrow: the version the running bundle reports.
-  const version = useUiStore((state) => state.update?.current);
+  const update = useUiStore((state) => state.update);
+  const version = update?.current;
   const refresh = useUiStore((state) => state.refresh);
+  const [checkedUpToDate, setCheckedUpToDate] = useState(false);
+
+  useEffect(() => {
+    if (!open) setCheckedUpToDate(false);
+  }, [open]);
+
+  const handleCheckUpdates = async () => {
+    setCheckedUpToDate(false);
+    const next = await checkForUpdatesNow();
+    if (next && !next.available && !next.error) {
+      setCheckedUpToDate(true);
+    }
+  };
 
   return (
     <Dialog.Root
@@ -88,8 +103,48 @@ export function SettingsModal() {
                 );
               })}
             </div>
-            <div className="mt-auto px-2.5 pb-1 font-mono text-[11px] text-[var(--text-muted)]">
-              {version ? `Kip ${version}` : "Kip"}
+            <div className="mt-auto space-y-1.5 px-2 pb-1">
+              <div className="px-0.5 font-mono text-[11px] text-[var(--text-muted)]">
+                {version ? `Kip ${version}` : "Kip"}
+              </div>
+              {update?.available && update.latest ? (
+                <button
+                  type="button"
+                  onClick={() => void activateUpdate()}
+                  className="btn-secondary h-7 w-full justify-start rounded-[7px] px-2 text-[11.5px]"
+                >
+                  {update.state === "ready_to_restart"
+                    ? `Restart into v${update.latest}`
+                    : update.state === "downloading"
+                      ? `Downloading ${update.progress}%`
+                      : update.state === "verifying"
+                        ? "Verifying…"
+                        : `Update to v${update.latest}`}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={update?.state === "checking"}
+                  onClick={() => void handleCheckUpdates()}
+                  title={update?.error ?? "Check for updates"}
+                  className="btn-ghost h-7 w-full justify-start rounded-[7px] px-1.5 text-[11.5px]"
+                >
+                  <RotateCw
+                    size={11}
+                    strokeWidth={1.5}
+                    className={
+                      update?.state === "checking" ? "animate-spin" : ""
+                    }
+                  />
+                  <span>
+                    {update?.state === "checking"
+                      ? "Checking…"
+                      : checkedUpToDate
+                        ? "Up to date"
+                        : "Check for updates"}
+                  </span>
+                </button>
+              )}
             </div>
           </nav>
           <div className="thin-scroll relative min-w-0 flex-1 overflow-y-auto p-6 pr-11">

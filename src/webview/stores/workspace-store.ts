@@ -20,6 +20,11 @@ interface WorkspaceState {
   markUnread: (threadId: string) => void;
   /** Opens a thread, switching workspace first when it belongs to another one. */
   openThread: (threadId: string) => Promise<void>;
+  /** Restores workspace and thread selection from an atomic update handoff. */
+  restoreSession: (
+    workspaceId: string | null,
+    threadId: string | null,
+  ) => Promise<void>;
   initialize: () => Promise<void>;
   selectWorkspace: (workspaceId: string) => Promise<void>;
   pickWorkspace: () => Promise<void>;
@@ -78,6 +83,26 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       set({ activeWorkspaceId: workspace.id, threads });
       get().selectThread(threadId);
       return;
+    }
+  },
+
+  restoreSession: async (workspaceId, threadId) => {
+    const workspaces = get().workspaces;
+    if (workspaceId && workspaces.some((ws) => ws.id === workspaceId)) {
+      const threads = await request("listThreads", { workspaceId });
+      const hasThread =
+        threadId !== null && threads.some((thread) => thread.id === threadId);
+      set({
+        activeWorkspaceId: workspaceId,
+        threads,
+        activeThreadId: hasThread
+          ? threadId
+          : (threads.find((thread) => !thread.isEmpty)?.id ?? null),
+      });
+      return;
+    }
+    if (threadId) {
+      await get().openThread(threadId);
     }
   },
 

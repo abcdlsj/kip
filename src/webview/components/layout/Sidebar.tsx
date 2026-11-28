@@ -20,7 +20,7 @@ import { modShortcut } from "../../lib/platform";
 import { useChatStore } from "../../stores/chat-store";
 import { useUiStore } from "../../stores/ui-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
-import { UpdateIndicator } from "./UpdateIndicator";
+import { UpdatePill } from "./UpdatePill";
 
 export function Sidebar() {
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
@@ -403,7 +403,7 @@ export function Sidebar() {
                 <Settings size={14} strokeWidth={1.5} className="shrink-0" />
                 Settings
               </button>
-              <UpdateIndicator />
+              <UpdatePill />
             </div>
           </div>
         </>

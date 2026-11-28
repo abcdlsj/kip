@@ -555,3 +555,51 @@ textarea:focus {
     transform: rotate(360deg);
   }
 }
+
+/* Minimalist Seamless Auto-Update pill */
+.update-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--border-hairline);
+  border-radius: 999px;
+  background: var(--bg-active);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    opacity 120ms ease;
+}
+
+.update-pill:hover:not(:disabled) {
+  background: var(--bg-subtle);
+  border-color: var(--border-focus);
+}
+
+.update-pill--busy {
+  opacity: 0.78;
+  cursor: default;
+}
+
+.update-pill--ready {
+  border-color: var(--border-focus);
+}
+
+.update-pill--error {
+  border-color: var(--status-err);
+  color: var(--status-err);
+}
+
+.update-pill--compact {
+  height: 20px;
+  padding: 0 6px;
+}

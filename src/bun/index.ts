@@ -9,7 +9,7 @@ import Electrobun, {
   Utils,
 } from "electrobun/bun";
 import { join } from "node:path";
-import { KipDatabase } from "./storage/db";
+import { getDataDir, KipDatabase } from "./storage/db";
 import { ModelRegistry } from "./agent/model-registry";
 import { KipOrchestrator } from "./agent/pi-orchestrator";
 import { createKipRpc } from "./rpc-handler";
@@ -18,8 +18,7 @@ import { triggerSync } from "./sync/s3-sync";
 import { prepareCefUserDataDir } from "./system/cef-guard";
 import { NotchIndicator, type NotchState } from "./system/notch";
 import { applyWindowsDpiAwareness } from "./system/windows-dpi";
-import { UpdateChecker } from "./system/update-checker";
-import { createUpdateInstaller } from "./system/update-installer";
+import { defaultUpdateCacheDir, UpdateManager } from "./updater";
 import { PluginWindows } from "./plugins/windows";
 import {
   disposePlugins,
@@ -136,17 +135,15 @@ const orchestrator = new KipOrchestrator(
 );
 
 const windowRef: { current: BrowserWindow | null } = { current: null };
-const updateChecker = new UpdateChecker({
-  // Dev bundles carry a stale version.json, so local builds stay quiet unless
-  // KIP_UPDATE_CURRENT_VERSION pins the version explicitly.
-  currentVersion: process.env.KIP_UPDATE_CURRENT_VERSION ?? localVersion,
-  installer: createUpdateInstaller({
-    // Restarting for an update stops any running agent; the view warns first.
-    onQuit: () => {
-      quitCleanly();
-    },
-  }),
+const updater = new UpdateManager({
+  appVersion: localVersion,
+  dataDir: getDataDir(),
+  cacheDir: defaultUpdateCacheDir(),
+  isDev: updateChannel === "dev",
   onStatus: (status) => rpc.send.updateStatus(status),
+  onQuit: () => {
+    quitCleanly();
+  },
 });
 const pluginWindows = new PluginWindows(
   database,
@@ -156,7 +153,7 @@ const rpc = createKipRpc({
   database,
   registry,
   orchestrator,
-  updateChecker,
+  updater,
   pluginWindows,
   windowRef,
 });
@@ -376,11 +373,7 @@ Electrobun.events.on(
   },
 );
 
-if (updateChannel === "dev" && !process.env.KIP_UPDATE_CURRENT_VERSION) {
-  console.log("Update checks are off for the dev channel.");
-} else {
-  updateChecker.start();
-}
+updater.startBackground();
 
 notch = new NotchIndicator(() => {
   const { threadId } = topThread();
@@ -399,7 +392,7 @@ function shutdown(): Promise<void> {
       clearTimeout(syncTimer);
       syncTimer = null;
     }
-    updateChecker.stop();
+    updater.stopBackground();
     if (notch) {
       notch.dispose();
       notch = null;

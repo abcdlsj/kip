@@ -260,6 +260,11 @@ export class KipDatabase {
   }
 
   close(): void {
+    try {
+      this.db.run("PRAGMA wal_checkpoint(TRUNCATE)");
+    } catch {
+      // Best-effort flush before closing.
+    }
     this.db.close();
   }
 
